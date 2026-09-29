@@ -30,39 +30,39 @@ class Menu extends CommonGLPI
 
         $menu = [
             'title' => self::getMenuName(),
-            'page'  => Ui::url('front/home.php'),
+            'page'  => Ui::path('front/home.php'),
             'icon'  => self::getIcon(),
         ];
 
         $menu['options']['home'] = [
             'title' => __('Início', 'checklistitens'),
-            'page'  => Ui::url('front/home.php'),
+            'page'  => Ui::path('front/home.php'),
             'icon'  => self::getIcon(),
         ];
 
         if (Profile::isManager() || Profile::isAdmin()) {
             $menu['options']['manager'] = [
                 'title' => __('Conferência do setor', 'checklistitens'),
-                'page'  => Ui::url('front/manager.php'),
+                'page'  => Ui::path('front/manager.php'),
                 'icon'  => Confirmation::getIcon(),
             ];
             $menu['options']['equipment'] = [
                 'title' => __('Equipamentos', 'checklistitens'),
-                'page'  => Ui::url('front/equipment.php'),
+                'page'  => Ui::path('front/equipment.php'),
                 'icon'  => EquipmentRecord::getIcon(),
             ];
             $menu['options']['usage'] = [
                 'title' => Usage::getTypeName(2),
-                'page'  => Ui::url('front/usage.php'),
+                'page'  => Ui::path('front/usage.php'),
                 'icon'  => Usage::getIcon(),
-                'links' => ['search' => Ui::url('front/usage.php')],
+                'links' => ['search' => Ui::path('front/usage.php')],
             ];
         }
 
         if (Profile::isAdmin()) {
             $menu['options']['itemblock'] = [
                 'title' => ItemBlock::getTypeName(2),
-                'page'  => Ui::url('front/itemblock.php'),
+                'page'  => Ui::path('front/itemblock.php'),
                 'icon'  => ItemBlock::getIcon(),
             ];
 
@@ -77,13 +77,13 @@ class Menu extends CommonGLPI
 
             $menu['options']['selfiepurge'] = [
                 'title' => SelfiePurge::getTypeName(1),
-                'page'  => Ui::url('front/selfiepurge.php'),
+                'page'  => Ui::path('front/selfiepurge.php'),
                 'icon'  => SelfiePurge::getIcon(),
             ];
 
             $menu['options']['config'] = [
                 'title' => Config::getTypeName(),
-                'page'  => Ui::url('front/config.form.php'),
+                'page'  => Ui::path('front/config.form.php'),
                 'icon'  => 'ti ti-settings',
             ];
         }

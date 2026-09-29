@@ -2,6 +2,7 @@
 
 namespace GlpiPlugin\Checklistitens;
 
+use CommonGLPI;
 use CronTask;
 use NotificationEvent;
 
@@ -9,10 +10,17 @@ use NotificationEvent;
  * Tarefa automática: equipamento retirado num turno que já terminou e ainda não devolvido gera
  * alerta para os gestores do setor e para o TI — um alerta por setor e turno, com a lista.
  * Cada uso é alertado uma vez (date_alert_not_returned); os painéis continuam mostrando.
+ *
+ * Estende CommonGLPI porque a tela de ações automáticas do GLPI instancia o tipo da tarefa.
  */
-class NotReturnedAlert
+class NotReturnedAlert extends CommonGLPI
 {
     public const CRON_NAME = 'notreturned';
+
+    public static function getTypeName($nb = 0)
+    {
+        return __('Alerta de equipamento não devolvido', 'checklistitens');
+    }
 
     public static function cronInfo($name)
     {

@@ -49,9 +49,16 @@ class Ui
         TemplateRenderer::getInstance()->display('@checklistitens/' . $template, $params);
     }
 
+    /** URL completa (com o root_doc do GLPI), para links e redirecionamentos. */
     public static function url(string $path): string
     {
         return Plugin::getWebDir('checklistitens') . '/' . ltrim($path, '/');
+    }
+
+    /** Caminho sem o root_doc, no formato que o menu do GLPI espera. */
+    public static function path(string $path): string
+    {
+        return '/' . Plugin::getWebDir('checklistitens', false) . '/' . ltrim($path, '/');
     }
 
     public static function logoutUrl(): string
