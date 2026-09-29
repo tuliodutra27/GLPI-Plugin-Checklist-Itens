@@ -207,4 +207,32 @@
     border-radius: .375rem;
     object-fit: cover;
     cursor: zoom-in;
+    flex-shrink: 0;
+}
+
+.ci-thumb-empty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tblr-bg-surface-secondary, #f1f5f9);
+    color: var(--tblr-muted, #667382);
+    font-size: 1.5rem;
+    cursor: default;
+}
+
+/* Problemas marcados, em etiquetas */
+.ci-problem-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem;
+    list-style: none;
+    padding: 0;
+    margin: .25rem 0 0;
+}
+
+.ci-problem-tags li {
+    padding: .1rem .5rem;
+    border-radius: 1rem;
+    font-size: .8rem;
+    background: rgba(245, 159, 0, .15);
 }

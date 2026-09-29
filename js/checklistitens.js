@@ -104,7 +104,25 @@
             });
         }
 
+        function updateButtons(problems) {
+            var hasSelfie = qsa('[data-ci-selfie-box]', form).some(function (box) {
+                return box.hasAttribute('data-ci-selfie-ready');
+            });
+
+            qsa('[data-ci-require]', form).forEach(function (button) {
+                var requirement = button.getAttribute('data-ci-require');
+                var ready = requirement === 'problems' ? problems > 0 : (requirement === 'selfie' ? hasSelfie : true);
+                button.disabled = !ready;
+            });
+        }
+
         function update() {
+            // Conferência do gestor: só exige a selfie
+            if (flow === 'confirm') {
+                updateButtons(0);
+                return;
+            }
+
             var itemtype = '';
             if (flow === 'checkout') {
                 var type = checked('itemtype');
@@ -143,16 +161,7 @@
                 ? itemChosen && isOk
                 : itemChosen && (isOk || (isNok && problems > 0));
             show('selfie', selfieVisible);
-
-            var hasSelfie = qsa('[data-ci-selfie-box]', form).some(function (box) {
-                return box.hasAttribute('data-ci-selfie-ready');
-            });
-
-            qsa('[data-ci-require]', form).forEach(function (button) {
-                var requirement = button.getAttribute('data-ci-require');
-                var ready = requirement === 'problems' ? problems > 0 : (requirement === 'selfie' ? hasSelfie : true);
-                button.disabled = !ready;
-            });
+            updateButtons(problems);
         }
 
         form.addEventListener('change', update);

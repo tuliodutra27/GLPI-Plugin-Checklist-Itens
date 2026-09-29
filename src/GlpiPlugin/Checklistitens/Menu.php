@@ -40,6 +40,14 @@ class Menu extends CommonGLPI
             'icon'  => self::getIcon(),
         ];
 
+        if (Profile::isManager() || Profile::isAdmin()) {
+            $menu['options']['manager'] = [
+                'title' => __('Conferência do setor', 'checklistitens'),
+                'page'  => Ui::url('front/manager.php'),
+                'icon'  => Confirmation::getIcon(),
+            ];
+        }
+
         if (Profile::isAdmin()) {
             $menu['options']['problemtype'] = [
                 'title' => ProblemType::getTypeName(2),

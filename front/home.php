@@ -1,8 +1,11 @@
 <?php
 
 use GlpiPlugin\Checklistitens\Config;
+use GlpiPlugin\Checklistitens\Confirmation;
+use GlpiPlugin\Checklistitens\ItemBlock;
 use GlpiPlugin\Checklistitens\ProblemType;
 use GlpiPlugin\Checklistitens\Profile;
+use GlpiPlugin\Checklistitens\Sector;
 use GlpiPlugin\Checklistitens\Ui;
 use GlpiPlugin\Checklistitens\Usage;
 
@@ -40,6 +43,25 @@ if (Profile::canUse()) {
         'color'       => 'green',
         'badge'       => $releasable ? sprintf(_n('%d liberado', '%d liberados', $releasable, 'checklistitens'), $releasable) : '',
         'badge_color' => 'green',
+    ];
+}
+
+if (Profile::isManager() || Profile::isAdmin()) {
+    $pending = 0;
+    $scope   = Sector::forCurrentUser();
+    if (count($scope)) {
+        $pending = countElementsInTable(Usage::getTable(), ['groups_id' => $scope, 'status' => Usage::STATUS_IN_USE])
+            + countElementsInTable(Usage::getTable(), ['groups_id' => $scope, 'status' => Usage::STATUS_RETURNED, 'plugin_checklistitens_confirmations_id_checkin' => 0])
+            + countElementsInTable(ItemBlock::getTable(), ['groups_id' => $scope, 'plugin_checklistitens_confirmations_id' => 0]);
+    }
+    $cards[] = [
+        'title'       => __('Conferência do setor', 'checklistitens'),
+        'description' => __('Conferir os checklists do turno, abrir chamados e liberar a devolução.', 'checklistitens'),
+        'url'         => Ui::url('front/manager.php'),
+        'icon'        => Confirmation::getIcon(),
+        'color'       => 'orange',
+        'badge'       => $pending ? sprintf(_n('%d pendente', '%d pendentes', $pending, 'checklistitens'), $pending) : '',
+        'badge_color' => 'orange',
     ];
 }
 

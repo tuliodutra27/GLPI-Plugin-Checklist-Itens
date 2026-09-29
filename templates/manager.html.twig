@@ -1,0 +1,191 @@
+{# Gestor: conferência do setor por turno #}
+{% macro thumb(url) %}
+    {% if url %}
+        <a href="{{ url }}" target="_blank" rel="noopener" title="{{ __('Ver selfie', 'checklistitens') }}">
+            <img src="{{ url }}" class="ci-thumb" alt="{{ __('Selfie', 'checklistitens') }}" loading="lazy">
+        </a>
+    {% else %}
+        <span class="ci-thumb ci-thumb-empty"><i class="ti ti-user-off"></i></span>
+    {% endif %}
+{% endmacro %}
+
+{% macro shift_badge(row) %}
+    {% if row.previous_shift %}
+        <span class="badge bg-red-lt">{{ __('Turno anterior', 'checklistitens') }}: {{ row.shift_label }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% import _self as ci %}
+
+<div class="ci-page container-fluid">
+    <h2 class="ci-title mb-3"><i class="ti ti-user-check"></i> {{ __('Conferência do setor', 'checklistitens') }}</h2>
+
+    <form method="get" action="{{ post_url }}" class="card mb-3">
+        <div class="card-body d-flex flex-wrap align-items-end gap-3">
+            <div class="flex-fill">
+                <label class="form-label" for="ci-group">{{ __('Setor', 'checklistitens') }}</label>
+                <select id="ci-group" name="groups_id" class="form-select" onchange="this.form.submit()">
+                    {% for id, name in groups %}
+                        <option value="{{ id }}" {{ id == groups_id ? 'selected' }}>{{ name }}</option>
+                    {% else %}
+                        <option value="0">{{ __('Você não está em nenhum grupo', 'checklistitens') }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <div class="text-muted small">{{ __('Turno atual', 'checklistitens') }}</div>
+                <div class="fw-bold">{{ shift_label }}</div>
+            </div>
+        </div>
+    </form>
+
+    {% for alert in alerts %}
+        <div class="alert alert-{{ alert.type }}"><i class="ti ti-alert-circle"></i> {{ alert.text }}</div>
+    {% endfor %}
+
+    {# ---------------------------------------------------------------- BLOQUEADOS #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title"><i class="ti ti-lock"></i> {{ __('Itens bloqueados', 'checklistitens') }} <span class="badge bg-orange ms-1">{{ blocks|length }}</span></h3>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for b in blocks %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between flex-wrap gap-2">
+                        <div>
+                            <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong> <span class="text-muted small">{{ b.detail }}</span>
+                            <div class="small">{{ b.reason_label }} · {{ b.user }} · {{ b.when }}</div>
+                            <ul class="ci-problem-tags mb-1">
+                                {% for p in b.problems %}<li>{{ p }}</li>{% endfor %}
+                            </ul>
+                            {{ ci.shift_badge(b) }}
+                            {% if b.conferred %}<span class="badge bg-green-lt">{{ __('Conferido', 'checklistitens') }}</span>{% endif %}
+                        </div>
+                        <div class="text-end">
+                            <div class="small mb-1">{{ b.status_label }}</div>
+                            {% if b.ticket_id %}
+                                <a href="{{ b.ticket_url }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
+                                    <i class="ti ti-ticket"></i> {{ __('Chamado', 'checklistitens') }} {{ b.ticket_id }}
+                                </a>
+                            {% elseif b.can_open_ticket and can_confirm %}
+                                <form method="post" action="{{ post_url }}">
+                                    <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="groups_id" value="{{ groups_id }}">
+                                    <button type="submit" name="open_ticket" value="{{ b.id }}" class="btn btn-sm btn-warning">
+                                        <i class="ti ti-ticket"></i> {{ __('Abrir chamado', 'checklistitens') }}
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <div class="list-group-item text-muted">{{ __('Nenhum item bloqueado.', 'checklistitens') }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ---------------------------------------------------------------- RETIRADAS #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title"><i class="ti ti-login"></i> {{ __('Retiradas aguardando conferência', 'checklistitens') }} <span class="badge bg-blue ms-1">{{ checkouts|length }}</span></h3>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for u in checkouts %}
+                <div class="list-group-item d-flex align-items-center gap-3">
+                    {{ ci.thumb(u.selfie_url) }}
+                    <div class="flex-fill">
+                        <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted small">{{ u.detail }}</span>
+                        <div class="small">{{ u.user }} · {{ u.when }}</div>
+                        {{ ci.shift_badge(u) }}
+                    </div>
+                    <span class="badge bg-green-lt"><i class="ti ti-circle-check"></i> {{ __('Ok', 'checklistitens') }}</span>
+                </div>
+            {% else %}
+                <div class="list-group-item text-muted">{{ __('Nenhuma retirada pendente.', 'checklistitens') }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ---------------------------------------------------------------- DEVOLUÇÕES #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title"><i class="ti ti-logout"></i> {{ __('Devoluções não conferidas', 'checklistitens') }} <span class="badge bg-secondary ms-1">{{ checkins|length }}</span></h3>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for u in checkins %}
+                <div class="list-group-item d-flex align-items-center gap-3">
+                    {{ ci.thumb(u.selfie_url) }}
+                    <div class="flex-fill">
+                        <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted small">{{ u.detail }}</span>
+                        <div class="small">{{ u.user }} · {{ u.when }}</div>
+                        {% if u.problems|length %}
+                            <ul class="ci-problem-tags mb-1">{% for p in u.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+                        {% endif %}
+                        {{ ci.shift_badge(u) }}
+                    </div>
+                    {% if u.is_ok %}
+                        <span class="badge bg-green-lt"><i class="ti ti-circle-check"></i> {{ __('Ok', 'checklistitens') }}</span>
+                    {% else %}
+                        <span class="badge bg-orange-lt"><i class="ti ti-alert-triangle"></i> {{ __('Com problema', 'checklistitens') }}</span>
+                    {% endif %}
+                </div>
+            {% else %}
+                <div class="list-group-item text-muted">{{ __('Nenhuma devolução pendente.', 'checklistitens') }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ---------------------------------------------------------------- LIBERADOS #}
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title"><i class="ti ti-clock"></i> {{ __('Liberados, aguardando devolução', 'checklistitens') }} <span class="badge bg-green ms-1">{{ released|length }}</span></h3>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for u in released %}
+                <div class="list-group-item">
+                    <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted small">{{ u.detail }}</span>
+                    <div class="small">{{ u.user }} · {{ __('Retirado em', 'checklistitens') }} {{ u.when }}</div>
+                    {{ ci.shift_badge(u) }}
+                </div>
+            {% else %}
+                <div class="list-group-item text-muted">{{ __('Nenhum equipamento aguardando devolução.', 'checklistitens') }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ---------------------------------------------------------------- CONFIRMAR #}
+    {% if can_confirm %}
+        <form method="post" action="{{ post_url }}" enctype="multipart/form-data" class="card mb-3" data-ci-flow="confirm">
+            <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="groups_id" value="{{ groups_id }}">
+            {% for b in blocks %}{% if not b.conferred %}<input type="hidden" name="block_ids[]" value="{{ b.id }}">{% endif %}{% endfor %}
+            {% for u in checkouts %}<input type="hidden" name="checkout_ids[]" value="{{ u.id }}">{% endfor %}
+            {% for u in checkins %}<input type="hidden" name="checkin_ids[]" value="{{ u.id }}">{% endfor %}
+
+            <div class="card-body">
+                <h3 class="ci-step-title"><i class="ti ti-user-check"></i> {{ __('Confirmar conferência do turno', 'checklistitens') }}</h3>
+                {% if pending_count %}
+                    <p>
+                        {{ __('Serão confirmados todos os itens pendentes acima', 'checklistitens') }}:
+                        {{ checkouts|length }} {{ __('retirada(s)', 'checklistitens') }},
+                        {{ checkins|length }} {{ __('devolução(ões)', 'checklistitens') }},
+                        {{ (pending_count - checkouts|length - checkins|length) }} {{ __('bloqueio(s)', 'checklistitens') }}.
+                        {% if tickets_to_open %}
+                            <strong>{{ tickets_to_open }} {{ __('chamado(s) será(ão) aberto(s) automaticamente.', 'checklistitens') }}</strong>
+                        {% endif %}
+                    </p>
+                    <p class="text-muted small">{{ __('As retiradas conferidas ficam liberadas para devolução.', 'checklistitens') }}</p>
+                    {% include '@checklistitens/parts/selfie_input.html.twig' with {'label': __('Tirar minha selfie', 'checklistitens')} %}
+                    <button type="submit" name="confirm" value="1" class="btn btn-success btn-lg w-100 mt-3" data-ci-require="selfie">
+                        <i class="ti ti-checks"></i> {{ __('Confirmar conferência', 'checklistitens') }}
+                    </button>
+                {% else %}
+                    <div class="alert alert-success mb-0">{{ __('Nada pendente de conferência neste setor.', 'checklistitens') }}</div>
+                {% endif %}
+            </div>
+        </form>
+    {% endif %}
+
+    <a href="{{ home_url }}" class="btn btn-outline-secondary"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>
+</div>

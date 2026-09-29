@@ -9,8 +9,9 @@ require_once __DIR__ . '/autoload.php';
 
 use GlpiPlugin\Checklistitens\Menu;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
+use GlpiPlugin\Checklistitens\Usage;
 
-define('PLUGIN_CHECKLISTITENS_VERSION', '0.3.0');
+define('PLUGIN_CHECKLISTITENS_VERSION', '0.4.0');
 define('PLUGIN_CHECKLISTITENS_MIN_GLPI_VERSION', '10.0.0');
 define('PLUGIN_CHECKLISTITENS_MAX_GLPI_VERSION', '10.0.99');
 
@@ -27,6 +28,9 @@ function plugin_init_checklistitens()
     if (!Plugin::isPluginActive('checklistitens')) {
         return;
     }
+
+    // O chamado aberto na conferência fica vinculado ao registro de uso
+    Plugin::registerClass(Usage::class, ['ticket_types' => true]);
 
     // Interface padrão: Ativos > Checklist uso de equipamentos
     $PLUGIN_HOOKS['menu_toadd']['checklistitens'] = ['assets' => Menu::class];
