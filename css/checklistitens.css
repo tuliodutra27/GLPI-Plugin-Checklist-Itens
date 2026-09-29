@@ -37,3 +37,28 @@
     font-weight: 600;
     font-size: 1.1rem;
 }
+
+/* Selfie */
+.ci-selfie-button {
+    min-height: 3.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+}
+
+.ci-selfie-preview {
+    display: block;
+    max-width: 220px;
+    max-height: 220px;
+    border-radius: .5rem;
+    object-fit: cover;
+}
+
+.ci-thumb {
+    width: 56px;
+    height: 56px;
+    border-radius: .375rem;
+    object-fit: cover;
+    cursor: zoom-in;
+}
