@@ -12,7 +12,7 @@ use GlpiPlugin\Checklistitens\Menu;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
 use GlpiPlugin\Checklistitens\Usage;
 
-define('PLUGIN_CHECKLISTITENS_VERSION', '0.6.0');
+define('PLUGIN_CHECKLISTITENS_VERSION', '0.7.0');
 define('PLUGIN_CHECKLISTITENS_MIN_GLPI_VERSION', '10.0.0');
 define('PLUGIN_CHECKLISTITENS_MAX_GLPI_VERSION', '10.0.99');
 
@@ -30,8 +30,9 @@ function plugin_init_checklistitens()
         return;
     }
 
-    // O chamado aberto na conferência fica vinculado ao registro de uso
-    Plugin::registerClass(Usage::class, ['ticket_types' => true]);
+    // O chamado aberto na conferência fica vinculado ao registro de uso; o registro de uso também
+    // dispara a notificação de equipamento não devolvido
+    Plugin::registerClass(Usage::class, ['ticket_types' => true, 'notificationtemplates_types' => true]);
 
     // Aba "Registro de uso" no formulário do Telefone
     Plugin::registerClass(EquipmentRecord::class, ['addtabon' => ['Phone']]);

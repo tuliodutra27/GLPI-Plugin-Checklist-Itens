@@ -4,8 +4,14 @@ namespace GlpiPlugin\Checklistitens;
 
 use CronTask;
 use DBConnection;
+use Glpi\Toolbox\Sanitizer;
 use Item_Ticket;
 use Migration;
+use Notification;
+use Notification_NotificationTemplate;
+use NotificationTarget;
+use NotificationTemplate;
+use NotificationTemplateTranslation;
 use Toolbox;
 
 /**
@@ -33,6 +39,7 @@ class Install
         Selfie::createBaseDir();
         self::registerCronTasks();
         self::installDisplayPreferences();
+        self::installNotifications();
     }
 
     /**
@@ -72,6 +79,109 @@ class Install
             'state'   => CronTask::STATE_WAITING,
             'comment' => __('Libera itens bloqueados cujo chamado já foi solucionado (rede de segurança do hook de chamado).', 'checklistitens'),
         ]);
+        CronTask::register(NotReturnedAlert::class, NotReturnedAlert::CRON_NAME, 15 * MINUTE_TIMESTAMP, [
+            'mode'    => CronTask::MODE_EXTERNAL,
+            'state'   => CronTask::STATE_WAITING,
+            'comment' => __('Alerta os gestores do setor e o TI sobre equipamentos não devolvidos no fim do turno.', 'checklistitens'),
+        ]);
+    }
+
+    /**
+     * Notificação "Equipamento não devolvido no fim do turno" (e-mail e navegador), para os
+     * gestores do setor e o TI. Só é criada se ainda não existir.
+     */
+    private static function installNotifications(): void
+    {
+        $event = NotificationTargetUsage::EVENT_NOT_RETURNED;
+        if (countElementsInTable(Notification::getTable(), ['itemtype' => Usage::class, 'event' => $event]) > 0) {
+            return;
+        }
+
+        $name = 'Checklist uso de equipamentos - Equipamento não devolvido';
+
+        $template_id = (new NotificationTemplate())->add([
+            'name'     => Sanitizer::sanitize($name),
+            'itemtype' => Usage::class,
+            'comment'  => '',
+        ]);
+        if (!$template_id) {
+            return;
+        }
+
+        $text = "Equipamentos retirados no turno ##checklist.shift## que ainda não foram devolvidos"
+            . " (setor ##checklist.sector##):\n\n"
+            . "##FOREACHitems##\n"
+            . "- ##item.label## — ##item.user## (retirado em ##item.checkout##; ##item.status##)\n"
+            . "##ENDFOREACHitems##\n\n"
+            . "Conferência do setor: ##checklist.url##";
+
+        $html = '<p>Equipamentos retirados no turno <strong>##checklist.shift##</strong> que ainda não foram'
+            . ' devolvidos (setor <strong>##checklist.sector##</strong>):</p>'
+            . '<ul>##FOREACHitems##<li>##item.label## — ##item.user## (retirado em ##item.checkout##; ##item.status##)</li>##ENDFOREACHitems##</ul>'
+            . '<p><a href="##checklist.url##">Abrir a conferência do setor</a></p>';
+
+        (new NotificationTemplateTranslation())->add([
+            'notificationtemplates_id' => $template_id,
+            'language'                 => '',
+            'subject'                  => Sanitizer::sanitize('[Checklist] ##checklist.count## equipamento(s) não devolvido(s) - ##checklist.sector##'),
+            'content_text'             => Sanitizer::sanitize($text),
+            'content_html'             => Sanitizer::sanitize($html),
+        ]);
+
+        $notification_id = (new Notification())->add([
+            'name'         => Sanitizer::sanitize($name),
+            'entities_id'  => 0,
+            'is_recursive' => 1,
+            'is_active'    => 1,
+            'itemtype'     => Usage::class,
+            'event'        => $event,
+            'comment'      => '',
+        ]);
+        if (!$notification_id) {
+            return;
+        }
+
+        $link = new Notification_NotificationTemplate();
+        foreach ([Notification_NotificationTemplate::MODE_MAIL, Notification_NotificationTemplate::MODE_AJAX] as $mode) {
+            $link->add([
+                'notifications_id'         => $notification_id,
+                'notificationtemplates_id' => $template_id,
+                'mode'                     => $mode,
+            ]);
+        }
+
+        $target = new NotificationTarget();
+        foreach ([NotificationTargetUsage::SECTOR_MANAGERS, NotificationTargetUsage::PLUGIN_ADMINS] as $recipient) {
+            $target->add([
+                'notifications_id' => $notification_id,
+                'type'             => Notification::USER_TYPE,
+                'items_id'         => $recipient,
+            ]);
+        }
+    }
+
+    private static function uninstallNotifications(): void
+    {
+        global $DB;
+
+        $notifications = [];
+        foreach ($DB->request(['SELECT' => 'id', 'FROM' => Notification::getTable(), 'WHERE' => ['itemtype' => Usage::class]]) as $row) {
+            $notifications[] = (int) $row['id'];
+        }
+        if (count($notifications)) {
+            $DB->delete(NotificationTarget::getTable(), ['notifications_id' => $notifications]);
+            $DB->delete(Notification_NotificationTemplate::getTable(), ['notifications_id' => $notifications]);
+            $DB->delete(Notification::getTable(), ['id' => $notifications]);
+        }
+
+        $templates = [];
+        foreach ($DB->request(['SELECT' => 'id', 'FROM' => NotificationTemplate::getTable(), 'WHERE' => ['itemtype' => Usage::class]]) as $row) {
+            $templates[] = (int) $row['id'];
+        }
+        if (count($templates)) {
+            $DB->delete(NotificationTemplateTranslation::getTable(), ['notificationtemplates_id' => $templates]);
+            $DB->delete(NotificationTemplate::getTable(), ['id' => $templates]);
+        }
     }
 
     public static function uninstall(): void
@@ -92,6 +202,7 @@ class Install
         // Vínculos de chamados com registros de uso que deixam de existir
         $DB->delete(Item_Ticket::getTable(), ['itemtype' => Usage::class]);
         $DB->delete('glpi_displaypreferences', ['itemtype' => [Usage::class, ProblemType::class]]);
+        self::uninstallNotifications();
     }
 
     /**
