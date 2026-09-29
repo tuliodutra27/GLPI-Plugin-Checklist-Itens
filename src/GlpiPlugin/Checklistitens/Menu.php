@@ -75,6 +75,12 @@ class Menu extends CommonGLPI
                 ] + (Profile::canAdministrate() ? ['add' => ProblemType::getFormURL(false)] : []),
             ];
 
+            $menu['options']['selfiepurge'] = [
+                'title' => SelfiePurge::getTypeName(1),
+                'page'  => Ui::url('front/selfiepurge.php'),
+                'icon'  => SelfiePurge::getIcon(),
+            ];
+
             $menu['options']['config'] = [
                 'title' => Config::getTypeName(),
                 'page'  => Ui::url('front/config.form.php'),

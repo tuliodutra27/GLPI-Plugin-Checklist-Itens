@@ -1,0 +1,61 @@
+{# Administradores: limpeza manual das selfies depois do prazo mínimo #}
+<div class="ci-page container-fluid">
+    <h2 class="ci-title mb-3"><i class="ti ti-trash"></i> {{ __('Limpeza de selfies', 'checklistitens') }}</h2>
+
+    <div class="alert alert-info">
+        {{ __('As selfies ficam guardadas por pelo menos %d dias e nada é apagado automaticamente. Depois desse prazo, você pode limpar as imagens antigas. Os registros de uso (quem, quando, problemas, chamados) são mantidos.', 'checklistitens')|format(retention_days) }}
+    </div>
+
+    <form method="get" action="{{ page_url }}" class="card mb-3">
+        <div class="card-body row g-2 align-items-end">
+            <div class="col-12 col-md-4">
+                <label class="form-label">{{ __('Limpar selfies gravadas até', 'checklistitens') }}</label>
+                <input type="date" name="date_limit" value="{{ limit }}" max="{{ max_limit }}" class="form-control">
+            </div>
+            <div class="col-12 col-md-3">
+                <button type="submit" class="btn btn-outline-primary w-100"><i class="ti ti-calculator"></i> {{ __('Calcular', 'checklistitens') }}</button>
+            </div>
+        </div>
+        <div class="card-footer">
+            <strong>{{ count }}</strong> {{ __('selfie(s) até essa data', 'checklistitens') }} · {{ size }}
+        </div>
+    </form>
+
+    {% if can_purge and count > 0 %}
+        <form method="post" action="{{ page_url }}" class="card mb-3" onsubmit="return confirm('{{ __('Apagar definitivamente as selfies até a data escolhida? Esta ação não pode ser desfeita.', 'checklistitens')|e('js') }}');">
+            <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="date_limit" value="{{ limit }}">
+            <div class="card-body">
+                <button type="submit" name="purge" value="1" class="btn btn-danger">
+                    <i class="ti ti-trash"></i> {{ __('Apagar %d selfie(s)', 'checklistitens')|format(count) }}
+                </button>
+            </div>
+        </form>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title">{{ __('Limpezas anteriores', 'checklistitens') }}</h3></div>
+        <div class="table-responsive">
+            <table class="table card-table">
+                <thead>
+                    <tr>
+                        <th>{{ __('Quando', 'checklistitens') }}</th>
+                        <th>{{ __('Por', 'checklistitens') }}</th>
+                        <th>{{ __('Selfies até', 'checklistitens') }}</th>
+                        <th>{{ __('Arquivos', 'checklistitens') }}</th>
+                        <th>{{ __('Espaço liberado', 'checklistitens') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for h in history %}
+                        <tr><td>{{ h.when }}</td><td>{{ h.user }}</td><td>{{ h.limit }}</td><td>{{ h.files }}</td><td>{{ h.size }}</td></tr>
+                    {% else %}
+                        <tr><td colspan="5" class="text-muted">{{ __('Nenhuma limpeza feita ainda.', 'checklistitens') }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <a href="{{ home_url }}" class="btn btn-outline-secondary"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>
+</div>

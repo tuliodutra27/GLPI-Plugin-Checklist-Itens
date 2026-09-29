@@ -7,6 +7,7 @@ use GlpiPlugin\Checklistitens\ItemBlock;
 use GlpiPlugin\Checklistitens\ProblemType;
 use GlpiPlugin\Checklistitens\Profile;
 use GlpiPlugin\Checklistitens\Sector;
+use GlpiPlugin\Checklistitens\SelfiePurge;
 use GlpiPlugin\Checklistitens\Ui;
 use GlpiPlugin\Checklistitens\Usage;
 
@@ -16,7 +17,8 @@ if (!Profile::canUse() && !Profile::isManager() && !Profile::isAdmin()) {
     Html::displayRightError();
 }
 
-$cards = [];
+$cards   = [];
+$notices = [];
 
 if (Profile::canUse()) {
     $open      = Usage::getOpenForUser((int) Session::getLoginUserID());
@@ -91,6 +93,26 @@ if (Profile::isAdmin()) {
         'badge'       => $blocked ? (string) $blocked : '',
         'badge_color' => 'red',
     ];
+    $old_selfies = count(SelfiePurge::getEligible(SelfiePurge::getMaxLimitDate()));
+    if ($old_selfies > 0) {
+        $notices[] = [
+            'type' => 'info',
+            'text' => sprintf(
+                __('Há %1$d selfie(s) com mais de %2$d dias. Elas podem ser limpas em "Limpeza de selfies".', 'checklistitens'),
+                $old_selfies,
+                Config::getRetentionDays()
+            ),
+        ];
+    }
+    $cards[] = [
+        'title'       => SelfiePurge::getTypeName(1),
+        'description' => __('Apagar selfies antigas, depois do prazo mínimo de guarda.', 'checklistitens'),
+        'url'         => Ui::url('front/selfiepurge.php'),
+        'icon'        => SelfiePurge::getIcon(),
+        'color'       => 'secondary',
+        'badge'       => $old_selfies ? (string) $old_selfies : '',
+        'badge_color' => 'azure',
+    ];
     $cards[] = [
         'title'       => ProblemType::getTypeName(2),
         'description' => __('Lista de problemas que o colaborador marca, por tipo de equipamento.', 'checklistitens'),
@@ -109,6 +131,7 @@ if (Profile::isAdmin()) {
 
 Ui::header(__('Checklist uso de equipamentos', 'checklistitens'), 'home');
 Ui::render('home.html.twig', [
-    'cards' => $cards,
+    'cards'   => $cards,
+    'notices' => $notices,
 ]);
 Ui::footer();

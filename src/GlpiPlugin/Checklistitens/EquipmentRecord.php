@@ -509,6 +509,6 @@ class EquipmentRecord extends CommonGLPI
             return ['url' => Selfie::getUrl($kind, $id), 'removed' => ''];
         }
 
-        return ['url' => '', 'removed' => ''];
+        return ['url' => '', 'removed' => SelfiePurge::getRemovedLabel($date)];
     }
 }
