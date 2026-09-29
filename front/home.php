@@ -2,6 +2,7 @@
 
 use GlpiPlugin\Checklistitens\Config;
 use GlpiPlugin\Checklistitens\Confirmation;
+use GlpiPlugin\Checklistitens\EquipmentRecord;
 use GlpiPlugin\Checklistitens\ItemBlock;
 use GlpiPlugin\Checklistitens\ProblemType;
 use GlpiPlugin\Checklistitens\Profile;
@@ -62,6 +63,20 @@ if (Profile::isManager() || Profile::isAdmin()) {
         'color'       => 'orange',
         'badge'       => $pending ? sprintf(_n('%d pendente', '%d pendentes', $pending, 'checklistitens'), $pending) : '',
         'badge_color' => 'orange',
+    ];
+    $cards[] = [
+        'title'       => __('Equipamentos', 'checklistitens'),
+        'description' => __('Situação atual e registro de uso completo de cada rádio e telefone.', 'checklistitens'),
+        'url'         => Ui::url('front/equipment.php'),
+        'icon'        => EquipmentRecord::getIcon(),
+        'color'       => 'blue',
+    ];
+    $cards[] = [
+        'title'       => Usage::getTypeName(2),
+        'description' => __('Histórico de todas as retiradas e devoluções, com filtros e exportação.', 'checklistitens'),
+        'url'         => Ui::url('front/usage.php'),
+        'icon'        => Usage::getIcon(),
+        'color'       => 'azure',
     ];
 }
 

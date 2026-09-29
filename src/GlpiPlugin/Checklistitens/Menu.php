@@ -46,6 +46,17 @@ class Menu extends CommonGLPI
                 'page'  => Ui::url('front/manager.php'),
                 'icon'  => Confirmation::getIcon(),
             ];
+            $menu['options']['equipment'] = [
+                'title' => __('Equipamentos', 'checklistitens'),
+                'page'  => Ui::url('front/equipment.php'),
+                'icon'  => EquipmentRecord::getIcon(),
+            ];
+            $menu['options']['usage'] = [
+                'title' => Usage::getTypeName(2),
+                'page'  => Ui::url('front/usage.php'),
+                'icon'  => Usage::getIcon(),
+                'links' => ['search' => Ui::url('front/usage.php')],
+            ];
         }
 
         if (Profile::isAdmin()) {

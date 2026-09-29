@@ -32,6 +32,34 @@ class Install
         ProblemType::installDefaults();
         Selfie::createBaseDir();
         self::registerCronTasks();
+        self::installDisplayPreferences();
+    }
+
+    /**
+     * Colunas padrão das listas (histórico de usos e catálogo), se ainda não houver nenhuma.
+     */
+    private static function installDisplayPreferences(): void
+    {
+        global $DB;
+
+        $defaults = [
+            Usage::class       => [2, 3, 4, 5, 6, 7, 9],
+            ProblemType::class => [101, 102, 103, 104, 105],
+        ];
+
+        foreach ($defaults as $itemtype => $nums) {
+            if (countElementsInTable('glpi_displaypreferences', ['itemtype' => $itemtype, 'users_id' => 0]) > 0) {
+                continue;
+            }
+            foreach ($nums as $rank => $num) {
+                $DB->insert('glpi_displaypreferences', [
+                    'itemtype' => $itemtype,
+                    'num'      => $num,
+                    'rank'     => $rank + 1,
+                    'users_id' => 0,
+                ]);
+            }
+        }
     }
 
     /**
@@ -63,6 +91,7 @@ class Install
 
         // Vínculos de chamados com registros de uso que deixam de existir
         $DB->delete(Item_Ticket::getTable(), ['itemtype' => Usage::class]);
+        $DB->delete('glpi_displaypreferences', ['itemtype' => [Usage::class, ProblemType::class]]);
     }
 
     /**

@@ -7,11 +7,12 @@
 
 require_once __DIR__ . '/autoload.php';
 
+use GlpiPlugin\Checklistitens\EquipmentRecord;
 use GlpiPlugin\Checklistitens\Menu;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
 use GlpiPlugin\Checklistitens\Usage;
 
-define('PLUGIN_CHECKLISTITENS_VERSION', '0.5.0');
+define('PLUGIN_CHECKLISTITENS_VERSION', '0.6.0');
 define('PLUGIN_CHECKLISTITENS_MIN_GLPI_VERSION', '10.0.0');
 define('PLUGIN_CHECKLISTITENS_MAX_GLPI_VERSION', '10.0.99');
 
@@ -31,6 +32,9 @@ function plugin_init_checklistitens()
 
     // O chamado aberto na conferência fica vinculado ao registro de uso
     Plugin::registerClass(Usage::class, ['ticket_types' => true]);
+
+    // Aba "Registro de uso" no formulário do Telefone
+    Plugin::registerClass(EquipmentRecord::class, ['addtabon' => ['Phone']]);
 
     // Interface padrão: Ativos > Checklist uso de equipamentos
     $PLUGIN_HOOKS['menu_toadd']['checklistitens'] = ['assets' => Menu::class];

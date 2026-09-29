@@ -163,6 +163,37 @@ class ItemProvider
     }
 
     /**
+     * Todos os itens de um tipo (não excluídos), opcionalmente só de alguns grupos. Usado no
+     * registro de uso dos equipamentos.
+     *
+     * @param int[]|null $groups null = todos os grupos
+     * @return array[]
+     */
+    public static function getItems(string $itemtype, ?array $groups): array
+    {
+        global $DB;
+
+        $table = self::getTable($itemtype);
+        if (!self::isSupported($itemtype) || !$DB->tableExists($table) || ($groups !== null && !count($groups))) {
+            return [];
+        }
+
+        $criteria = self::getBaseCriteria($itemtype);
+        $criteria['WHERE'] = [
+            "$table.is_deleted" => 0,
+            getEntitiesRestrictCriteria($table, '', '', $DB->fieldExists($table, 'is_recursive')),
+        ];
+        if ($groups !== null) {
+            $criteria['WHERE']["$table.groups_id"] = array_values(array_map('intval', $groups));
+        }
+        if ($DB->fieldExists($table, 'is_template')) {
+            $criteria['WHERE']["$table.is_template"] = 0;
+        }
+
+        return iterator_to_array($DB->request($criteria), false);
+    }
+
+    /**
      * @param int[] $groups
      */
     private static function getAvailabilityCriteria(string $itemtype, array $groups): ?array
@@ -207,7 +238,10 @@ class ItemProvider
         global $DB;
 
         $table  = self::getTable($itemtype);
-        $fields = ["$table.id", "$table.serial", "$table.groups_id", "$table.states_id", "$table.entities_id", 'glpi_manufacturers.name AS manufacturer'];
+        $fields = [
+            "$table.id", "$table.serial", "$table.groups_id", "$table.states_id", "$table.entities_id",
+            'glpi_manufacturers.name AS manufacturer', 'glpi_states.completename AS state_name',
+        ];
         if ($DB->fieldExists($table, 'name')) {
             $fields[] = "$table.name";
         }
@@ -217,6 +251,7 @@ class ItemProvider
             'FROM'      => $table,
             'LEFT JOIN' => [
                 'glpi_manufacturers' => ['ON' => [$table => 'manufacturers_id', 'glpi_manufacturers' => 'id']],
+                'glpi_states'        => ['ON' => [$table => 'states_id', 'glpi_states' => 'id']],
             ],
         ];
 

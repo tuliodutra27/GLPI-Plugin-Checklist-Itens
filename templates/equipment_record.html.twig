@@ -1,0 +1,156 @@
+{# Registro de uso completo de um equipamento (página própria e aba no Telefone) #}
+{% macro selfie(info) %}
+    {% if info.url %}
+        <a href="{{ info.url }}" target="_blank" rel="noopener" title="{{ __('Ver selfie', 'checklistitens') }}">
+            <img src="{{ info.url }}" class="ci-thumb" alt="{{ __('Selfie', 'checklistitens') }}" loading="lazy">
+        </a>
+    {% elseif info.removed %}
+        <span class="small text-muted">{{ info.removed }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% import _self as ci %}
+
+<div class="ci-page ci-page-wide container-fluid">
+    {% if not embedded %}
+        <h2 class="ci-title mb-3"><i class="{{ icon }}"></i> {{ label }}</h2>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-body d-flex flex-wrap justify-content-between gap-3">
+            <div>
+                <div class="text-muted small">{{ type_label }}</div>
+                <div class="fs-3 fw-bold">{{ label }}</div>
+                <div class="text-muted">{{ detail }}</div>
+                <div class="small mt-1">{{ __('Setor', 'checklistitens') }}: {{ sector ?: '—' }} · {{ __('Estado no GLPI', 'checklistitens') }}: {{ state ?: '—' }}</div>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-{{ situation_color }} fs-5">{{ situation_label }}</span>
+                {% if can_release and not embedded %}
+                    <form method="post" action="{{ release_url }}" class="mt-2" onsubmit="return confirm('{{ __('Liberar este item para retirada?', 'checklistitens')|e('js') }}');">
+                        <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" name="release" value="{{ active_block_id }}" class="btn btn-sm btn-outline-success">
+                            <i class="ti ti-lock-open"></i> {{ __('Liberar item', 'checklistitens') }}
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="row text-center g-2">
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.uses }}</div><div class="small text-muted">{{ __('Usos', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.refusals }}</div><div class="small text-muted">{{ __('Recusas com problema', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.with_problem }}</div><div class="small text-muted">{{ __('Devoluções com problema', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.tickets }}</div><div class="small text-muted">{{ __('Chamados', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fw-bold">{{ stats.repair_time }}</div><div class="small text-muted">{{ __('Tempo bloqueado', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fw-bold">{{ stats.last_use }}</div><div class="small text-muted">{{ __('Último uso', 'checklistitens') }}</div></div>
+            </div>
+        </div>
+    </div>
+
+    <form method="get" action="{{ page_url }}" class="card mb-3">
+        <input type="hidden" name="itemtype" value="{{ itemtype }}">
+        <input type="hidden" name="items_id" value="{{ items_id }}">
+        <div class="card-body row g-2 align-items-end">
+            <div class="col-6 col-md-3">
+                <label class="form-label">{{ __('De', 'checklistitens') }}</label>
+                <input type="date" name="date_from" value="{{ filters.date_from }}" class="form-control">
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label">{{ __('Até', 'checklistitens') }}</label>
+                <input type="date" name="date_to" value="{{ filters.date_to }}" class="form-control">
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="form-label">{{ __('Colaborador', 'checklistitens') }}</label>
+                <select name="users_id" class="form-select">
+                    <option value="0">{{ __('Todos', 'checklistitens') }}</option>
+                    {% for id, name in users %}<option value="{{ id }}" {{ id == filters.users_id ? 'selected' }}>{{ name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-12 col-md-3 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-fill"><i class="ti ti-filter"></i> {{ __('Filtrar', 'checklistitens') }}</button>
+                <button type="submit" name="csv" value="1" class="btn btn-outline-secondary flex-fill"><i class="ti ti-file-spreadsheet"></i> CSV</button>
+            </div>
+        </div>
+    </form>
+
+    <div class="ci-timeline">
+        {% for e in timeline %}
+            <div class="card mb-3" id="usage-{{ e.id }}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div><strong>{{ e.user }}</strong> <span class="text-muted small">{{ e.sector }}</span></div>
+                    <span class="badge bg-{{ e.status_color }}">{{ e.status_label }}</span>
+                </div>
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex gap-3 align-items-center">
+                        {{ ci.selfie(e.checkout.selfie) }}
+                        <div class="flex-fill">
+                            <div class="fw-bold"><i class="ti ti-login"></i> {{ e.status == 4 ? __('Tentativa de retirada', 'checklistitens') : __('Retirada', 'checklistitens') }}</div>
+                            <div class="small">{{ e.checkout.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkout.shift }}</div>
+                            {% if e.checkout.problems|length %}
+                                <ul class="ci-problem-tags">{% for p in e.checkout.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+                            {% else %}
+                                <span class="badge bg-green-lt">{{ __('Equipamento ok', 'checklistitens') }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {% if e.confirmation %}
+                        <div class="list-group-item d-flex gap-3 align-items-center">
+                            {{ ci.selfie(e.confirmation.selfie) }}
+                            <div>
+                                <div class="fw-bold"><i class="ti ti-user-check"></i> {{ __('Conferência do gestor', 'checklistitens') }}</div>
+                                <div class="small">{{ e.confirmation.user }} · {{ e.confirmation.when }}</div>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if e.checkin %}
+                        <div class="list-group-item d-flex gap-3 align-items-center">
+                            {{ ci.selfie(e.checkin.selfie) }}
+                            <div class="flex-fill">
+                                <div class="fw-bold"><i class="ti ti-logout"></i> {{ __('Devolução', 'checklistitens') }}</div>
+                                <div class="small">{{ e.checkin.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkin.shift }}{% if e.duration %} · {{ __('duração', 'checklistitens') }} {{ e.duration }}{% endif %}</div>
+                                {% if e.checkin.problems|length %}
+                                    <ul class="ci-problem-tags">{% for p in e.checkin.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+                                {% else %}
+                                    <span class="badge bg-green-lt">{{ __('Equipamento ok', 'checklistitens') }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if e.checkin_confirmation %}
+                        <div class="list-group-item d-flex gap-3 align-items-center">
+                            {{ ci.selfie(e.checkin_confirmation.selfie) }}
+                            <div>
+                                <div class="fw-bold"><i class="ti ti-user-check"></i> {{ __('Devolução conferida', 'checklistitens') }}</div>
+                                <div class="small">{{ e.checkin_confirmation.user }} · {{ e.checkin_confirmation.when }}</div>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    {% if e.block %}
+                        <div class="list-group-item">
+                            <div class="fw-bold"><i class="ti ti-lock"></i> {{ __('Bloqueio', 'checklistitens') }}: {{ e.block.status_label }}</div>
+                            <div class="small">
+                                {% if e.block.ticket_id %}
+                                    <a href="{{ e.block.ticket_url }}" target="_blank" rel="noopener">{{ __('Chamado', 'checklistitens') }} #{{ e.block.ticket_id }}</a> ({{ e.block.ticket_status }})
+                                {% else %}
+                                    {{ __('Sem chamado ainda', 'checklistitens') }}
+                                {% endif %}
+                                {% if e.block.release_label %} · {{ e.block.release_label }}{% endif %}
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">{{ __('Nenhum uso registrado para este equipamento.', 'checklistitens') }}</div>
+        {% endfor %}
+    </div>
+
+    {% if not embedded %}
+        <a href="{{ list_url }}" class="btn btn-outline-secondary"><i class="ti ti-arrow-left"></i> {{ __('Equipamentos', 'checklistitens') }}</a>
+    {% endif %}
+</div>

@@ -85,6 +85,175 @@ class Usage extends CommonDBTM
         );
     }
 
+    /**
+     * Link do registro (busca e itens do chamado): abre o registro de uso do equipamento.
+     */
+    public static function getFormURLWithID($id = 0, $full = true)
+    {
+        return Ui::url('front/usage.form.php?id=' . (int) $id);
+    }
+
+    public function rawSearchOptions()
+    {
+        $table = self::getTable();
+
+        return [
+            ['id' => 'common', 'name' => self::getTypeName(2)],
+            [
+                'id'            => '1',
+                'table'         => $table,
+                'field'         => 'id',
+                'name'          => __('ID'),
+                'datatype'      => 'itemlink',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '2',
+                'table'         => $table,
+                'field'         => 'itemtype',
+                'name'          => __('Tipo', 'checklistitens'),
+                'datatype'      => 'specific',
+                'searchtype'    => ['equals', 'notequals'],
+                'massiveaction' => false,
+            ],
+            [
+                'id'               => '3',
+                'table'            => $table,
+                'field'            => 'items_id',
+                'name'             => __('Equipamento', 'checklistitens'),
+                'datatype'         => 'specific',
+                'additionalfields' => ['itemtype'],
+                'searchtype'       => ['equals'],
+                'massiveaction'    => false,
+            ],
+            [
+                'id'            => '4',
+                'table'         => 'glpi_users',
+                'field'         => 'name',
+                'linkfield'     => 'users_id',
+                'name'          => __('Colaborador', 'checklistitens'),
+                'datatype'      => 'dropdown',
+                'right'         => 'all',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '5',
+                'table'         => 'glpi_groups',
+                'field'         => 'completename',
+                'linkfield'     => 'groups_id',
+                'name'          => __('Setor', 'checklistitens'),
+                'datatype'      => 'dropdown',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '6',
+                'table'         => $table,
+                'field'         => 'status',
+                'name'          => __('Situação', 'checklistitens'),
+                'datatype'      => 'specific',
+                'searchtype'    => ['equals', 'notequals'],
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '7',
+                'table'         => $table,
+                'field'         => 'date_checkout',
+                'name'          => __('Retirada', 'checklistitens'),
+                'datatype'      => 'datetime',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '8',
+                'table'         => $table,
+                'field'         => 'checkout_is_ok',
+                'name'          => __('Ok na retirada', 'checklistitens'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '9',
+                'table'         => $table,
+                'field'         => 'date_checkin',
+                'name'          => __('Devolução', 'checklistitens'),
+                'datatype'      => 'datetime',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '10',
+                'table'         => $table,
+                'field'         => 'checkin_is_ok',
+                'name'          => __('Ok na devolução', 'checklistitens'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '11',
+                'table'         => $table,
+                'field'         => 'checkout_shift_start',
+                'name'          => __('Turno da retirada', 'checklistitens'),
+                'datatype'      => 'datetime',
+                'massiveaction' => false,
+            ],
+        ];
+    }
+
+    public static function getSpecificValueToDisplay($field, $values, array $options = [])
+    {
+        if (!is_array($values)) {
+            $values = [$field => $values];
+        }
+        switch ($field) {
+            case 'itemtype':
+                return htmlspecialchars(ItemProvider::getShortTypeLabel((string) $values['itemtype']));
+            case 'items_id':
+                if (!empty($values['itemtype'])) {
+                    return htmlspecialchars(ItemProvider::describe((string) $values['itemtype'], (int) $values['items_id']));
+                }
+                return (string) (int) $values['items_id'];
+            case 'status':
+                return htmlspecialchars(self::getStatusLabels()[(int) $values['status']] ?? '');
+        }
+
+        return parent::getSpecificValueToDisplay($field, $values, $options);
+    }
+
+    public static function getSpecificValueToSelect($field, $name = '', $values = '', array $options = [])
+    {
+        if (!is_array($values)) {
+            $values = [$field => $values];
+        }
+        $options['display'] = false;
+        switch ($field) {
+            case 'itemtype':
+                $types = [];
+                foreach (ItemProvider::getSupportedTypes() as $itemtype) {
+                    $types[$itemtype] = ItemProvider::getShortTypeLabel($itemtype);
+                }
+                return \Dropdown::showFromArray($name, $types, $options + ['value' => $values[$field]]);
+            case 'status':
+                return \Dropdown::showFromArray($name, self::getStatusLabels(), $options + ['value' => $values[$field]]);
+        }
+
+        return parent::getSpecificValueToSelect($field, $name, $values, $options);
+    }
+
+    /**
+     * Restrição da busca (hook addDefaultWhere): gestor vê só o seu setor; TI vê tudo.
+     */
+    public static function getSearchRestriction(): string
+    {
+        if (Profile::isAdmin()) {
+            return '';
+        }
+
+        $groups = Sector::forCurrentUser();
+        if (!Profile::isManager() || !count($groups)) {
+            return '0 = 1';
+        }
+
+        return sprintf('`%s`.`groups_id` IN (%s)', self::getTable(), implode(',', array_map('intval', $groups)));
+    }
+
     /** @return array<int, string> */
     public static function getStatusLabels(): array
     {

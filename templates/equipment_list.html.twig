@@ -1,0 +1,76 @@
+{# Lista de equipamentos com a situação atual #}
+<div class="ci-page ci-page-wide container-fluid">
+    <h2 class="ci-title mb-3"><i class="ti ti-history"></i> {{ __('Equipamentos', 'checklistitens') }}</h2>
+
+    <form method="get" action="{{ page_url }}" class="card mb-3">
+        <div class="card-body row g-2 align-items-end">
+            <div class="col-12 col-md-3">
+                <label class="form-label">{{ __('Buscar', 'checklistitens') }}</label>
+                <input type="search" name="q" value="{{ filters.q }}" class="form-control" placeholder="{{ __('Número de série, nome ou modelo', 'checklistitens') }}">
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label">{{ __('Tipo', 'checklistitens') }}</label>
+                <select name="itemtype" class="form-select">
+                    <option value="">{{ __('Todos', 'checklistitens') }}</option>
+                    {% for key, label in types %}<option value="{{ key }}" {{ key == filters.itemtype ? 'selected' }}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label">{{ __('Setor', 'checklistitens') }}</label>
+                <select name="groups_id" class="form-select">
+                    <option value="0">{{ __('Todos os meus setores', 'checklistitens') }}</option>
+                    {% for id, name in groups %}<option value="{{ id }}" {{ id == filters.groups_id ? 'selected' }}>{{ name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-8 col-md-3">
+                <label class="form-label">{{ __('Situação', 'checklistitens') }}</label>
+                <select name="situation" class="form-select">
+                    <option value="">{{ __('Todas', 'checklistitens') }}</option>
+                    {% for key, label in situations %}<option value="{{ key }}" {{ key == filters.situation ? 'selected' }}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="col-4 col-md-1">
+                <button type="submit" class="btn btn-primary w-100"><i class="ti ti-filter"></i></button>
+            </div>
+        </div>
+    </form>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table table-hover">
+                <thead>
+                    <tr>
+                        <th>{{ __('Equipamento', 'checklistitens') }}</th>
+                        <th>{{ __('Setor', 'checklistitens') }}</th>
+                        <th>{{ __('Situação', 'checklistitens') }}</th>
+                        <th>{{ __('Último problema', 'checklistitens') }}</th>
+                        <th class="text-center">{{ __('Chamados', 'checklistitens') }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for i in items %}
+                        <tr>
+                            <td>
+                                <a href="{{ i.url }}"><i class="{{ i.icon }}"></i> <strong>{{ i.label }}</strong></a>
+                                <div class="small text-muted">{{ i.type_label }} · {{ i.detail }}</div>
+                            </td>
+                            <td class="small">{{ i.sector }}</td>
+                            <td>
+                                <span class="badge bg-{{ i.situation_color }}">{{ i.situation_label }}</span>
+                                {% if i.holder %}<div class="small text-muted">{{ i.holder }}</div>{% endif %}
+                                {% if i.situation == 'out' and i.state %}<div class="small text-muted">{{ i.state }}</div>{% endif %}
+                            </td>
+                            <td class="small">{{ i.last_problem }}</td>
+                            <td class="text-center">{{ i.tickets ?: '' }}</td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5" class="text-muted">{{ __('Nenhum equipamento encontrado.', 'checklistitens') }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="card-footer text-muted small">{{ items|length }} {{ __('equipamento(s)', 'checklistitens') }}</div>
+    </div>
+
+    <a href="{{ home_url }}" class="btn btn-outline-secondary mt-3"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>
+</div>

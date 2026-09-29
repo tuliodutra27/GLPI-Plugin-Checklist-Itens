@@ -1,10 +1,20 @@
 <?php
 
+use GlpiPlugin\Checklistitens\EquipmentRecord;
 use GlpiPlugin\Checklistitens\Profile;
 use GlpiPlugin\Checklistitens\Ui;
 use GlpiPlugin\Checklistitens\Usage;
 
 include('../../../inc/includes.php');
+
+// Link de um registro (busca, itens do chamado): abre o registro de uso do equipamento
+if (isset($_GET['id']) && !isset($_POST['action'])) {
+    $usage = new Usage();
+    if ($usage->getFromDB((int) $_GET['id']) && EquipmentRecord::canViewItem((string) $usage->fields['itemtype'], (int) $usage->fields['items_id'])) {
+        Html::redirect(EquipmentRecord::getUrl((string) $usage->fields['itemtype'], (int) $usage->fields['items_id']) . '#usage-' . (int) $usage->getID());
+    }
+    Html::displayRightError();
+}
 
 Session::checkRight(Profile::RIGHT_USAGE, CREATE);
 

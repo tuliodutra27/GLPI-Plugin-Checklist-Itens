@@ -109,6 +109,15 @@ class Sector
 
     public static function getName(int $group): string
     {
-        return self::getNames([$group])[$group] ?? '';
+        static $cache = [];
+
+        if ($group <= 0) {
+            return '';
+        }
+        if (!array_key_exists($group, $cache)) {
+            $cache[$group] = self::getNames([$group])[$group] ?? '';
+        }
+
+        return $cache[$group];
     }
 }

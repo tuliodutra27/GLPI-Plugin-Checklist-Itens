@@ -5,6 +5,7 @@ require_once __DIR__ . '/autoload.php';
 use GlpiPlugin\Checklistitens\Install;
 use GlpiPlugin\Checklistitens\ItemBlock;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
+use GlpiPlugin\Checklistitens\Usage;
 
 /**
  * Instalação e atualização: é idempotente (tabelas, colunas, configuração, direitos e dados
@@ -33,6 +34,18 @@ function plugin_checklistitens_uninstall()
 function plugin_checklistitens_profile_add(Profile $profile)
 {
     ChecklistProfile::grantUsage((int) $profile->getID());
+}
+
+/**
+ * Busca do GLPI: o gestor vê só os registros do seu setor (com subgrupos).
+ */
+function plugin_checklistitens_addDefaultWhere($itemtype)
+{
+    if ($itemtype === Usage::class) {
+        return Usage::getSearchRestriction();
+    }
+
+    return '';
 }
 
 /**
