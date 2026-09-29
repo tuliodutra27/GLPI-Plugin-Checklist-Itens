@@ -3,6 +3,7 @@
 require_once __DIR__ . '/autoload.php';
 
 use GlpiPlugin\Checklistitens\Install;
+use GlpiPlugin\Checklistitens\ItemBlock;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
 
 /**
@@ -32,4 +33,17 @@ function plugin_checklistitens_uninstall()
 function plugin_checklistitens_profile_add(Profile $profile)
 {
     ChecklistProfile::grantUsage((int) $profile->getID());
+}
+
+/**
+ * Hook item_update de Ticket: chamado solucionado ou fechado libera o item bloqueado.
+ */
+function plugin_checklistitens_ticket_update(Ticket $ticket)
+{
+    if (!in_array('status', $ticket->updates ?? [], true)) {
+        return;
+    }
+    if (in_array((int) $ticket->fields['status'], [CommonITILObject::SOLVED, CommonITILObject::CLOSED], true)) {
+        ItemBlock::releaseByTicket((int) $ticket->getID());
+    }
 }

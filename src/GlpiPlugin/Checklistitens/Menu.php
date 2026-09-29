@@ -49,6 +49,12 @@ class Menu extends CommonGLPI
         }
 
         if (Profile::isAdmin()) {
+            $menu['options']['itemblock'] = [
+                'title' => ItemBlock::getTypeName(2),
+                'page'  => Ui::url('front/itemblock.php'),
+                'icon'  => ItemBlock::getIcon(),
+            ];
+
             $menu['options']['problemtype'] = [
                 'title' => ProblemType::getTypeName(2),
                 'page'  => ProblemType::getSearchURL(false),

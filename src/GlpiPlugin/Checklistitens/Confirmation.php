@@ -258,34 +258,11 @@ class Confirmation extends CommonDBTM
 
     private static function presentBlock(array $row, string $current_shift): array
     {
-        global $CFG_GLPI;
+        $block = ItemBlock::present($row);
 
-        $itemtype = (string) $row['itemtype'];
-        $item_row = ItemProvider::getRow($itemtype, (int) $row['items_id']);
-        $item     = $item_row !== null ? ItemProvider::present($itemtype, $item_row) : ['label' => '#' . $row['items_id'], 'detail' => ''];
-        $phase    = (int) $row['reason'] === ItemBlock::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
-        $status   = (int) $row['status'];
-        $ticket   = (int) $row['tickets_id'];
-
-        return [
-            'id'             => (int) $row['id'],
-            'itemtype'       => $itemtype,
-            'type_label'     => ItemProvider::getTypeLabel($itemtype),
-            'icon'           => ItemProvider::getTypeIcon($itemtype),
-            'label'          => $item['label'],
-            'detail'         => $item['detail'],
-            'user'           => Ui::text(getUserName((int) $row['users_id'])),
-            'when'           => Ui::datetime($row['date_block']),
-            'shift_label'    => Shift::label($row['block_shift_start']),
-            'previous_shift' => $row['block_shift_start'] !== null && $row['block_shift_start'] < $current_shift,
-            'reason_label'   => ItemBlock::getReasonLabels()[(int) $row['reason']] ?? '',
-            'status'         => $status,
-            'status_label'   => ItemBlock::getStatusLabels()[$status] ?? '',
-            'problems'       => array_column(UsageProblem::getFor((int) $row['plugin_checklistitens_usages_id'], $phase), 'name'),
-            'ticket_id'      => $ticket,
-            'ticket_url'     => $ticket > 0 ? $CFG_GLPI['root_doc'] . '/front/ticket.form.php?id=' . $ticket : '',
-            'conferred'      => (int) $row['plugin_checklistitens_confirmations_id'] > 0,
-            'can_open_ticket' => $ticket === 0 && $status === ItemBlock::STATUS_WAITING,
+        return $block + [
+            'previous_shift'  => $row['block_shift_start'] !== null && $row['block_shift_start'] < $current_shift,
+            'can_open_ticket' => $block['ticket_id'] === 0 && $block['status'] === ItemBlock::STATUS_WAITING,
         ];
     }
 

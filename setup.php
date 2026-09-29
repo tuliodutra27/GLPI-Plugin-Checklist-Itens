@@ -11,7 +11,7 @@ use GlpiPlugin\Checklistitens\Menu;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
 use GlpiPlugin\Checklistitens\Usage;
 
-define('PLUGIN_CHECKLISTITENS_VERSION', '0.4.0');
+define('PLUGIN_CHECKLISTITENS_VERSION', '0.5.0');
 define('PLUGIN_CHECKLISTITENS_MIN_GLPI_VERSION', '10.0.0');
 define('PLUGIN_CHECKLISTITENS_MAX_GLPI_VERSION', '10.0.99');
 
@@ -44,6 +44,11 @@ function plugin_init_checklistitens()
     // Todo perfil novo recebe o direito de uso (retirada/devolução)
     $PLUGIN_HOOKS['item_add']['checklistitens'] = [
         'Profile' => 'plugin_checklistitens_profile_add',
+    ];
+
+    // Chamado solucionado/fechado libera o item bloqueado
+    $PLUGIN_HOOKS['item_update']['checklistitens'] = [
+        'Ticket' => 'plugin_checklistitens_ticket_update',
     ];
 }
 

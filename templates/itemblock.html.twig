@@ -1,0 +1,81 @@
+{# TI: itens bloqueados de todos os setores, com liberação manual #}
+<div class="ci-page container-fluid">
+    <h2 class="ci-title mb-3"><i class="ti ti-lock"></i> {{ __('Itens bloqueados', 'checklistitens') }}</h2>
+
+    <div class="alert alert-info">
+        {{ __('O item volta a circular sozinho quando o chamado vinculado é solucionado ou fechado. Use "Liberar" só quando não houver chamado a resolver (ex.: chamado excluído, item trocado).', 'checklistitens') }}
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title">{{ __('Bloqueados agora', 'checklistitens') }} <span class="badge bg-orange ms-1">{{ active|length }}</span></h3>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+                <thead>
+                    <tr>
+                        <th>{{ __('Equipamento', 'checklistitens') }}</th>
+                        <th>{{ __('Setor', 'checklistitens') }}</th>
+                        <th>{{ __('Motivo', 'checklistitens') }}</th>
+                        <th>{{ __('Chamado', 'checklistitens') }}</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for b in active %}
+                        <tr>
+                            <td>
+                                <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong>
+                                <div class="text-muted small">{{ b.detail }}</div>
+                            </td>
+                            <td>{{ b.sector }}</td>
+                            <td>
+                                {{ b.reason_label }}
+                                <div class="small text-muted">{{ b.user }} · {{ b.when }}</div>
+                                <ul class="ci-problem-tags">{% for p in b.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+                            </td>
+                            <td>
+                                {% if b.ticket_id %}
+                                    <a href="{{ b.ticket_url }}" target="_blank" rel="noopener">#{{ b.ticket_id }}</a>
+                                    <div class="small text-muted">{{ b.ticket_status }}</div>
+                                {% else %}
+                                    <span class="text-muted">{{ __('Aguardando conferência do gestor', 'checklistitens') }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if can_release %}
+                                    <form method="post" action="{{ post_url }}" onsubmit="return confirm('{{ __('Liberar este item para retirada?', 'checklistitens')|e('js') }}');">
+                                        <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" name="release" value="{{ b.id }}" class="btn btn-sm btn-outline-success">
+                                            <i class="ti ti-lock-open"></i> {{ __('Liberar', 'checklistitens') }}
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr><td colspan="5" class="text-muted">{{ __('Nenhum item bloqueado.', 'checklistitens') }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title">{{ __('Liberados recentemente', 'checklistitens') }}</h3>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for b in released %}
+                <div class="list-group-item">
+                    <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong> <span class="text-muted small">{{ b.sector }}</span>
+                    <div class="small text-muted">{{ b.release_label }}{% if b.ticket_id %} · <a href="{{ b.ticket_url }}" target="_blank" rel="noopener">#{{ b.ticket_id }}</a>{% endif %}</div>
+                </div>
+            {% else %}
+                <div class="list-group-item text-muted">{{ __('Nenhuma liberação ainda.', 'checklistitens') }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <a href="{{ home_url }}" class="btn btn-outline-secondary"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>
+</div>

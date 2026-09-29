@@ -108,6 +108,140 @@ class ItemBlock extends CommonDBTM
         return $id ? (int) $id : 0;
     }
 
+    /**
+     * Encerra o bloqueio: o item volta a aparecer na retirada (se continuar em estado disponível).
+     */
+    public function release(int $type, int $users_id = 0): bool
+    {
+        if ((int) $this->fields['lock_active'] !== 1) {
+            return false;
+        }
+
+        return (bool) $this->update([
+            'id'               => $this->getID(),
+            'status'           => self::STATUS_RELEASED,
+            'lock_active'      => 'NULL',
+            'release_type'     => $type,
+            'users_id_release' => $users_id,
+            'date_release'     => Shift::now(),
+        ]);
+    }
+
+    /**
+     * Libera os bloqueios ativos ligados a um chamado (chamado solucionado ou fechado).
+     *
+     * @return int quantos bloqueios foram liberados
+     */
+    public static function releaseByTicket(int $tickets_id): int
+    {
+        global $DB;
+
+        if ($tickets_id <= 0) {
+            return 0;
+        }
+
+        $released = 0;
+        $block    = new self();
+        foreach ($DB->request(['SELECT' => 'id', 'FROM' => self::getTable(), 'WHERE' => ['tickets_id' => $tickets_id, 'lock_active' => 1]]) as $row) {
+            if ($block->getFromDB((int) $row['id']) && $block->release(self::RELEASE_TICKET)) {
+                $released++;
+            }
+        }
+
+        return $released;
+    }
+
+    public static function cronInfo($name)
+    {
+        if ($name === 'releaseblocks') {
+            return ['description' => __('Checklist uso de equipamentos: libera itens bloqueados cujo chamado foi solucionado', 'checklistitens')];
+        }
+
+        return [];
+    }
+
+    /**
+     * Rede de segurança do hook de chamado: libera os bloqueios cujo chamado já está
+     * solucionado ou fechado (ex.: chamado atualizado por uma ação que não disparou o hook).
+     */
+    public static function cronReleaseblocks(\CronTask $task): int
+    {
+        global $DB;
+
+        $iterator = $DB->request([
+            'SELECT'     => [self::getTable() . '.tickets_id'],
+            'DISTINCT'   => true,
+            'FROM'       => self::getTable(),
+            'INNER JOIN' => [
+                'glpi_tickets' => ['ON' => [self::getTable() => 'tickets_id', 'glpi_tickets' => 'id']],
+            ],
+            'WHERE'      => [
+                self::getTable() . '.lock_active' => 1,
+                'glpi_tickets.status'             => [\CommonITILObject::SOLVED, \CommonITILObject::CLOSED],
+            ],
+        ]);
+
+        $released = 0;
+        foreach ($iterator as $row) {
+            $released += self::releaseByTicket((int) $row['tickets_id']);
+        }
+        $task->addVolume($released);
+
+        return $released > 0 ? 1 : 0;
+    }
+
+    /**
+     * Linha do bloqueio para as telas (painel do TI, registro do equipamento).
+     */
+    public static function present(array $row): array
+    {
+        global $CFG_GLPI;
+
+        $itemtype = (string) $row['itemtype'];
+        $item_row = ItemProvider::getRow($itemtype, (int) $row['items_id']);
+        $item     = $item_row !== null ? ItemProvider::present($itemtype, $item_row) : ['label' => '#' . $row['items_id'], 'detail' => ''];
+        $phase    = (int) $row['reason'] === self::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
+        $ticket   = (int) $row['tickets_id'];
+        $status   = (int) $row['status'];
+
+        $ticket_status = '';
+        if ($ticket > 0) {
+            $t = new \Ticket();
+            $ticket_status = $t->getFromDB($ticket) ? \Ticket::getStatus((int) $t->fields['status']) : __('Chamado excluído', 'checklistitens');
+        }
+
+        $release = '';
+        if ($status === self::STATUS_RELEASED) {
+            $release = (int) $row['release_type'] === self::RELEASE_TICKET
+                ? sprintf(__('Liberado automaticamente em %s (chamado solucionado)', 'checklistitens'), Ui::datetime($row['date_release']))
+                : sprintf(__('Liberado por %1$s em %2$s', 'checklistitens'), Ui::text(getUserName((int) $row['users_id_release'])), Ui::datetime($row['date_release']));
+        }
+
+        return [
+            'id'             => (int) $row['id'],
+            'itemtype'       => $itemtype,
+            'items_id'       => (int) $row['items_id'],
+            'type_label'     => ItemProvider::getTypeLabel($itemtype),
+            'icon'           => ItemProvider::getTypeIcon($itemtype),
+            'label'          => $item['label'],
+            'detail'         => $item['detail'],
+            'sector'         => Sector::getName((int) $row['groups_id']),
+            'user'           => Ui::text(getUserName((int) $row['users_id'])),
+            'when'           => Ui::datetime($row['date_block']),
+            'shift_label'    => Shift::label($row['block_shift_start']),
+            'reason_label'   => self::getReasonLabels()[(int) $row['reason']] ?? '',
+            'status'         => $status,
+            'status_label'   => self::getStatusLabels()[$status] ?? '',
+            'active'         => (int) $row['lock_active'] === 1,
+            'problems'       => array_column(UsageProblem::getFor((int) $row['plugin_checklistitens_usages_id'], $phase), 'name'),
+            'ticket_id'      => $ticket,
+            'ticket_url'     => $ticket > 0 ? $CFG_GLPI['root_doc'] . '/front/ticket.form.php?id=' . $ticket : '',
+            'ticket_status'  => $ticket_status,
+            'conferred'      => (int) $row['plugin_checklistitens_confirmations_id'] > 0,
+            'release_label'  => $release,
+        ];
+    }
+
     public static function getActiveFor(string $itemtype, int $items_id): ?array
     {
         global $DB;

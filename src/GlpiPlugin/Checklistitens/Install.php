@@ -2,7 +2,9 @@
 
 namespace GlpiPlugin\Checklistitens;
 
+use CronTask;
 use DBConnection;
+use Item_Ticket;
 use Migration;
 use Toolbox;
 
@@ -29,6 +31,19 @@ class Install
         Profile::installRights();
         ProblemType::installDefaults();
         Selfie::createBaseDir();
+        self::registerCronTasks();
+    }
+
+    /**
+     * Tarefas automáticas (CronTask::register não duplica se já existir).
+     */
+    private static function registerCronTasks(): void
+    {
+        CronTask::register(ItemBlock::class, 'releaseblocks', DAY_TIMESTAMP, [
+            'mode'    => CronTask::MODE_EXTERNAL,
+            'state'   => CronTask::STATE_WAITING,
+            'comment' => __('Libera itens bloqueados cujo chamado já foi solucionado (rede de segurança do hook de chamado).', 'checklistitens'),
+        ]);
     }
 
     public static function uninstall(): void
@@ -44,6 +59,10 @@ class Install
         Config::uninstall();
         Profile::uninstallRights();
         Selfie::removeBaseDir();
+        CronTask::unregister('checklistitens');
+
+        // Vínculos de chamados com registros de uso que deixam de existir
+        $DB->delete(Item_Ticket::getTable(), ['itemtype' => Usage::class]);
     }
 
     /**

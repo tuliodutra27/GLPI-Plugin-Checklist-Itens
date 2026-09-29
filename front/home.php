@@ -66,6 +66,16 @@ if (Profile::isManager() || Profile::isAdmin()) {
 }
 
 if (Profile::isAdmin()) {
+    $blocked = countElementsInTable(ItemBlock::getTable(), ['lock_active' => 1]);
+    $cards[] = [
+        'title'       => __('Itens bloqueados', 'checklistitens'),
+        'description' => __('Todos os setores. O item volta a circular quando o chamado é solucionado.', 'checklistitens'),
+        'url'         => Ui::url('front/itemblock.php'),
+        'icon'        => ItemBlock::getIcon(),
+        'color'       => 'red',
+        'badge'       => $blocked ? (string) $blocked : '',
+        'badge_color' => 'red',
+    ];
     $cards[] = [
         'title'       => ProblemType::getTypeName(2),
         'description' => __('Lista de problemas que o colaborador marca, por tipo de equipamento.', 'checklistitens'),
