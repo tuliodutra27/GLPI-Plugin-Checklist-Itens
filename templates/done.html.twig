@@ -1,0 +1,40 @@
+{# Depois de salvar: retirada → logoff automático; devolução → "Pegar outro equipamento?" #}
+<div class="ci-page container-fluid" data-ci-idle="{{ idle_seconds }}" data-ci-logout="{{ logout_url }}">
+    <div class="card">
+        <div class="card-body text-center py-5">
+            {% if blocked %}
+                <i class="ti ti-lock ci-done-icon text-warning"></i>
+            {% else %}
+                <i class="ti ti-circle-check ci-done-icon text-success"></i>
+            {% endif %}
+
+            <h2 class="mb-1">
+                {% if action == 'checkout' %}
+                    {{ __('Retirada registrada', 'checklistitens') }}
+                {% else %}
+                    {{ __('Devolução registrada', 'checklistitens') }}
+                {% endif %}
+            </h2>
+            <p class="text-muted">{{ item }}</p>
+
+            {% if blocked %}
+                <div class="alert alert-warning d-inline-block">
+                    {{ __('O equipamento ficou bloqueado e será conferido pelo gestor.', 'checklistitens') }}
+                </div>
+            {% endif %}
+
+            {% if action == 'checkout' %}
+                <p class="mt-3" data-ci-redirect="{{ logout_url }}" data-ci-redirect-after="{{ logout_after }}">
+                    {{ __('Saindo do sistema em', 'checklistitens') }} <span data-ci-countdown>{{ logout_after }}</span> s...
+                </p>
+                <a href="{{ logout_url }}" class="btn btn-lg btn-primary"><i class="ti ti-power"></i> {{ __('Sair agora', 'checklistitens') }}</a>
+            {% else %}
+                <h3 class="mt-4">{{ __('Pegar outro equipamento?', 'checklistitens') }}</h3>
+                <div class="d-flex gap-2 justify-content-center mt-3">
+                    <a href="{{ checkout_url }}" class="btn btn-lg btn-success"><i class="ti ti-check"></i> {{ __('Sim', 'checklistitens') }}</a>
+                    <a href="{{ logout_url }}" class="btn btn-lg btn-outline-secondary"><i class="ti ti-power"></i> {{ __('Não, sair', 'checklistitens') }}</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

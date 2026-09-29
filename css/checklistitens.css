@@ -38,6 +38,152 @@
     font-size: 1.1rem;
 }
 
+/* Passos do fluxo */
+.ci-step-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-size: 1.15rem;
+    margin-bottom: .75rem;
+}
+
+.ci-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--tblr-primary, #206bc4);
+    color: #fff;
+    font-size: .95rem;
+    flex-shrink: 0;
+}
+
+/* Botões grandes de escolha (tipo, SIM/NÃO) */
+.ci-choice {
+    display: block;
+    width: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+
+.ci-choice-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.ci-choice-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    min-height: 4rem;
+    padding: .75rem;
+    border: 2px solid var(--tblr-border-color, #dadfe5);
+    border-radius: .5rem;
+    font-size: 1.15rem;
+    font-weight: 600;
+    text-align: center;
+}
+
+.ci-choice-box i {
+    font-size: 1.5rem;
+}
+
+.ci-choice-input:checked + .ci-choice-box {
+    border-color: var(--tblr-primary, #206bc4);
+    background: rgba(32, 107, 196, .08);
+}
+
+.ci-choice-ok .ci-choice-input:checked + .ci-choice-box {
+    border-color: var(--tblr-success, #2fb344);
+    background: rgba(47, 179, 68, .1);
+}
+
+.ci-choice-nok .ci-choice-input:checked + .ci-choice-box {
+    border-color: var(--tblr-warning, #f59f00);
+    background: rgba(245, 159, 0, .12);
+}
+
+.ci-choice-input:focus-visible + .ci-choice-box {
+    outline: 2px solid var(--tblr-primary, #206bc4);
+    outline-offset: 2px;
+}
+
+/* Lista de equipamentos */
+.ci-item-list {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    max-height: 55vh;
+    overflow-y: auto;
+}
+
+.ci-item {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    padding: .75rem;
+    border: 1px solid var(--tblr-border-color, #dadfe5);
+    border-radius: .5rem;
+    cursor: pointer;
+    margin: 0;
+}
+
+.ci-item .form-check-input {
+    margin-top: .2rem;
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+}
+
+.ci-item:has(input:checked) {
+    border-color: var(--tblr-primary, #206bc4);
+    background: rgba(32, 107, 196, .06);
+}
+
+.ci-item-disabled {
+    opacity: .6;
+    cursor: not-allowed;
+}
+
+/* Problemas */
+.ci-problem-group {
+    margin-bottom: .75rem;
+}
+
+.ci-problem-group-title {
+    font-size: .8rem;
+    text-transform: uppercase;
+    color: var(--tblr-muted, #667382);
+    margin-bottom: .25rem;
+}
+
+.ci-problem {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .55rem .25rem;
+    margin: 0;
+    border-bottom: 1px solid var(--tblr-border-color-light, #eef0f3);
+    cursor: pointer;
+}
+
+.ci-problem .form-check-input {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    margin: 0;
+}
+
+.ci-done-icon {
+    font-size: 4.5rem;
+    display: block;
+    margin-bottom: .5rem;
+}
+
 /* Selfie */
 .ci-selfie-button {
     min-height: 3.5rem;
