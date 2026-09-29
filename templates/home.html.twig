@@ -1,0 +1,38 @@
+{# Tela inicial: um cartão por função que o perfil pode usar #}
+<div class="ci-page container-fluid">
+    <h2 class="ci-title mb-3">
+        <i class="ti ti-clipboard-check"></i>
+        {{ __('Checklist uso de equipamentos', 'checklistitens') }}
+    </h2>
+
+    {% for notice in notices|default([]) %}
+        <div class="alert alert-{{ notice.type }}">{{ notice.text }}</div>
+    {% endfor %}
+
+    <div class="row g-3">
+        {% for card in cards %}
+            <div class="col-12 col-md-6 col-xl-4">
+                <a href="{{ card.url }}" class="card ci-card text-decoration-none h-100">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <span class="ci-card-icon bg-{{ card.color }} text-white">
+                            <i class="{{ card.icon }}"></i>
+                        </span>
+                        <div>
+                            <div class="ci-card-title">
+                                {{ card.title }}
+                                {% if card.badge is defined and card.badge %}
+                                    <span class="badge bg-{{ card.badge_color|default('orange') }} ms-1">{{ card.badge }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="text-muted small">{{ card.description }}</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        {% else %}
+            <div class="col-12">
+                <div class="alert alert-info">{{ __('Nenhuma função disponível para o seu perfil.', 'checklistitens') }}</div>
+            </div>
+        {% endfor %}
+    </div>
+</div>

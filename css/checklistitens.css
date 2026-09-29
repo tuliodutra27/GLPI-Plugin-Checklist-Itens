@@ -1,0 +1,39 @@
+/* Checklist uso de equipamentos: usa as classes do tema do GLPI (Tabler); aqui só ajustes de
+   tamanho para uso no celular/tablet. Cores vêm das variáveis do tema (claro/escuro). */
+
+.ci-page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding-bottom: 2rem;
+}
+
+.ci-title {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.ci-card {
+    color: inherit;
+    transition: box-shadow .15s ease-in-out;
+}
+
+.ci-card:hover {
+    box-shadow: 0 0 0 2px var(--tblr-primary, #206bc4);
+}
+
+.ci-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border-radius: .5rem;
+    font-size: 1.6rem;
+    flex-shrink: 0;
+}
+
+.ci-card-title {
+    font-weight: 600;
+    font-size: 1.1rem;
+}

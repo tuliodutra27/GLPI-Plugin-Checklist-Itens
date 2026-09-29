@@ -1,0 +1,12 @@
+.claude/
+/rascunhos/
+
+# Documentação interna do projeto: fica só local (repositório público leva apenas o código)
+/PLANO-*.md
+/old/
+/Diagramas/
+*.pdf
+
+# backups automáticos do draw.io
+.$*.bkp
+.$*.dtmp
