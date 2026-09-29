@@ -32,6 +32,12 @@ class Profile extends GlpiProfile
         return __('Checklist uso de equipamentos', 'checklistitens');
     }
 
+    /** @return string[] */
+    public static function getRightNames(): array
+    {
+        return [self::RIGHT_USAGE, self::RIGHT_MANAGER, self::RIGHT_CONFIG];
+    }
+
     public static function getAllRights(): array
     {
         return [

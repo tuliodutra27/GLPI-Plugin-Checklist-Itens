@@ -30,9 +30,11 @@ class Ui
             Html::header($title, $_SERVER['PHP_SELF'], 'assets', Menu::class, $option);
         }
 
-        $dir = Plugin::getWebDir('checklistitens', false);
-        echo Html::css($dir . '/css/checklistitens.css');
-        echo Html::script($dir . '/js/checklistitens.js');
+        // A versão no link muda quando o arquivo muda, para o navegador não usar CSS/JS antigos
+        $dir  = Plugin::getWebDir('checklistitens', false);
+        $root = Plugin::getPhpDir('checklistitens');
+        echo Html::css($dir . '/css/checklistitens.css', ['version' => (string) @filemtime($root . '/css/checklistitens.css')]);
+        echo Html::script($dir . '/js/checklistitens.js', ['version' => (string) @filemtime($root . '/js/checklistitens.js')]);
     }
 
     public static function footer(): void

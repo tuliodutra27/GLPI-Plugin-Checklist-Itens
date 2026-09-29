@@ -163,6 +163,48 @@ class ItemProvider
     }
 
     /**
+     * Diagnóstico para o TI quando a lista de retirada vem vazia: mostra onde os itens "somem"
+     * (setor, estado disponível, uso aberto, bloqueio).
+     *
+     * @param int[] $groups
+     * @return array<string, string|int|bool>
+     */
+    public static function diagnose(string $itemtype, array $groups): array
+    {
+        global $DB;
+
+        $states    = Config::getAvailableStates();
+        $in_sector = count($groups) ? self::getItems($itemtype, $groups) : [];
+
+        $available_state = array_filter($in_sector, static fn ($row) => in_array((int) $row['states_id'], $states, true));
+        $ids             = array_map(static fn ($row) => (int) $row['id'], $available_state);
+
+        $open = $blocked = 0;
+        if (count($ids)) {
+            $open    = countElementsInTable(Install::TABLE_USAGES, ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_open' => 1]);
+            $blocked = countElementsInTable(Install::TABLE_ITEMBLOCKS, ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_active' => 1]);
+        }
+
+        $state_names = [];
+        if (count($states)) {
+            foreach ($DB->request(['SELECT' => 'completename', 'FROM' => 'glpi_states', 'WHERE' => ['id' => $states]]) as $row) {
+                $state_names[] = Ui::text($row['completename']);
+            }
+        }
+
+        return [
+            'type_enabled'    => in_array($itemtype, Config::getEnabledTypes(), true),
+            'type_supported'  => self::isSupported($itemtype),
+            'sector'          => implode(', ', Sector::getNames($groups)),
+            'states'          => implode(', ', $state_names),
+            'in_sector'       => count($in_sector),
+            'available_state' => count($available_state),
+            'open'            => $open,
+            'blocked'         => $blocked,
+        ];
+    }
+
+    /**
      * Todos os itens de um tipo (não excluídos), opcionalmente só de alguns grupos. Usado no
      * registro de uso dos equipamentos.
      *

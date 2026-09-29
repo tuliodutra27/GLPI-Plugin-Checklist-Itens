@@ -240,9 +240,10 @@ class Config extends CommonGLPI
         echo "</td></tr>";
 
         echo "<tr class='tab_bg_1'><td>" . __('Estados disponíveis para retirada', 'checklistitens') . "</td><td>";
+        // Seleção múltipla: no GLPI 10 os valores vão em 'value' (array)
         State::dropdown([
             'name'     => 'states',
-            'values'   => self::getAvailableStates(),
+            'value'    => self::getAvailableStates(),
             'multiple' => true,
         ]);
         echo "</td></tr>";

@@ -5,6 +5,27 @@
     max-width: 960px;
     margin: 0 auto;
     padding-bottom: 2rem;
+    /* Quebra só entre palavras (o tema do GLPI permite quebrar em qualquer letra, o que
+       espremia os textos a uma letra por linha no celular) */
+    word-break: normal;
+    overflow-wrap: break-word;
+}
+
+.ci-page * {
+    word-break: normal;
+}
+
+/* Textos ao lado de ícones/campos ocupam o espaço que sobra, sem encolher até sumir */
+.ci-page .d-flex > .flex-fill,
+.ci-page .d-flex > div,
+.ci-item > span,
+.ci-problem > span {
+    min-width: 0;
+}
+
+.ci-item > span,
+.ci-problem > span {
+    flex: 1 1 auto;
 }
 
 .ci-page-wide {
@@ -19,7 +40,21 @@
 
 .ci-card {
     color: inherit;
+    width: 100%;
     transition: box-shadow .15s ease-in-out;
+}
+
+/* Ícone numa coluna fixa e texto no resto da largura */
+.ci-card-body {
+    display: grid;
+    grid-template-columns: 3rem minmax(0, 1fr);
+    align-items: center;
+    gap: .75rem;
+    width: 100%;
+}
+
+.ci-card-text {
+    min-width: 0;
 }
 
 .ci-card:hover {

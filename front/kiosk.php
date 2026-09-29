@@ -23,15 +23,21 @@ foreach (Config::getEnabledTypes() as $itemtype) {
     $limit        = Config::getLimit($itemtype);
     $limitReached = $limit > 0 && Usage::countOpenForUser($users_id, $itemtype) >= $limit;
 
+    $items = ($step === 'checkout' && !$limitReached) ? ItemProvider::getAvailable($itemtype, $sector) : [];
+
     $types[] = [
         'itemtype'      => $itemtype,
         'label'         => ItemProvider::getTypeLabel($itemtype),
         'short_label'   => ItemProvider::getShortTypeLabel($itemtype),
         'icon'          => ItemProvider::getTypeIcon($itemtype),
-        'items'         => ($step === 'checkout' && !$limitReached) ? ItemProvider::getAvailable($itemtype, $sector) : [],
+        'items'         => $items,
         'limit_reached' => $limitReached,
         'limit'         => $limit,
         'problems'      => ProblemType::getGroupedForType($itemtype),
+        // Lista vazia: o TI vê o motivo (setor, estado, em uso, bloqueado)
+        'diagnostic'    => ($step === 'checkout' && !$limitReached && !count($items) && Profile::isAdmin())
+            ? ItemProvider::diagnose($itemtype, $sector)
+            : null,
     ];
 }
 
@@ -50,6 +56,7 @@ Ui::render('kiosk.html.twig', [
     'selected_type' => $selected_type,
     'my_usages'     => $my_usages,
     'has_sector'    => count($sector) > 0,
+    'sector_names'  => implode(', ', Sector::getNames($sector)),
     'post_url'      => Ui::url('front/usage.form.php'),
     'home_url'      => Ui::url('front/home.php'),
     'checkin_url'   => Ui::url('front/kiosk.php?step=checkin'),

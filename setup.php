@@ -30,6 +30,15 @@ function plugin_init_checklistitens()
         return;
     }
 
+    // Perfis da interface simplificada (operador, gestor operacional) só mantêm na sessão os
+    // direitos da lista Profile::$helpdesk_rights; sem isso o GLPI descarta os direitos do plugin
+    // no login e as telas respondem "sem permissão".
+    foreach (ChecklistProfile::getRightNames() as $right) {
+        if (!in_array($right, Profile::$helpdesk_rights, true)) {
+            Profile::$helpdesk_rights[] = $right;
+        }
+    }
+
     // O chamado aberto na conferência fica vinculado ao registro de uso; o registro de uso também
     // dispara a notificação de equipamento não devolvido
     Plugin::registerClass(Usage::class, ['ticket_types' => true, 'notificationtemplates_types' => true]);
