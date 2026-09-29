@@ -10,7 +10,7 @@ require_once __DIR__ . '/autoload.php';
 use GlpiPlugin\Checklistitens\Menu;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
 
-define('PLUGIN_CHECKLISTITENS_VERSION', '0.1.0');
+define('PLUGIN_CHECKLISTITENS_VERSION', '0.2.0');
 define('PLUGIN_CHECKLISTITENS_MIN_GLPI_VERSION', '10.0.0');
 define('PLUGIN_CHECKLISTITENS_MAX_GLPI_VERSION', '10.0.99');
 

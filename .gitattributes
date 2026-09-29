@@ -1,0 +1,4 @@
+# O plugin roda em Linux: manter finais de linha LF no repositório e na cópia local
+* text=auto eol=lf
+*.png binary
+*.jpg binary

@@ -41,6 +41,15 @@ class Menu extends CommonGLPI
         ];
 
         if (Profile::isAdmin()) {
+            $menu['options']['problemtype'] = [
+                'title' => ProblemType::getTypeName(2),
+                'page'  => ProblemType::getSearchURL(false),
+                'icon'  => ProblemType::getIcon(),
+                'links' => [
+                    'search' => ProblemType::getSearchURL(false),
+                ] + (Profile::canAdministrate() ? ['add' => ProblemType::getFormURL(false)] : []),
+            ];
+
             $menu['options']['config'] = [
                 'title' => Config::getTypeName(),
                 'page'  => Ui::url('front/config.form.php'),

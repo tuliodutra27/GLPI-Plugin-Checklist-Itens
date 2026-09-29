@@ -27,6 +27,7 @@ class Install
         self::createTables();
         Config::installDefaults();
         Profile::installRights();
+        ProblemType::installDefaults();
         Selfie::createBaseDir();
     }
 

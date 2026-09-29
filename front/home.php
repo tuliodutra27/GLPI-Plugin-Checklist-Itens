@@ -1,6 +1,7 @@
 <?php
 
 use GlpiPlugin\Checklistitens\Config;
+use GlpiPlugin\Checklistitens\ProblemType;
 use GlpiPlugin\Checklistitens\Profile;
 use GlpiPlugin\Checklistitens\Ui;
 
@@ -13,6 +14,13 @@ if (!Profile::canUse() && !Profile::isManager() && !Profile::isAdmin()) {
 $cards = [];
 
 if (Profile::isAdmin()) {
+    $cards[] = [
+        'title'       => ProblemType::getTypeName(2),
+        'description' => __('Lista de problemas que o colaborador marca, por tipo de equipamento.', 'checklistitens'),
+        'url'         => ProblemType::getSearchURL(),
+        'icon'        => ProblemType::getIcon(),
+        'color'       => 'secondary',
+    ];
     $cards[] = [
         'title'       => Config::getTypeName(),
         'description' => __('Tipos, estados, limites, turnos, categorias e retenção de selfies.', 'checklistitens'),
