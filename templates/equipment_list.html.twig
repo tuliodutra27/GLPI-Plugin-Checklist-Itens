@@ -52,15 +52,15 @@
                         <tr>
                             <td>
                                 <a href="{{ i.url }}"><i class="{{ i.icon }}"></i> <strong>{{ i.label }}</strong></a>
-                                <div class="small text-muted">{{ i.type_label }} · {{ i.detail }}</div>
+                                <div class="ci-small text-muted">{{ i.type_label }} · {{ i.detail }}</div>
                             </td>
-                            <td class="small">{{ i.sector }}</td>
+                            <td class="ci-small">{{ i.sector }}</td>
                             <td>
                                 <span class="badge bg-{{ i.situation_color }}">{{ i.situation_label }}</span>
-                                {% if i.holder %}<div class="small text-muted">{{ i.holder }}</div>{% endif %}
-                                {% if i.situation == 'out' and i.state %}<div class="small text-muted">{{ i.state }}</div>{% endif %}
+                                {% if i.holder %}<div class="ci-small text-muted">{{ i.holder }}</div>{% endif %}
+                                {% if i.situation == 'out' and i.state %}<div class="ci-small text-muted">{{ i.state }}</div>{% endif %}
                             </td>
-                            <td class="small">{{ i.last_problem }}</td>
+                            <td class="ci-small">{{ i.last_problem }}</td>
                             <td class="text-center">{{ i.tickets ?: '' }}</td>
                         </tr>
                     {% else %}
@@ -69,7 +69,7 @@
                 </tbody>
             </table>
         </div>
-        <div class="card-footer text-muted small">{{ items|length }} {{ __('equipamento(s)', 'checklistitens') }}</div>
+        <div class="card-footer text-muted ci-small">{{ items|length }} {{ __('equipamento(s)', 'checklistitens') }}</div>
     </div>
 
     <a href="{{ home_url }}" class="btn btn-outline-secondary mt-3"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>

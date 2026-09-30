@@ -33,7 +33,7 @@
                 </select>
             </div>
             <div>
-                <div class="text-muted small">{{ __('Turno atual', 'checklistitens') }}</div>
+                <div class="text-muted ci-small">{{ __('Turno atual', 'checklistitens') }}</div>
                 <div class="fw-bold">{{ shift_label }}</div>
             </div>
         </div>
@@ -53,8 +53,8 @@
                 <div class="list-group-item">
                     <div class="d-flex justify-content-between flex-wrap gap-2">
                         <div>
-                            <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong> <span class="text-muted small">{{ b.detail }}</span>
-                            <div class="small">{{ b.reason_label }} · {{ b.user }} · {{ b.when }}</div>
+                            <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong> <span class="text-muted ci-small">{{ b.detail }}</span>
+                            <div class="ci-small">{{ b.reason_label }} · {{ b.user }} · {{ b.when }}</div>
                             <ul class="ci-problem-tags mb-1">
                                 {% for p in b.problems %}<li>{{ p }}</li>{% endfor %}
                             </ul>
@@ -62,7 +62,7 @@
                             {% if b.conferred %}<span class="badge bg-green-lt">{{ __('Conferido', 'checklistitens') }}</span>{% endif %}
                         </div>
                         <div class="text-end">
-                            <div class="small mb-1">{{ b.status_label }}</div>
+                            <div class="ci-small mb-1">{{ b.status_label }}</div>
                             {% if b.ticket_id %}
                                 <a href="{{ b.ticket_url }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
                                     <i class="ti ti-ticket"></i> {{ __('Chamado', 'checklistitens') }} {{ b.ticket_id }}
@@ -95,8 +95,8 @@
                 <div class="list-group-item d-flex align-items-center gap-3">
                     {{ ci.thumb(u.selfie_url) }}
                     <div class="flex-fill">
-                        <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted small">{{ u.detail }}</span>
-                        <div class="small">{{ u.user }} · {{ u.when }}</div>
+                        <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted ci-small">{{ u.detail }}</span>
+                        <div class="ci-small">{{ u.user }} · {{ u.when }}</div>
                         {{ ci.shift_badge(u) }}
                     </div>
                     <span class="badge bg-green-lt"><i class="ti ti-circle-check"></i> {{ __('Ok', 'checklistitens') }}</span>
@@ -117,8 +117,8 @@
                 <div class="list-group-item d-flex align-items-center gap-3">
                     {{ ci.thumb(u.selfie_url) }}
                     <div class="flex-fill">
-                        <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted small">{{ u.detail }}</span>
-                        <div class="small">{{ u.user }} · {{ u.when }}</div>
+                        <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted ci-small">{{ u.detail }}</span>
+                        <div class="ci-small">{{ u.user }} · {{ u.when }}</div>
                         {% if u.problems|length %}
                             <ul class="ci-problem-tags mb-1">{% for p in u.problems %}<li>{{ p }}</li>{% endfor %}</ul>
                         {% endif %}
@@ -144,8 +144,8 @@
         <div class="list-group list-group-flush">
             {% for u in released %}
                 <div class="list-group-item">
-                    <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted small">{{ u.detail }}</span>
-                    <div class="small">{{ u.user }} · {{ __('Retirado em', 'checklistitens') }} {{ u.when }}</div>
+                    <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted ci-small">{{ u.detail }}</span>
+                    <div class="ci-small">{{ u.user }} · {{ __('Retirado em', 'checklistitens') }} {{ u.when }}</div>
                     {{ ci.shift_badge(u) }}
                 </div>
             {% else %}
@@ -175,7 +175,7 @@
                             <strong>{{ tickets_to_open }} {{ __('chamado(s) será(ão) aberto(s) automaticamente.', 'checklistitens') }}</strong>
                         {% endif %}
                     </p>
-                    <p class="text-muted small">{{ __('As retiradas conferidas ficam liberadas para devolução.', 'checklistitens') }}</p>
+                    <p class="text-muted ci-small">{{ __('As retiradas conferidas ficam liberadas para devolução.', 'checklistitens') }}</p>
                     {% include '@checklistitens/parts/selfie_input.html.twig' with {'label': __('Tirar minha selfie', 'checklistitens')} %}
                     <button type="submit" name="confirm" value="1" class="btn btn-success btn-lg w-100 mt-3" data-ci-require="selfie">
                         <i class="ti ti-checks"></i> {{ __('Confirmar conferência', 'checklistitens') }}

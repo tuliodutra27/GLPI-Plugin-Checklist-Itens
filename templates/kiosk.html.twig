@@ -57,7 +57,7 @@
             {{ __('Você não está em nenhum grupo (setor) no GLPI, então nenhum equipamento aparece. Procure o TI.', 'checklistitens') }}
         </div>
     {% elseif step == 'checkout' %}
-        <div class="text-muted small mb-2"><i class="ti ti-users"></i> {{ __('Seu setor', 'checklistitens') }}: {{ sector_names }}</div>
+        <div class="text-muted ci-small mb-2"><i class="ti ti-users"></i> {{ __('Seu setor', 'checklistitens') }}: {{ sector_names }}</div>
     {% endif %}
 
     {% if my_usages|length and step == 'checkout' %}
@@ -70,8 +70,8 @@
                     <div class="list-group-item d-flex justify-content-between align-items-center gap-2">
                         <div>
                             <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong>
-                            <span class="text-muted small">{{ u.detail }}</span>
-                            <div class="small text-muted">{{ __('Retirado em', 'checklistitens') }} {{ u.checkout }}</div>
+                            <span class="text-muted ci-small">{{ u.detail }}</span>
+                            <div class="ci-small text-muted">{{ __('Retirado em', 'checklistitens') }} {{ u.checkout }}</div>
                         </div>
                         <span class="badge bg-{{ u.status_color }}">{{ u.status_label }}</span>
                     </div>
@@ -124,13 +124,14 @@
                                 <div class="alert alert-info">{{ __('Nenhum equipamento deste tipo disponível no seu setor agora.', 'checklistitens') }}</div>
                                 {% if t.diagnostic %}
                                     {% set d = t.diagnostic %}
-                                    <div class="alert alert-secondary small">
+                                    <div class="alert alert-secondary ci-small">
                                         <strong>{{ __('Diagnóstico (visível só para o TI)', 'checklistitens') }}</strong>
                                         <ul class="mb-0">
                                             {% if not d.type_supported %}<li>{{ __('Tipo indisponível (plugin Radios inativo?).', 'checklistitens') }}</li>{% endif %}
                                             {% if not d.type_enabled %}<li>{{ __('Tipo desabilitado na configuração do plugin.', 'checklistitens') }}</li>{% endif %}
-                                            <li>{{ __('Setor considerado', 'checklistitens') }}: {{ d.sector ?: __('nenhum grupo', 'checklistitens') }}</li>
-                                            <li>{{ __('Estados disponíveis na configuração', 'checklistitens') }}: {{ d.states ?: __('nenhum (configure em Configuração)', 'checklistitens') }}</li>
+                                            <li>{{ __('Setor considerado', 'checklistitens') }}: {{ d.sector ?: __('nenhum grupo', 'checklistitens') }} (ids: {{ d.groups_ids }})</li>
+                                            <li>{{ __('Estados disponíveis na configuração', 'checklistitens') }}: {{ d.states ?: __('nenhum (configure em Configuração)', 'checklistitens') }} (ids: {{ d.states_ids }})</li>
+                                            <li>{{ __('Tipos habilitados', 'checklistitens') }}: {{ d.enabled_types }}</li>
                                             <li>{{ __('Itens deste tipo no setor', 'checklistitens') }}: {{ d.in_sector }}</li>
                                             <li>{{ __('Desses, em estado disponível', 'checklistitens') }}: {{ d.available_state }}</li>
                                             <li>{{ __('Em uso agora', 'checklistitens') }}: {{ d.open }} · {{ __('bloqueados', 'checklistitens') }}: {{ d.blocked }}</li>

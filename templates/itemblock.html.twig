@@ -26,18 +26,18 @@
                         <tr>
                             <td>
                                 <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong>
-                                <div class="text-muted small">{{ b.detail }}</div>
+                                <div class="text-muted ci-small">{{ b.detail }}</div>
                             </td>
                             <td>{{ b.sector }}</td>
                             <td>
                                 {{ b.reason_label }}
-                                <div class="small text-muted">{{ b.user }} · {{ b.when }}</div>
+                                <div class="ci-small text-muted">{{ b.user }} · {{ b.when }}</div>
                                 <ul class="ci-problem-tags">{% for p in b.problems %}<li>{{ p }}</li>{% endfor %}</ul>
                             </td>
                             <td>
                                 {% if b.ticket_id %}
                                     <a href="{{ b.ticket_url }}" target="_blank" rel="noopener">#{{ b.ticket_id }}</a>
-                                    <div class="small text-muted">{{ b.ticket_status }}</div>
+                                    <div class="ci-small text-muted">{{ b.ticket_status }}</div>
                                 {% else %}
                                     <span class="text-muted">{{ __('Aguardando conferência do gestor', 'checklistitens') }}</span>
                                 {% endif %}
@@ -68,8 +68,8 @@
         <div class="list-group list-group-flush">
             {% for b in released %}
                 <div class="list-group-item">
-                    <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong> <span class="text-muted small">{{ b.sector }}</span>
-                    <div class="small text-muted">{{ b.release_label }}{% if b.ticket_id %} · <a href="{{ b.ticket_url }}" target="_blank" rel="noopener">#{{ b.ticket_id }}</a>{% endif %}</div>
+                    <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong> <span class="text-muted ci-small">{{ b.sector }}</span>
+                    <div class="ci-small text-muted">{{ b.release_label }}{% if b.ticket_id %} · <a href="{{ b.ticket_url }}" target="_blank" rel="noopener">#{{ b.ticket_id }}</a>{% endif %}</div>
                 </div>
             {% else %}
                 <div class="list-group-item text-muted">{{ __('Nenhuma liberação ainda.', 'checklistitens') }}</div>

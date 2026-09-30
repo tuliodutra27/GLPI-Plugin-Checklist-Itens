@@ -15,6 +15,12 @@
     word-break: normal;
 }
 
+/* Texto menor. Não usar a classe "small" do Bootstrap: o CSS legado do GLPI define
+   "#page .small { width: 1% }", o que espreme o texto a uma letra por linha. */
+.ci-small {
+    font-size: .875em;
+}
+
 /* Textos ao lado de ícones/campos ocupam o espaço que sobra, sem encolher até sumir */
 .ci-page .d-flex > .flex-fill,
 .ci-page .d-flex > div,

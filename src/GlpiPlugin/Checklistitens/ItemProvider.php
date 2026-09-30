@@ -195,6 +195,9 @@ class ItemProvider
         return [
             'type_enabled'    => in_array($itemtype, Config::getEnabledTypes(), true),
             'type_supported'  => self::isSupported($itemtype),
+            'enabled_types'   => implode(', ', Config::getEnabledTypes()),
+            'groups_ids'      => implode(', ', $groups),
+            'states_ids'      => implode(', ', $states),
             'sector'          => implode(', ', Sector::getNames($groups)),
             'states'          => implode(', ', $state_names),
             'in_sector'       => count($in_sector),
