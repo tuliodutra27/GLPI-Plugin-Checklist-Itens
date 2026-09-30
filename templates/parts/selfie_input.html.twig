@@ -1,10 +1,30 @@
-{# Campo de selfie: abre a câmera frontal do celular/tablet; o JS redimensiona e grava em selfie_data #}
+{#
+  Campo de selfie. Duas formas, escolhidas pelo JS:
+  - câmera dentro da página, sempre a frontal (precisa de HTTPS ou de o navegador tratar o
+    endereço como seguro);
+  - câmera nativa do aparelho (input capture): funciona em HTTP, mas é o app de câmera que
+    decide qual câmera abre.
+  Nas duas, o JS reduz a foto e grava em selfie_data.
+#}
 <div class="ci-selfie" data-ci-selfie-box>
-    <label class="btn btn-primary btn-lg w-100 ci-selfie-button">
+    <div class="ci-camera" data-ci-camera hidden>
+        <video class="ci-camera-video" data-ci-camera-video playsinline muted autoplay></video>
+        <button type="button" class="btn btn-success btn-lg w-100 mt-2" data-ci-camera-shoot>
+            <i class="ti ti-camera"></i> {{ __('Tirar foto', 'checklistitens') }}
+        </button>
+    </div>
+
+    <button type="button" class="btn btn-primary btn-lg w-100 ci-selfie-button" data-ci-camera-open hidden>
+        <i class="ti ti-camera"></i>
+        <span data-ci-camera-open-label>{{ label|default(__('Tirar selfie', 'checklistitens')) }}</span>
+    </button>
+
+    <label class="btn btn-primary btn-lg w-100 ci-selfie-button" data-ci-selfie-native>
         <i class="ti ti-camera"></i>
         <span data-ci-selfie-label>{{ label|default(__('Tirar selfie', 'checklistitens')) }}</span>
         <input type="file" name="selfie_file" accept="image/*" capture="user" class="d-none" data-ci-selfie-input>
     </label>
+
     <input type="hidden" name="selfie_data" value="" data-ci-selfie-data>
     <img class="ci-selfie-preview mt-2" alt="{{ __('Selfie', 'checklistitens') }}" hidden data-ci-selfie-preview>
     <div class="text-muted ci-small mt-1" data-ci-selfie-status></div>

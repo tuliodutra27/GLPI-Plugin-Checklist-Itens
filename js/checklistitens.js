@@ -21,9 +21,19 @@
     }
 
     /**
-     * Selfie: abre a câmera frontal (input capture), reduz a foto no navegador e guarda em
-     * JPEG base64 no campo oculto. Se o navegador não conseguir ler a foto (ex.: formato não
-     * suportado), o arquivo original segue no envio como alternativa.
+     * Câmera dentro da página: só em contexto seguro (HTTPS, ou endereço liberado como seguro
+     * no navegador/política do aparelho). Em HTTP o navegador não oferece a câmera à página.
+     */
+    function cameraSupported() {
+        return !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    }
+
+    /**
+     * Selfie. Quando a câmera na página está disponível, abre sempre a câmera FRONTAL
+     * (facingMode "user"); senão usa a câmera nativa do aparelho (input capture), em que o app
+     * de câmera decide qual câmera abre. Nos dois casos reduz a foto no navegador e guarda em
+     * JPEG base64 no campo oculto. Se a foto nativa não puder ser lida (formato não suportado),
+     * o arquivo original segue no envio como alternativa.
      */
     function setupSelfie(box) {
         var input = box.querySelector('[data-ci-selfie-input]');
@@ -31,55 +41,160 @@
         var preview = box.querySelector('[data-ci-selfie-preview]');
         var status = box.querySelector('[data-ci-selfie-status]');
         var label = box.querySelector('[data-ci-selfie-label]');
+        var nativeButton = box.querySelector('[data-ci-selfie-native]');
+        var camera = box.querySelector('[data-ci-camera]');
+        var video = box.querySelector('[data-ci-camera-video]');
+        var openButton = box.querySelector('[data-ci-camera-open]');
+        var openLabel = box.querySelector('[data-ci-camera-open-label]');
+        var shootButton = box.querySelector('[data-ci-camera-shoot]');
+        var stream = null;
 
         if (!input || !hidden) {
             return;
         }
 
-        input.addEventListener('change', function () {
-            var file = input.files && input.files[0];
+        function setStatus(text) {
+            if (status) {
+                status.textContent = text;
+            }
+        }
+
+        function clear() {
             hidden.value = '';
             box.removeAttribute('data-ci-selfie-ready');
+        }
+
+        /** Reduz a imagem (foto ou quadro do vídeo) e grava no campo oculto. */
+        function store(source, width, height) {
+            var scale = Math.min(1, MAX_SIDE / Math.max(width, height));
+            var canvas = document.createElement('canvas');
+            canvas.width = Math.round(width * scale);
+            canvas.height = Math.round(height * scale);
+            canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+
+            hidden.value = canvas.toDataURL('image/jpeg', QUALITY);
+            preview.src = hidden.value;
+            preview.hidden = false;
+            box.setAttribute('data-ci-selfie-ready', '1');
+            setStatus('Selfie pronta.');
+            notify(box, 'ci:change');
+        }
+
+        // ---------------------------------------------------------- câmera nativa do aparelho
+        input.addEventListener('change', function () {
+            var file = input.files && input.files[0];
+            clear();
             if (!file) {
                 notify(box, 'ci:change');
                 return;
             }
 
-            status.textContent = 'Processando a foto...';
+            setStatus('Processando a foto...');
             var url = URL.createObjectURL(file);
             var img = new Image();
 
             img.onload = function () {
-                var scale = Math.min(1, MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
-                var canvas = document.createElement('canvas');
-                canvas.width = Math.round(img.naturalWidth * scale);
-                canvas.height = Math.round(img.naturalHeight * scale);
-                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
                 URL.revokeObjectURL(url);
-
-                hidden.value = canvas.toDataURL('image/jpeg', QUALITY);
-                preview.src = hidden.value;
-                preview.hidden = false;
+                store(img, img.naturalWidth, img.naturalHeight);
                 // A versão reduzida já está no campo oculto: não reenviar o arquivo original.
                 input.value = '';
-                box.setAttribute('data-ci-selfie-ready', '1');
-                status.textContent = 'Selfie pronta.';
                 if (label) {
                     label.textContent = 'Tirar outra selfie';
                 }
-                notify(box, 'ci:change');
             };
 
             img.onerror = function () {
                 URL.revokeObjectURL(url);
                 preview.hidden = true;
                 box.setAttribute('data-ci-selfie-ready', '1');
-                status.textContent = 'Foto recebida (será enviada como está).';
+                setStatus('Foto recebida (será enviada como está).');
                 notify(box, 'ci:change');
             };
 
             img.src = url;
         });
+
+        // ---------------------------------------------------------- câmera frontal na página
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(function (track) {
+                    track.stop();
+                });
+                stream = null;
+            }
+            if (video) {
+                video.srcObject = null;
+            }
+            if (camera) {
+                camera.hidden = true;
+            }
+        }
+
+        function useNative(message) {
+            stopCamera();
+            if (openButton) {
+                openButton.hidden = true;
+            }
+            if (nativeButton) {
+                nativeButton.hidden = false;
+            }
+            if (message) {
+                setStatus(message);
+            }
+        }
+
+        if (!cameraSupported() || !camera || !video || !openButton || !shootButton) {
+            return; // fica só a câmera nativa do aparelho
+        }
+
+        if (nativeButton) {
+            nativeButton.hidden = true;
+        }
+        openButton.hidden = false;
+
+        openButton.addEventListener('click', function () {
+            clear();
+            preview.hidden = true;
+            setStatus('Abrindo a câmera frontal...');
+            notify(box, 'ci:change');
+
+            navigator.mediaDevices.getUserMedia({
+                video: {facingMode: 'user', width: {ideal: 1280}, height: {ideal: 960}},
+                audio: false
+            }).then(function (mediaStream) {
+                stream = mediaStream;
+                video.srcObject = mediaStream;
+                camera.hidden = false;
+                openButton.hidden = true;
+                setStatus('Enquadre o rosto e toque em "Tirar foto".');
+                var playing = video.play();
+                if (playing && playing.catch) {
+                    playing.catch(function () {});
+                }
+            }).catch(function () {
+                useNative('Não foi possível abrir a câmera aqui. Use o botão para abrir a câmera do aparelho.');
+            });
+        });
+
+        shootButton.addEventListener('click', function () {
+            if (!video.videoWidth) {
+                setStatus('A câmera ainda está carregando, tente de novo.');
+                return;
+            }
+            store(video, video.videoWidth, video.videoHeight);
+            stopCamera();
+            openButton.hidden = false;
+            if (openLabel) {
+                openLabel.textContent = 'Tirar outra selfie';
+            }
+        });
+
+        // Libera a câmera ao enviar ou sair da página
+        var form = box.closest ? box.closest('form') : null;
+        if (form) {
+            form.addEventListener('submit', stopCamera);
+        }
+        window.addEventListener('pagehide', stopCamera);
     }
 
     /**
