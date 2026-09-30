@@ -33,6 +33,9 @@ class Config extends CommonGLPI
 
     public const BATTERY_CATEGORY = 'TI > 02 - Equipamentos > Rádio > Troca de Bateria';
 
+    /** Perfil que, por padrão, abre a tela do plugin logo depois do login. */
+    public const DEFAULT_LANDING_PROFILE = 'operador';
+
     public static function getTypeName($nb = 0)
     {
         return __('Configuração', 'checklistitens');
@@ -52,6 +55,7 @@ class Config extends CommonGLPI
             'itilcategories'        => '',
             'idle_logout'           => '60',
             'selfie_retention_days' => (string) self::MIN_RETENTION_DAYS,
+            'landing_profiles'      => '',
         ];
     }
 
@@ -65,6 +69,9 @@ class Config extends CommonGLPI
 
         if (!isset($current['states'])) {
             $defaults['states'] = implode(',', self::findIdsByName(State::getTable(), 'name', ['Ativo']));
+        }
+        if (!isset($current['landing_profiles'])) {
+            $defaults['landing_profiles'] = implode(',', self::findIdsByName(\Profile::getTable(), 'name', [self::DEFAULT_LANDING_PROFILE]));
         }
         if (!isset($current['itilcategories'])) {
             $pairs = [];
@@ -187,6 +194,22 @@ class Config extends CommonGLPI
     }
 
     /**
+     * Perfis que abrem a tela do plugin logo depois do login. Enquanto a opção nunca foi gravada
+     * (plugin instalado antes dela existir), vale o perfil de nome "operador".
+     *
+     * @return int[]
+     */
+    public static function getLandingProfiles(): array
+    {
+        $stored = GlpiConfig::getConfigurationValues(self::CONTEXT, ['landing_profiles']);
+        if (!array_key_exists('landing_profiles', $stored)) {
+            return self::findIdsByName(\Profile::getTable(), 'name', [self::DEFAULT_LANDING_PROFILE]);
+        }
+
+        return array_values(array_filter(array_map('intval', explode(',', (string) $stored['landing_profiles']))));
+    }
+
+    /**
      * Grava o formulário de configuração (valores já vêm tratados pelo GLPI em $_POST).
      */
     public static function saveFromForm(array $input): void
@@ -214,6 +237,7 @@ class Config extends CommonGLPI
             'itilcategories'        => implode(',', $categories),
             'idle_logout'           => (string) max(0, (int) ($input['idle_logout'] ?? 60)),
             'selfie_retention_days' => (string) max(self::MIN_RETENTION_DAYS, (int) ($input['selfie_retention_days'] ?? self::MIN_RETENTION_DAYS)),
+            'landing_profiles'      => implode(',', array_filter(array_map('intval', (array) ($input['landing_profiles'] ?? [])))),
         ]);
 
         Session::addMessageAfterRedirect(__('Configuração salva.', 'checklistitens'));
@@ -271,6 +295,15 @@ class Config extends CommonGLPI
             ]);
             echo "</td></tr>";
         }
+
+        echo "<tr class='tab_bg_1'><td>" . __('Perfis que abrem a tela do plugin logo depois do login', 'checklistitens') . "</td><td>";
+        \Profile::dropdown([
+            'name'     => 'landing_profiles',
+            'value'    => self::getLandingProfiles(),
+            'multiple' => true,
+        ]);
+        echo "<div class='text-muted'>" . __('Só na primeira página depois do login; o Início do GLPI continua acessível.', 'checklistitens') . "</div>";
+        echo "</td></tr>";
 
         echo "<tr class='tab_bg_1'><td>" . __('Logoff por inatividade nas telas do colaborador (segundos, 0 = desligado)', 'checklistitens') . "</td><td>";
         echo "<input type='number' min='0' class='form-control' style='max-width:8rem' name='idle_logout' value='" . self::getIdleSeconds() . "'>";

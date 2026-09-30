@@ -8,6 +8,7 @@
 require_once __DIR__ . '/autoload.php';
 
 use GlpiPlugin\Checklistitens\EquipmentRecord;
+use GlpiPlugin\Checklistitens\Landing;
 use GlpiPlugin\Checklistitens\Menu;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
 use GlpiPlugin\Checklistitens\Usage;
@@ -54,6 +55,9 @@ function plugin_init_checklistitens()
     $PLUGIN_HOOKS['helpdesk_menu_entry_icon']['checklistitens'] = Menu::getIcon();
 
     $PLUGIN_HOOKS['config_page']['checklistitens'] = 'front/config.form.php';
+
+    // Depois do login, perfis configurados (padrão: operador) abrem direto a tela do plugin
+    $PLUGIN_HOOKS['post_init']['checklistitens'] = [Landing::class, 'redirectAfterLogin'];
 
     // Todo perfil novo recebe o direito de uso (retirada/devolução)
     $PLUGIN_HOOKS['item_add']['checklistitens'] = [

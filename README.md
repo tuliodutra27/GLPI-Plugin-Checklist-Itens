@@ -14,6 +14,7 @@ equipamentos compartilhados do setor** (rádios comunicadores, celulares e table
 - **Devolução:** só depois da conferência do gestor. "Equipamento ok?" → selfie → salvar →
   "Pegar outro equipamento?". Com problema, o item volta bloqueado.
 - Logoff automático por inatividade.
+- Perfis configurados (padrão: `operador`) abrem direto a tela do plugin logo depois do login.
 
 **Gestor do setor**
 - **Conferência por turno** (padrão: turnos de 12 h, às 07h e 19h): vê retiradas, devoluções e
