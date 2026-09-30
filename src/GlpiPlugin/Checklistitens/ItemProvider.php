@@ -226,8 +226,8 @@ class ItemProvider
         $criteria = self::getBaseCriteria($itemtype);
         $criteria['WHERE'] = [
             "$table.is_deleted" => 0,
-            getEntitiesRestrictCriteria($table, '', '', $DB->fieldExists($table, 'is_recursive')),
         ];
+        self::addEntityRestriction($criteria['WHERE'], $table);
         if ($groups !== null) {
             $criteria['WHERE']["$table.groups_id"] = array_values(array_map('intval', $groups));
         }
@@ -269,13 +269,28 @@ class ItemProvider
                 'FROM'   => Install::TABLE_ITEMBLOCKS,
                 'WHERE'  => ['itemtype' => $itemtype, 'lock_active' => 1],
             ])]],
-            getEntitiesRestrictCriteria($table, '', '', $DB->fieldExists($table, 'is_recursive')),
         ];
+        self::addEntityRestriction($criteria['WHERE'], $table);
         if ($DB->fieldExists($table, 'is_template')) {
             $criteria['WHERE']["$table.is_template"] = 0;
         }
 
         return $criteria;
+    }
+
+    /**
+     * Restrição de entidades do GLPI. Quem vê todas as entidades (ex.: Super-Admin na raiz com
+     * recursividade) recebe um critério vazio, que viraria "AND ()" (SQL inválido) se entrasse
+     * no WHERE como está; por isso só entra quando tem conteúdo.
+     */
+    private static function addEntityRestriction(array &$where, string $table): void
+    {
+        global $DB;
+
+        $restriction = getEntitiesRestrictCriteria($table, '', '', $DB->fieldExists($table, 'is_recursive'));
+        if (count($restriction)) {
+            $where[] = $restriction;
+        }
     }
 
     private static function getBaseCriteria(string $itemtype): array
