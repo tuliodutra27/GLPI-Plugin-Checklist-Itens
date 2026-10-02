@@ -93,24 +93,35 @@ if (Profile::isAdmin()) {
         'badge'       => $blocked ? (string) $blocked : '',
         'badge_color' => 'red',
     ];
-    $old_selfies = count(SelfiePurge::getEligible(SelfiePurge::getMaxLimitDate()));
+    $old_selfies   = count(SelfiePurge::getEligible(SelfiePurge::getMaxLimitDate()));
+    $old_locations = count(SelfiePurge::getEligibleLocations(SelfiePurge::getLocationMaxLimitDate()));
     if ($old_selfies > 0) {
         $notices[] = [
             'type' => 'info',
             'text' => sprintf(
-                __('Há %1$d selfie(s) com mais de %2$d dias. Elas podem ser limpas em "Limpeza de selfies".', 'checklistitens'),
+                __('Há %1$d selfie(s) com mais de %2$d dias. Elas podem ser limpas em "Limpeza de selfies e localizações".', 'checklistitens'),
                 $old_selfies,
                 Config::getRetentionDays()
             ),
         ];
     }
+    if ($old_locations > 0) {
+        $notices[] = [
+            'type' => 'info',
+            'text' => sprintf(
+                __('Há %1$d localização(ões) com mais de %2$d dias. Elas podem ser limpas em "Limpeza de selfies e localizações".', 'checklistitens'),
+                $old_locations,
+                Config::getLocationRetentionDays()
+            ),
+        ];
+    }
     $cards[] = [
         'title'       => SelfiePurge::getTypeName(1),
-        'description' => __('Apagar selfies antigas, depois do prazo mínimo de guarda.', 'checklistitens'),
+        'description' => __('Apagar selfies e localizações antigas, depois do prazo de guarda.', 'checklistitens'),
         'url'         => Ui::url('front/selfiepurge.php'),
         'icon'        => SelfiePurge::getIcon(),
         'color'       => 'secondary',
-        'badge'       => $old_selfies ? (string) $old_selfies : '',
+        'badge'       => ($old_selfies + $old_locations) ? (string) ($old_selfies + $old_locations) : '',
         'badge_color' => 'azure',
     ];
     $cards[] = [

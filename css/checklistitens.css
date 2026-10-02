@@ -249,6 +249,21 @@
     transform: scaleX(-1);
 }
 
+/* Localização da selfie */
+.ci-location-line {
+    font-size: .875em;
+    color: var(--tblr-muted, #667382);
+}
+
+.ci-location-line.ci-location-ok {
+    color: var(--tblr-success, #2fb344);
+}
+
+.ci-location-line.ci-location-missing {
+    color: var(--tblr-warning, #f59f00);
+    font-weight: 600;
+}
+
 .ci-selfie-preview {
     display: block;
     max-width: 220px;

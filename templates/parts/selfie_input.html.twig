@@ -28,4 +28,17 @@
     <input type="hidden" name="selfie_data" value="" data-ci-selfie-data>
     <img class="ci-selfie-preview mt-2" alt="{{ __('Selfie', 'checklistitens') }}" hidden data-ci-selfie-preview>
     <div class="text-muted ci-small mt-1" data-ci-selfie-status></div>
+
+    {# Localização lida junto com a selfie (obrigatória, mas não bloqueia o salvamento) #}
+    <input type="hidden" name="location_status" value="" data-ci-location-field="status">
+    <input type="hidden" name="location_latitude" value="" data-ci-location-field="latitude">
+    <input type="hidden" name="location_longitude" value="" data-ci-location-field="longitude">
+    <input type="hidden" name="location_accuracy" value="" data-ci-location-field="accuracy">
+    <div class="ci-location-line mt-2" data-ci-location hidden>
+        <i class="ti ti-map-pin"></i>
+        <span data-ci-location-text></span>
+        <button type="button" class="btn btn-sm btn-outline-warning ms-1" data-ci-location-retry hidden>
+            <i class="ti ti-refresh"></i> {{ __('Tentar de novo', 'checklistitens') }}
+        </button>
+    </div>
 </div>

@@ -10,6 +10,7 @@
 {% endmacro %}
 
 {% import _self as ci %}
+{% import '@checklistitens/parts/location.html.twig' as location %}
 
 <div class="ci-page ci-page-wide container-fluid">
     {% if not embedded %}
@@ -92,6 +93,7 @@
                             {% else %}
                                 <span class="badge bg-green-lt">{{ __('Equipamento ok', 'checklistitens') }}</span>
                             {% endif %}
+                            <div class="mt-1">{{ location.map(e.checkout.location) }}</div>
                         </div>
                     </div>
 
@@ -101,6 +103,7 @@
                             <div>
                                 <div class="fw-bold"><i class="ti ti-user-check"></i> {{ __('Conferência do gestor', 'checklistitens') }}</div>
                                 <div class="ci-small">{{ e.confirmation.user }} · {{ e.confirmation.when }}</div>
+                                <div class="mt-1">{{ location.map(e.confirmation.location) }}</div>
                             </div>
                         </div>
                     {% endif %}
@@ -116,6 +119,7 @@
                                 {% else %}
                                     <span class="badge bg-green-lt">{{ __('Equipamento ok', 'checklistitens') }}</span>
                                 {% endif %}
+                                <div class="mt-1">{{ location.map(e.checkin.location) }}</div>
                             </div>
                         </div>
                     {% endif %}
@@ -126,6 +130,7 @@
                             <div>
                                 <div class="fw-bold"><i class="ti ti-user-check"></i> {{ __('Devolução conferida', 'checklistitens') }}</div>
                                 <div class="ci-small">{{ e.checkin_confirmation.user }} · {{ e.checkin_confirmation.when }}</div>
+                                <div class="mt-1">{{ location.map(e.checkin_confirmation.location) }}</div>
                             </div>
                         </div>
                     {% endif %}

@@ -33,6 +33,7 @@ class Install
     public static function install(Migration $migration): void
     {
         self::createTables();
+        self::migrateColumns($migration);
         Config::installDefaults();
         Profile::installRights();
         ProblemType::installDefaults();
@@ -65,6 +66,49 @@ class Install
                     'rank'     => $rank + 1,
                     'users_id' => 0,
                 ]);
+            }
+        }
+    }
+
+    /**
+     * Colunas acrescentadas depois da primeira versão. Em instalação nova já vêm no CREATE TABLE;
+     * numa instalação existente, só as que faltam são criadas (não mexe no que já existe).
+     */
+    private static function migrateColumns(Migration $migration): void
+    {
+        global $DB;
+
+        $columns = [
+            // 0.9.0: localização na selfie
+            self::TABLE_USAGES => [
+                'checkout_latitude'        => ['decimal(10,7) NULL DEFAULT NULL', 'date_alert_not_returned'],
+                'checkout_longitude'       => ['decimal(10,7) NULL DEFAULT NULL', 'checkout_latitude'],
+                'checkout_accuracy'        => ['int unsigned NULL DEFAULT NULL', 'checkout_longitude'],
+                'checkout_location_status' => ['tinyint unsigned NOT NULL DEFAULT 0', 'checkout_accuracy'],
+                'checkin_latitude'         => ['decimal(10,7) NULL DEFAULT NULL', 'checkout_location_status'],
+                'checkin_longitude'        => ['decimal(10,7) NULL DEFAULT NULL', 'checkin_latitude'],
+                'checkin_accuracy'         => ['int unsigned NULL DEFAULT NULL', 'checkin_longitude'],
+                'checkin_location_status'  => ['tinyint unsigned NOT NULL DEFAULT 0', 'checkin_accuracy'],
+            ],
+            self::TABLE_CONFIRMATIONS => [
+                'latitude'        => ['decimal(10,7) NULL DEFAULT NULL', 'selfie'],
+                'longitude'       => ['decimal(10,7) NULL DEFAULT NULL', 'latitude'],
+                'accuracy'        => ['int unsigned NULL DEFAULT NULL', 'longitude'],
+                'location_status' => ['tinyint unsigned NOT NULL DEFAULT 0', 'accuracy'],
+            ],
+            self::TABLE_SELFIEPURGES => [
+                'purge_type' => ['tinyint unsigned NOT NULL DEFAULT 1', 'users_id'],
+            ],
+        ];
+
+        foreach ($columns as $table => $fields) {
+            if (!$DB->tableExists($table)) {
+                continue;
+            }
+            foreach ($fields as $field => [$definition, $after]) {
+                if (!$DB->fieldExists($table, $field, false)) {
+                    $migration->addField($table, $field, $definition, ['after' => $after]);
+                }
             }
         }
     }
@@ -246,6 +290,14 @@ class Install
                 `checkin_selfie` varchar(255) NOT NULL DEFAULT '',
                 `plugin_checklistitens_confirmations_id_checkin` int unsigned NOT NULL DEFAULT 0,
                 `date_alert_not_returned` timestamp NULL DEFAULT NULL,
+                `checkout_latitude` decimal(10,7) NULL DEFAULT NULL,
+                `checkout_longitude` decimal(10,7) NULL DEFAULT NULL,
+                `checkout_accuracy` int unsigned NULL DEFAULT NULL,
+                `checkout_location_status` tinyint unsigned NOT NULL DEFAULT 0,
+                `checkin_latitude` decimal(10,7) NULL DEFAULT NULL,
+                `checkin_longitude` decimal(10,7) NULL DEFAULT NULL,
+                `checkin_accuracy` int unsigned NULL DEFAULT NULL,
+                `checkin_location_status` tinyint unsigned NOT NULL DEFAULT 0,
                 `date_creation` timestamp NULL DEFAULT NULL,
                 `date_mod` timestamp NULL DEFAULT NULL,
                 PRIMARY KEY (`id`),
@@ -268,6 +320,10 @@ class Install
                 `date_confirmation` timestamp NULL DEFAULT NULL,
                 `shift_start` timestamp NULL DEFAULT NULL,
                 `selfie` varchar(255) NOT NULL DEFAULT '',
+                `latitude` decimal(10,7) NULL DEFAULT NULL,
+                `longitude` decimal(10,7) NULL DEFAULT NULL,
+                `accuracy` int unsigned NULL DEFAULT NULL,
+                `location_status` tinyint unsigned NOT NULL DEFAULT 0,
                 `date_creation` timestamp NULL DEFAULT NULL,
                 `date_mod` timestamp NULL DEFAULT NULL,
                 PRIMARY KEY (`id`),
@@ -346,6 +402,7 @@ class Install
             self::TABLE_SELFIEPURGES => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `users_id` int unsigned NOT NULL DEFAULT 0,
+                `purge_type` tinyint unsigned NOT NULL DEFAULT 1,
                 `date_purge` timestamp NULL DEFAULT NULL,
                 `date_limit` timestamp NULL DEFAULT NULL,
                 `nb_files` int unsigned NOT NULL DEFAULT 0,

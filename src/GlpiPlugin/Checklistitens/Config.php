@@ -23,6 +23,9 @@ class Config extends CommonGLPI
     /** Mínimo de dias que uma selfie fica guardada antes de poder ser limpa. */
     public const MIN_RETENTION_DAYS = 90;
 
+    /** Retenção padrão das localizações (ajustável na configuração). */
+    public const DEFAULT_LOCATION_RETENTION_DAYS = 90;
+
     public static $rightname = Profile::RIGHT_CONFIG;
 
     /** Categorias ITIL padrão, achadas pelo nome completo na instalação. */
@@ -56,6 +59,7 @@ class Config extends CommonGLPI
             'idle_logout'           => '60',
             'selfie_retention_days' => (string) self::MIN_RETENTION_DAYS,
             'landing_profiles'      => '',
+            'location_retention_days' => (string) self::DEFAULT_LOCATION_RETENTION_DAYS,
         ];
     }
 
@@ -193,6 +197,12 @@ class Config extends CommonGLPI
         return max(self::MIN_RETENTION_DAYS, (int) self::getValue('selfie_retention_days'));
     }
 
+    /** Dias que as localizações ficam guardadas antes de poderem ser limpas (padrão 90). */
+    public static function getLocationRetentionDays(): int
+    {
+        return max(1, (int) self::getValue('location_retention_days'));
+    }
+
     /**
      * Perfis que abrem a tela do plugin logo depois do login. Enquanto a opção nunca foi gravada
      * (plugin instalado antes dela existir), vale o perfil de nome "operador".
@@ -238,6 +248,7 @@ class Config extends CommonGLPI
             'idle_logout'           => (string) max(0, (int) ($input['idle_logout'] ?? 60)),
             'selfie_retention_days' => (string) max(self::MIN_RETENTION_DAYS, (int) ($input['selfie_retention_days'] ?? self::MIN_RETENTION_DAYS)),
             'landing_profiles'      => implode(',', array_filter(array_map('intval', (array) ($input['landing_profiles'] ?? [])))),
+            'location_retention_days' => (string) max(1, (int) ($input['location_retention_days'] ?? self::DEFAULT_LOCATION_RETENTION_DAYS)),
         ]);
 
         Session::addMessageAfterRedirect(__('Configuração salva.', 'checklistitens'));
@@ -311,6 +322,11 @@ class Config extends CommonGLPI
 
         echo "<tr class='tab_bg_1'><td>" . sprintf(__('Retenção mínima das selfies (dias, mínimo %d)', 'checklistitens'), self::MIN_RETENTION_DAYS) . "</td><td>";
         echo "<input type='number' min='" . self::MIN_RETENTION_DAYS . "' class='form-control' style='max-width:8rem' name='selfie_retention_days' value='" . self::getRetentionDays() . "'>";
+        echo "</td></tr>";
+
+        echo "<tr class='tab_bg_1'><td>" . __('Retenção das localizações das selfies (dias)', 'checklistitens') . "</td><td>";
+        echo "<input type='number' min='1' class='form-control' style='max-width:8rem' name='location_retention_days' value='" . self::getLocationRetentionDays() . "'>";
+        echo "<div class='text-muted'>" . __('Depois desse prazo, os administradores podem limpar as localizações em "Limpeza de selfies e localizações".', 'checklistitens') . "</div>";
         echo "</td></tr>";
 
         if ($canedit) {

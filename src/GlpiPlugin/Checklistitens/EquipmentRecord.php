@@ -360,6 +360,7 @@ class EquipmentRecord extends CommonGLPI
                     'is_ok'    => (int) $u['checkout_is_ok'] === 1,
                     'problems' => $problems[$id][Usage::PHASE_CHECKOUT] ?? [],
                     'selfie'   => self::selfieInfo((string) $u['checkout_selfie'], Selfie::KIND_CHECKOUT, $id, $u['date_checkout']),
+                    'location' => Location::present($u, 'checkout_', __('Retirada', 'checklistitens') . ' — ' . $item['label']),
                 ],
                 'confirmation' => self::confirmationInfo($confirmations[(int) $u['plugin_checklistitens_confirmations_id']] ?? null),
                 'checkin'      => $u['date_checkin'] ? [
@@ -368,6 +369,7 @@ class EquipmentRecord extends CommonGLPI
                     'is_ok'    => (int) $u['checkin_is_ok'] === 1,
                     'problems' => $problems[$id][Usage::PHASE_CHECKIN] ?? [],
                     'selfie'   => self::selfieInfo((string) $u['checkin_selfie'], Selfie::KIND_CHECKIN, $id, $u['date_checkin']),
+                    'location' => Location::present($u, 'checkin_', __('Devolução', 'checklistitens') . ' — ' . $item['label']),
                 ] : null,
                 'checkin_confirmation' => self::confirmationInfo($confirmations[(int) $u['plugin_checklistitens_confirmations_id_checkin']] ?? null),
                 'block'        => $block,
@@ -442,6 +444,8 @@ class EquipmentRecord extends CommonGLPI
             __('Devolução', 'checklistitens'), __('Turno da devolução', 'checklistitens'),
             __('Problemas na devolução', 'checklistitens'), __('Devolução conferida por', 'checklistitens'),
             __('Chamado', 'checklistitens'), __('Duração', 'checklistitens'),
+            __('Localização da retirada', 'checklistitens'), __('Localização da conferência', 'checklistitens'),
+            __('Localização da devolução', 'checklistitens'), __('Localização da conferência da devolução', 'checklistitens'),
         ], ';');
 
         $label = trim($record['label'] . ' ' . $record['detail']);
@@ -463,6 +467,10 @@ class EquipmentRecord extends CommonGLPI
                 $entry['checkin_confirmation']['user'] ?? '',
                 $entry['block']['ticket_id'] ?? '',
                 $entry['duration'],
+                Location::toText($entry['checkout']['location']),
+                isset($entry['confirmation']['location']) ? Location::toText($entry['confirmation']['location']) : '',
+                isset($entry['checkin']['location']) ? Location::toText($entry['checkin']['location']) : '',
+                isset($entry['checkin_confirmation']['location']) ? Location::toText($entry['checkin_confirmation']['location']) : '',
             ], ';');
         }
         fclose($out);
@@ -497,6 +505,7 @@ class EquipmentRecord extends CommonGLPI
             'user'   => Ui::text(getUserName((int) $row['users_id'])),
             'when'   => Ui::datetime($row['date_confirmation']),
             'selfie' => self::selfieInfo((string) $row['selfie'], Selfie::KIND_CONFIRMATION, (int) $row['id'], $row['date_confirmation']),
+            'location' => Location::present($row, '', __('Conferência do gestor', 'checklistitens')),
         ];
     }
 

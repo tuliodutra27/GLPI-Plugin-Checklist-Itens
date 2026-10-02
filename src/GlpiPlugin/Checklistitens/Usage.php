@@ -368,7 +368,7 @@ class Usage extends CommonDBTM
             'checkout_shift_start' => Shift::startFor($now),
             'checkout_is_ok'       => 1,
             'checkout_selfie'      => $selfie,
-        ]);
+        ] + Location::toFields('checkout_', Location::fromRequest()));
 
         if (!$id) {
             // o índice único de uso aberto recusou: alguém retirou o mesmo item agora há pouco
@@ -476,7 +476,7 @@ class Usage extends CommonDBTM
             'checkin_shift_start' => Shift::startFor($now),
             'checkin_is_ok'       => $is_ok,
             'checkin_selfie'      => $selfie,
-        ]);
+        ] + Location::toFields('checkin_', Location::fromRequest()));
         if (!$updated) {
             Selfie::deleteFile($selfie);
             return ['ok' => false, 'message' => __('Não foi possível registrar a devolução. Tente de novo.', 'checklistitens')];

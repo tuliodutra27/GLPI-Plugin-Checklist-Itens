@@ -1,0 +1,19 @@
+{# Localização de uma selfie: botão Mapa com Apple Maps e Google Maps, ou o motivo de não ter #}
+{% macro map(loc) %}
+    {% if loc.ok %}
+        <div class="dropdown d-inline-block ci-location">
+            <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false"
+                    title="{{ loc.coordinates }}">
+                <i class="ti ti-map-pin"></i> {{ __('Mapa', 'checklistitens') }}{% if loc.accuracy != '' %} <span class="text-muted">±{{ loc.accuracy }} m</span>{% endif %}
+            </button>
+            <ul class="dropdown-menu">
+                <li><a class="dropdown-item" href="{{ loc.apple_url }}" target="_blank" rel="noopener"><i class="ti ti-brand-apple me-1"></i> Apple Maps</a></li>
+                <li><a class="dropdown-item" href="{{ loc.google_url }}" target="_blank" rel="noopener"><i class="ti ti-map-2 me-1"></i> Google Maps</a></li>
+            </ul>
+        </div>
+    {% elseif loc.missing %}
+        <span class="badge bg-orange-lt ci-location"><i class="ti ti-map-pin-off"></i> {{ loc.label }}</span>
+    {% elseif loc.status == 6 %}
+        <span class="text-muted ci-small ci-location"><i class="ti ti-map-pin-off"></i> {{ loc.label }}</span>
+    {% endif %}
+{% endmacro %}

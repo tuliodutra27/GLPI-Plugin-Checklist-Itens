@@ -20,6 +20,119 @@
         element.dispatchEvent(event);
     }
 
+    // Situações da localização (iguais às de Location.php)
+    var LOCATION = {OK: 1, DENIED: 2, UNAVAILABLE: 3, TIMEOUT: 4, INSECURE: 5};
+    var LOCATION_WAIT_MS = 10000;   // espera máxima ao salvar, se a leitura ainda não terminou
+
+    /**
+     * Localização junto com a selfie: uma leitura só (não é rastreamento). Obrigatória, mas não
+     * bloqueia o salvamento: se faltar, mostra o motivo e o botão "Tentar de novo", e o registro
+     * vai com a situação para o gestor ver. Também só funciona em contexto seguro (HTTPS).
+     */
+    function setupLocation(box) {
+        var fields = {};
+        qsa('[data-ci-location-field]', box).forEach(function (input) {
+            fields[input.getAttribute('data-ci-location-field')] = input;
+        });
+        var line = box.querySelector('[data-ci-location]');
+        var text = box.querySelector('[data-ci-location-text]');
+        var retry = box.querySelector('[data-ci-location-retry]');
+        var pending = false;
+        var waiters = [];
+
+        if (!fields.status) {
+            return null;
+        }
+
+        function show(message, state) {
+            if (!line) {
+                return;
+            }
+            line.hidden = false;
+            line.classList.toggle('ci-location-ok', state === 'ok');
+            line.classList.toggle('ci-location-missing', state === 'missing');
+            if (text) {
+                text.textContent = message;
+            }
+        }
+
+        function finish(status, coords) {
+            var accuracy = coords && coords.accuracy ? Math.round(coords.accuracy) : null;
+
+            pending = false;
+            fields.status.value = String(status);
+            fields.latitude.value = coords ? String(coords.latitude) : '';
+            fields.longitude.value = coords ? String(coords.longitude) : '';
+            fields.accuracy.value = accuracy !== null ? String(accuracy) : '';
+
+            if (status === LOCATION.OK) {
+                show('Localização registrada' + (accuracy !== null ? ' (±' + accuracy + ' m)' : '') + '.', 'ok');
+            } else {
+                var reasons = {};
+                reasons[LOCATION.DENIED] = 'a permissão de localização foi negada';
+                reasons[LOCATION.UNAVAILABLE] = 'a localização do aparelho está desligada ou sem sinal';
+                reasons[LOCATION.TIMEOUT] = 'o aparelho demorou para responder';
+                reasons[LOCATION.INSECURE] = 'o navegador bloqueou (endereço sem HTTPS)';
+                show('A localização é obrigatória e não foi registrada: ' + (reasons[status] || 'não foi possível ler')
+                    + '. Ative a localização do aparelho e toque em "Tentar de novo". Se não der, o registro será salvo sem localização.', 'missing');
+            }
+            if (retry) {
+                retry.hidden = status === LOCATION.OK;
+            }
+
+            var callbacks = waiters;
+            waiters = [];
+            callbacks.forEach(function (callback) {
+                callback();
+            });
+            notify(box, 'ci:change');
+        }
+
+        function request() {
+            if (pending) {
+                return;
+            }
+            if (!window.isSecureContext || !navigator.geolocation) {
+                finish(LOCATION.INSECURE, null);
+                return;
+            }
+            pending = true;
+            if (retry) {
+                retry.hidden = true;
+            }
+            show('Obtendo localização...', '');
+            navigator.geolocation.getCurrentPosition(function (position) {
+                finish(LOCATION.OK, position.coords);
+            }, function (error) {
+                var code = error ? error.code : 0;
+                finish(code === 1 ? LOCATION.DENIED : (code === 3 ? LOCATION.TIMEOUT : LOCATION.UNAVAILABLE), null);
+            }, {enableHighAccuracy: true, timeout: 20000, maximumAge: 0});
+        }
+
+        if (retry) {
+            retry.addEventListener('click', request);
+        }
+
+        return {
+            // Primeira leitura: ao tocar no botão da selfie (ou ao salvar, se ainda não houve)
+            start: function () {
+                if (!pending && fields.status.value === '') {
+                    request();
+                }
+            },
+            isPending: function () {
+                return pending;
+            },
+            whenDone: function (callback) {
+                if (pending) {
+                    waiters.push(callback);
+                } else {
+                    callback();
+                }
+            }
+        };
+    }
+
     /**
      * Câmera dentro da página: só em contexto seguro (HTTPS, ou endereço liberado como seguro
      * no navegador/política do aparelho). Em HTTP o navegador não oferece a câmera à página.
@@ -51,6 +164,18 @@
 
         if (!input || !hidden) {
             return;
+        }
+
+        // A leitura da localização começa quando a pessoa toca no botão da selfie
+        var geo = setupLocation(box);
+        box.ciLocation = geo;
+        if (geo) {
+            box.addEventListener('click', function (event) {
+                var target = event.target;
+                if (target && target.closest && target.closest('[data-ci-camera-open], [data-ci-selfie-native]')) {
+                    geo.start();
+                }
+            });
         }
 
         function setStatus(text) {
@@ -281,13 +406,66 @@
 
         form.addEventListener('change', update);
         form.addEventListener('ci:change', update);
-        form.addEventListener('submit', function () {
-            // Evita envio em dobro; o atraso mantém no envio o botão clicado (refuse/save).
-            window.setTimeout(function () {
-                qsa('button[type="submit"]', form).forEach(function (button) {
-                    button.disabled = true;
+        function disableButtons() {
+            qsa('button[type="submit"]', form).forEach(function (button) {
+                button.disabled = true;
+            });
+        }
+
+        form.addEventListener('submit', function (event) {
+            // Localização obrigatória sem bloquear: se a leitura de alguma selfie visível ainda
+            // está em andamento, espera ela terminar (no máximo LOCATION_WAIT_MS) e envia.
+            if (!form.ciLocationWaited) {
+                var boxes = qsa('[data-ci-selfie-box]', form).filter(function (box) {
+                    return box.ciLocation && box.offsetParent !== null;
                 });
-            }, 0);
+                boxes.forEach(function (box) {
+                    box.ciLocation.start();
+                });
+                var waiting = boxes.filter(function (box) {
+                    return box.ciLocation.isPending();
+                });
+
+                if (waiting.length) {
+                    event.preventDefault();
+                    form.ciLocationWaited = true;
+
+                    var submitter = event.submitter || null;
+                    var sent = false;
+                    var send = function () {
+                        if (sent) {
+                            return;
+                        }
+                        sent = true;
+                        // form.submit() não leva o botão clicado (refuse/save/confirm): vai num campo oculto
+                        if (submitter && submitter.name) {
+                            var extra = document.createElement('input');
+                            extra.type = 'hidden';
+                            extra.name = submitter.name;
+                            extra.value = submitter.value;
+                            form.appendChild(extra);
+                        }
+                        HTMLFormElement.prototype.submit.call(form);
+                    };
+
+                    waiting.forEach(function (box) {
+                        box.ciLocation.whenDone(function () {
+                            var still = waiting.some(function (other) {
+                                return other.ciLocation.isPending();
+                            });
+                            if (!still) {
+                                send();
+                            }
+                        });
+                    });
+                    window.setTimeout(send, LOCATION_WAIT_MS);
+                    disableButtons();
+                    return;
+                }
+            }
+
+            // Evita envio em dobro; o atraso mantém no envio o botão clicado (refuse/save).
+            window.setTimeout(disableButtons, 0);
         });
         update();
     }

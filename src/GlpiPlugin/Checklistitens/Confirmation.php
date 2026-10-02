@@ -166,7 +166,7 @@ class Confirmation extends CommonDBTM
             'date_confirmation' => $now,
             'shift_start'       => Shift::startFor($now),
             'selfie'            => $selfie,
-        ]);
+        ] + Location::toFields('', Location::fromRequest()));
         if (!$id) {
             Selfie::deleteFile($selfie);
             return ['ok' => false, 'message' => __('Não foi possível registrar a conferência. Tente de novo.', 'checklistitens')];
@@ -253,6 +253,9 @@ class Confirmation extends CommonDBTM
             'selfie_url'     => ($is_checkin ? $row['checkin_selfie'] : $row['checkout_selfie']) !== ''
                 ? Selfie::getUrl($is_checkin ? Selfie::KIND_CHECKIN : Selfie::KIND_CHECKOUT, (int) $row['id'])
                 : '',
+            'location'       => $is_checkin
+                ? Location::present($row, 'checkin_', __('Devolução', 'checklistitens') . ' — ' . $usage['label'])
+                : Location::present($row, 'checkout_', __('Retirada', 'checklistitens') . ' — ' . $usage['label']),
         ];
     }
 
@@ -307,6 +310,17 @@ class Confirmation extends CommonDBTM
         }
         if ($not_returned) {
             $alerts[] = ['type' => 'danger', 'text' => sprintf(__('%d equipamento(s) retirado(s) em turno anterior ainda não devolvido(s).', 'checklistitens'), $not_returned)];
+        }
+
+        // Localização é obrigatória (não bloqueia, mas o gestor precisa ver)
+        $without_location = 0;
+        foreach (array_merge($data['checkouts'], $data['checkins']) as $row) {
+            if ($row['location']['missing']) {
+                $without_location++;
+            }
+        }
+        if ($without_location) {
+            $alerts[] = ['type' => 'warning', 'text' => sprintf(__('%d registro(s) pendente(s) sem localização. Veja o motivo em cada um.', 'checklistitens'), $without_location)];
         }
 
         if ($data['tickets_to_open']) {
