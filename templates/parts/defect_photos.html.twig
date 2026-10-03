@@ -1,0 +1,43 @@
+{#
+  Fotos do equipamento com defeito (de min_photos a max_photos; padrão 1 a 5), pela câmera
+  traseira do aparelho ou escolhidas da galeria. O JS (ChecklistDefectPhotos, em js/checklistitens.js) reduz cada foto e
+  grava em defect_photos[]; sem JS, os próprios campos de arquivo (defect_photo_files[]) vão no
+  envio, como na selfie.
+
+  Variáveis opcionais: min_photos, max_photos, photos_title.
+#}
+{% set ci_min = min_photos|default(1) %}
+{% set ci_max = max_photos|default(5) %}
+<div class="ci-defect-photos" data-ci-defect-photos data-ci-min="{{ ci_min }}" data-ci-max="{{ ci_max }}" data-ci-defect-count="0">
+    <p class="fw-bold mb-1">
+        <i class="ti ti-camera"></i>
+        {{ photos_title|default(__('Fotos do equipamento com defeito (1 a 5)', 'checklistitens')) }}
+    </p>
+    <p class="text-muted ci-small mb-2">{{ __('Fotografe só o equipamento.', 'checklistitens') }}</p>
+
+    <div class="row g-2">
+        <div class="col-12 col-sm-6">
+            <label class="btn btn-primary btn-lg w-100 ci-defect-button" data-ci-defect-picker>
+                <i class="ti ti-camera"></i>
+                <span>{{ __('Tirar foto', 'checklistitens') }}</span>
+                <input type="file" name="defect_photo_files[]" accept="image/*" capture="environment" class="d-none" data-ci-defect-input>
+            </label>
+        </div>
+        <div class="col-12 col-sm-6">
+            <label class="btn btn-outline-primary btn-lg w-100 ci-defect-button" data-ci-defect-picker>
+                <i class="ti ti-photo"></i>
+                <span>{{ __('Escolher da galeria', 'checklistitens') }}</span>
+                <input type="file" name="defect_photo_files[]" accept="image/*" multiple class="d-none" data-ci-defect-input>
+            </label>
+        </div>
+    </div>
+
+    <div class="ci-defect-grid mt-2" data-ci-defect-list></div>
+    <div class="ci-defect-counter ci-small mt-1" data-ci-defect-counter>
+        {{ __('%1$d de %2$d', 'checklistitens')|format(0, ci_max) }}
+    </div>
+    <div class="ci-defect-status ci-small mt-1" data-ci-defect-status role="status" aria-live="polite"></div>
+
+    {# Campos ocultos de cada foto (preenchidos pelo JS) #}
+    <div data-ci-defect-fields></div>
+</div>
