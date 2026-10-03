@@ -1,0 +1,41 @@
+name: Release
+
+# Ao enviar uma tag no formato vX.Y.Z, gera o zip do plugin e publica a release.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # O checkout transforma tag anotada em tag simples; busca de novo para manter a mensagem da tag.
+      - name: Buscar as tags com a mensagem
+        run: git fetch --force --tags origin
+
+      - name: Conferir se a tag bate com a versão do plugin
+        run: |
+          versao="${GITHUB_REF_NAME#v}"
+          atual=$(grep -oP "PLUGIN_CHECKLISTITENS_VERSION', '\K[^']+" setup.php)
+          if [ "$versao" != "$atual" ]; then
+            echo "A tag $GITHUB_REF_NAME não bate com a versão do setup.php ($atual)." >&2
+            exit 1
+          fi
+
+      # O GLPI exige que a pasta do plugin se chame "checklistitens".
+      - name: Gerar o zip com a pasta checklistitens
+        run: git archive --format=zip --prefix=checklistitens/ -o "checklistitens-${GITHUB_REF_NAME#v}.zip" HEAD
+
+      - name: Criar a release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "checklistitens-${GITHUB_REF_NAME#v}.zip" \
+            --title "${GITHUB_REF_NAME#v}" \
+            --notes-from-tag
