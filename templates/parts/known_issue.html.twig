@@ -1,0 +1,47 @@
+{# Problema já conhecido: laudos em aberto do equipamento (plugin Laudo), no formato de LaudoProvider::getOpenFor #}
+
+{# Quadro de alerta na retirada/devolução, com um bloco por laudo #}
+{% macro alert(laudos) %}
+    {% if laudos is not empty %}
+        <div class="alert alert-warning mb-0" role="alert">
+            <div class="d-flex">
+                <div><i class="ti ti-alert-triangle alert-icon"></i></div>
+                <div class="flex-fill">
+                    <h4 class="alert-title">{{ __('Este equipamento tem problema já conhecido', 'checklistitens') }}</h4>
+                    {% for l in laudos %}
+                        <div class="{{ loop.first ? 'mt-1' : 'border-top pt-2 mt-2' }}">
+                            <div>
+                                <strong>{{ l.name }}</strong>
+                                {% if l.date|default('') %} · {{ l.date|date('d/m/Y', false) }}{% endif %}
+                                · <span class="badge bg-orange-lt text-wrap">{{ l.status }}</span>
+                            </div>
+                            {% if l.occurrence|default('') %}
+                                <div>{{ l.occurrence }}</div>
+                            {% endif %}
+                            {% if l.items|default('') %}
+                                <div class="ci-small">{{ __('Itens afetados', 'checklistitens') }}: {{ l.items }}</div>
+                            {% endif %}
+                            {% if l.url|default(null) %}
+                                <a href="{{ l.url }}" target="_blank" rel="noopener" class="ci-small">
+                                    <i class="ti ti-external-link"></i> {{ __('Abrir laudo', 'checklistitens') }}
+                                </a>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{# Selo compacto para listas e painéis: o laudo mais recente e quantos outros há #}
+{% macro badge(laudos) %}
+    {% if laudos is not empty %}
+        {% set first = laudos|first %}
+        <span class="badge bg-yellow-lt text-wrap"
+              title="{% for l in laudos %}{{ l.name }}{% if l.date|default('') %} · {{ l.date|date('d/m/Y', false) }}{% endif %} · {{ l.status }}{{ loop.last ? '' : ' | ' }}{% endfor %}">
+            <i class="ti ti-alert-triangle"></i>
+            {{ __('Problema conhecido', 'checklistitens') }} ({{ first.name }} · {{ first.status }}{% if laudos|length > 1 %} +{{ laudos|length - 1 }}{% endif %})
+        </span>
+    {% endif %}
+{% endmacro %}
