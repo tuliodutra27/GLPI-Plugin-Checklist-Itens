@@ -60,6 +60,8 @@ class Config extends CommonGLPI
             'selfie_retention_days' => (string) self::MIN_RETENTION_DAYS,
             'landing_profiles'      => '',
             'location_retention_days' => (string) self::DEFAULT_LOCATION_RETENTION_DAYS,
+            'laudo_enabled'         => '1',
+            'laudo_done_statuses'   => '',
         ];
     }
 
@@ -76,6 +78,9 @@ class Config extends CommonGLPI
         }
         if (!isset($current['landing_profiles'])) {
             $defaults['landing_profiles'] = implode(',', self::findIdsByName(\Profile::getTable(), 'name', [self::DEFAULT_LANDING_PROFILE]));
+        }
+        if (!isset($current['laudo_done_statuses'])) {
+            $defaults['laudo_done_statuses'] = implode(',', LaudoProvider::findDefaultDoneStatuses());
         }
         if (!isset($current['itilcategories'])) {
             $pairs = [];
@@ -220,6 +225,42 @@ class Config extends CommonGLPI
     }
 
     /**
+     * Acrescenta um perfil aos que abrem o plugin depois do login (perfil criado pela instalação
+     * numa atualização, quando a lista já estava gravada).
+     */
+    public static function addLandingProfile(int $profiles_id): void
+    {
+        if ($profiles_id <= 0) {
+            return;
+        }
+
+        $profiles = self::getLandingProfiles();
+        if (!in_array($profiles_id, $profiles, true)) {
+            $profiles[] = $profiles_id;
+            GlpiConfig::setConfigurationValues(self::CONTEXT, ['landing_profiles' => implode(',', $profiles)]);
+        }
+    }
+
+    /** Integração com o plugin Laudo ligada na configuração (padrão: ligada). */
+    public static function isLaudoEnabled(): bool
+    {
+        return self::getValue('laudo_enabled') === '1';
+    }
+
+    /**
+     * Situações do Laudo consideradas concluídas. Se a lista estiver vazia (ex.: o Laudo foi
+     * instalado depois do checklist), vale a situação de nome "Concluído".
+     *
+     * @return int[]
+     */
+    public static function getLaudoDoneStatuses(): array
+    {
+        $ids = array_values(array_filter(array_map('intval', self::getList('laudo_done_statuses'))));
+
+        return count($ids) ? $ids : LaudoProvider::findDefaultDoneStatuses();
+    }
+
+    /**
      * Grava o formulário de configuração (valores já vêm tratados pelo GLPI em $_POST).
      */
     public static function saveFromForm(array $input): void
@@ -249,6 +290,8 @@ class Config extends CommonGLPI
             'selfie_retention_days' => (string) max(self::MIN_RETENTION_DAYS, (int) ($input['selfie_retention_days'] ?? self::MIN_RETENTION_DAYS)),
             'landing_profiles'      => implode(',', array_filter(array_map('intval', (array) ($input['landing_profiles'] ?? [])))),
             'location_retention_days' => (string) max(1, (int) ($input['location_retention_days'] ?? self::DEFAULT_LOCATION_RETENTION_DAYS)),
+            'laudo_enabled'         => !empty($input['laudo_enabled']) ? '1' : '0',
+            'laudo_done_statuses'   => implode(',', array_filter(array_map('intval', (array) ($input['laudo_done_statuses'] ?? [])))),
         ]);
 
         Session::addMessageAfterRedirect(__('Configuração salva.', 'checklistitens'));
@@ -328,6 +371,25 @@ class Config extends CommonGLPI
         echo "<input type='number' min='1' class='form-control' style='max-width:8rem' name='location_retention_days' value='" . self::getLocationRetentionDays() . "'>";
         echo "<div class='text-muted'>" . __('Depois desse prazo, os administradores podem limpar as localizações em "Limpeza de selfies e localizações".', 'checklistitens') . "</div>";
         echo "</td></tr>";
+
+        echo "<tr class='tab_bg_1'><td>" . __('Integração com o plugin Laudo (problema já conhecido)', 'checklistitens') . "</td><td>";
+        Dropdown::showYesNo('laudo_enabled', self::isLaudoEnabled() ? 1 : 0);
+        echo "<div class='text-muted'>" . (LaudoProvider::isAvailable()
+            ? __('Equipamento com laudo em aberto mostra o alerta, e o problema já conhecido não bloqueia o item.', 'checklistitens')
+            : __('O plugin Laudo não está ativo: a integração fica sem efeito.', 'checklistitens')) . "</div>";
+        echo "</td></tr>";
+
+        $statuses = LaudoProvider::getStatusOptions();
+        if (count($statuses)) {
+            echo "<tr class='tab_bg_1'><td>" . __('Situações do laudo consideradas concluídas', 'checklistitens') . "</td><td>";
+            // showFromArray: na seleção múltipla, os selecionados vão em 'values'
+            Dropdown::showFromArray('laudo_done_statuses', $statuses, [
+                'values'   => self::getLaudoDoneStatuses(),
+                'multiple' => true,
+            ]);
+            echo "<div class='text-muted'>" . __('Laudo em qualquer outra situação conta como em aberto.', 'checklistitens') . "</div>";
+            echo "</td></tr>";
+        }
 
         if ($canedit) {
             echo "<tr class='tab_bg_2'><td colspan='2' class='center'>";

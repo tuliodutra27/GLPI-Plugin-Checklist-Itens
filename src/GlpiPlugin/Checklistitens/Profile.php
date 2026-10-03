@@ -3,10 +3,15 @@
 namespace GlpiPlugin\Checklistitens;
 
 use CommonGLPI;
+use Glpi\Toolbox\Sanitizer;
 use Html;
+use ITILFollowup;
+use KnowbaseItem;
 use Profile as GlpiProfile;
 use ProfileRight;
 use Session;
+use Ticket;
+use TicketTask;
 use Toolbox;
 
 /**
@@ -15,6 +20,9 @@ use Toolbox;
  * - usage:   retirada e devolução (todos os perfis);
  * - manager: conferência do setor e registro de uso dos equipamentos do setor (gestor operacional);
  * - config:  catálogo, configuração, todos os setores, liberação manual e limpeza de selfies (TI).
+ *
+ * A instalação também cria os perfis "Operador" e "Gestor Operacional" quando ainda não existem
+ * (perfis existentes nunca são alterados, nem apagados na desinstalação).
  */
 class Profile extends GlpiProfile
 {
@@ -22,8 +30,30 @@ class Profile extends GlpiProfile
     public const RIGHT_MANAGER = 'plugin_checklistitens_manager';
     public const RIGHT_CONFIG  = 'plugin_checklistitens_config';
 
+    /** Chaves do array devolvido por createDefaultProfiles(). */
+    public const DEFAULT_OPERATOR = 'operator';
+    public const DEFAULT_MANAGER  = 'manager';
+
+    /** Nomes usados ao criar os perfis padrão. */
+    public const OPERATOR_PROFILE_NAME = 'Operador';
+    public const MANAGER_PROFILE_LABEL = 'Gestor Operacional';
+
     /** Nome do perfil que recebe o direito de gestor na instalação (comparação sem maiúsculas). */
     public const MANAGER_PROFILE_NAME = 'gestor operacional';
+
+    /** Campos do Self-Service copiados para o Gestor Operacional (além de interface e direitos). */
+    private const SELF_SERVICE_FIELDS = [
+        'helpdesk_hardware',
+        'helpdesk_item_type',
+        'ticket_status',
+        'problem_status',
+        'change_status',
+        'create_ticket_on_login',
+        'tickettemplates_id',
+        'changetemplates_id',
+        'problemtemplates_id',
+        'managed_domainrecordtypes',
+    ];
 
     public static $rightname = 'profile';
 
@@ -117,33 +147,186 @@ class Profile extends GlpiProfile
     }
 
     /**
+     * Cria os perfis "Operador" e "Gestor Operacional" se ainda não houver perfil com esses nomes
+     * (comparação sem maiúsculas). Perfis existentes nunca são alterados.
+     *
+     * - Operador: interface simplificada, só a FAQ;
+     * - Gestor Operacional: cópia do Self-Service (interface e direitos), sem os direitos do plugin.
+     *
+     * Os direitos do plugin são dados depois, por installRights().
+     *
+     * @return array<string, int> id do perfil criado agora, ou 0 se já existia (ou se falhou)
+     */
+    public static function createDefaultProfiles(): array
+    {
+        $created = [self::DEFAULT_OPERATOR => 0, self::DEFAULT_MANAGER => 0];
+
+        $names = [];
+        foreach ((new GlpiProfile())->find() as $data) {
+            $names[] = mb_strtolower(trim((string) $data['name']));
+        }
+
+        if (!in_array(mb_strtolower(self::OPERATOR_PROFILE_NAME), $names, true)) {
+            $created[self::DEFAULT_OPERATOR] = self::addProfile(
+                ['name' => self::OPERATOR_PROFILE_NAME, 'interface' => 'helpdesk'],
+                ['knowbase' => KnowbaseItem::READFAQ]
+            );
+        }
+
+        if (!in_array(self::MANAGER_PROFILE_NAME, $names, true)) {
+            [$fields, $rights] = self::getSelfServiceTemplate();
+            $created[self::DEFAULT_MANAGER] = self::addProfile(['name' => self::MANAGER_PROFILE_LABEL] + $fields, $rights);
+        }
+
+        return $created;
+    }
+
+    /**
+     * Cria o perfil e grava os direitos depois do add(): o post_addItem() do core descarta os
+     * direitos recebidos no add() e grava todos vazios.
+     *
+     * @param array<string, mixed> $input
+     * @param array<string, int>   $rights
+     */
+    private static function addProfile(array $input, array $rights): int
+    {
+        $input = array_merge($input, [
+            // Com 1, o core tira o "padrão" de todos os outros perfis
+            'is_default' => 0,
+            'comment'    => __('Criado pelo plugin Checklist uso de equipamentos.', 'checklistitens'),
+        ]);
+
+        $id = (int) (new GlpiProfile())->add(Sanitizer::sanitize($input));
+        if ($id <= 0) {
+            Toolbox::logError(sprintf('checklistitens: erro ao criar o perfil "%s"', $input['name']));
+            return 0;
+        }
+
+        ProfileRight::updateProfileRights($id, $rights);
+
+        return $id;
+    }
+
+    /**
+     * Campos e direitos do Self-Service para o Gestor Operacional, sem os direitos do próprio
+     * plugin. Se não houver Self-Service, um mínimo equivalente ao padrão do GLPI.
+     *
+     * @return array{0: array<string, mixed>, 1: array<string, int>}
+     */
+    private static function getSelfServiceTemplate(): array
+    {
+        $source = self::findSelfService();
+        if ($source === null) {
+            return [
+                ['interface' => 'helpdesk'],
+                [
+                    'ticket'          => Ticket::READMY | CREATE,
+                    'followup'        => ITILFollowup::SEEPUBLIC | ITILFollowup::ADDMYTICKET,
+                    'task'            => TicketTask::SEEPUBLIC,
+                    'password_update' => READ,
+                    'personalization' => READ | UPDATE,
+                    'knowbase'        => KnowbaseItem::READFAQ,
+                ],
+            ];
+        }
+
+        $fields = ['interface' => 'helpdesk'];
+        foreach (self::SELF_SERVICE_FIELDS as $field) {
+            // Vazio no Self-Service: fica o padrão do core/da tabela
+            if (isset($source[$field])) {
+                $fields[$field] = $source[$field];
+            }
+        }
+        // O add() do core recebe estes dois como lista e os grava em JSON
+        foreach (['helpdesk_item_type', 'managed_domainrecordtypes'] as $field) {
+            if (isset($fields[$field])) {
+                $fields[$field] = importArrayFromDB($fields[$field]);
+            }
+        }
+        // Sem _cycle_ticket, o add() de perfil helpdesk troca ticket_status pelo ciclo todo fechado
+        if (isset($fields['ticket_status'])) {
+            $fields['_cycle_ticket'] = 1;
+        }
+
+        $rights = [];
+        foreach (ProfileRight::getProfileRights((int) $source['id']) as $name => $value) {
+            if (strpos((string) $name, 'plugin_checklistitens_') !== 0) {
+                $rights[$name] = (int) $value;
+            }
+        }
+
+        return [$fields, $rights];
+    }
+
+    /**
+     * Self-Service: pelo nome; senão o perfil de id 1; senão o perfil padrão. Sempre helpdesk.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function findSelfService(): ?array
+    {
+        $by_id      = null;
+        $by_default = null;
+
+        foreach ((new GlpiProfile())->find(['interface' => 'helpdesk'], ['id']) as $data) {
+            if (mb_strtolower(trim((string) $data['name'])) === 'self-service') {
+                return $data;
+            }
+            if ((int) $data['id'] === 1) {
+                $by_id = $data;
+            }
+            if ($by_default === null && (int) $data['is_default'] === 1) {
+                $by_default = $data;
+            }
+        }
+
+        return $by_id ?? $by_default;
+    }
+
+    /**
      * Registra os direitos no core. Só na primeira instalação aplica a concessão padrão:
      * uso para todos os perfis, gestor para "gestor operacional" e tudo para o Super-Admin.
      * Numa atualização, os direitos já ajustados pelos administradores são preservados.
+     *
+     * Os perfis recém-criados por createDefaultProfiles() recebem seus direitos em qualquer caso
+     * (o hook de criação de perfil do plugin não roda enquanto ele está sendo instalado):
+     * Operador → uso; Gestor Operacional → uso e gestor.
+     *
+     * @param array<string, int> $created retorno de createDefaultProfiles()
      */
-    public static function installRights(): void
+    public static function installRights(array $created = []): void
     {
         $first_install = countElementsInTable(ProfileRight::getTable(), ['name' => self::RIGHT_USAGE]) === 0;
 
         ProfileRight::addProfileRights([self::RIGHT_USAGE, self::RIGHT_MANAGER, self::RIGHT_CONFIG]);
 
-        if (!$first_install) {
-            return;
+        if ($first_install) {
+            foreach ((new GlpiProfile())->find() as $data) {
+                $rights = [self::RIGHT_USAGE => CREATE];
+                $name   = mb_strtolower(trim((string) $data['name']));
+
+                if ($name === self::MANAGER_PROFILE_NAME) {
+                    $rights[self::RIGHT_MANAGER] = READ | UPDATE;
+                }
+                if ($name === 'super-admin') {
+                    $rights[self::RIGHT_MANAGER] = READ | UPDATE;
+                    $rights[self::RIGHT_CONFIG]  = READ | UPDATE;
+                }
+
+                ProfileRight::updateProfileRights((int) $data['id'], $rights);
+            }
         }
 
-        foreach ((new GlpiProfile())->find() as $data) {
-            $rights = [self::RIGHT_USAGE => CREATE];
-            $name   = mb_strtolower(trim((string) $data['name']));
-
-            if ($name === self::MANAGER_PROFILE_NAME) {
-                $rights[self::RIGHT_MANAGER] = READ | UPDATE;
+        // Na primeira instalação o laço acima já cobre; repetir é inofensivo
+        $grants = [
+            self::DEFAULT_OPERATOR => [self::RIGHT_USAGE => CREATE],
+            self::DEFAULT_MANAGER  => [self::RIGHT_USAGE => CREATE, self::RIGHT_MANAGER => READ | UPDATE],
+        ];
+        foreach ($grants as $key => $rights) {
+            $profiles_id = (int) ($created[$key] ?? 0);
+            if ($profiles_id > 0) {
+                ProfileRight::updateProfileRights($profiles_id, $rights);
             }
-            if ($name === 'super-admin') {
-                $rights[self::RIGHT_MANAGER] = READ | UPDATE;
-                $rights[self::RIGHT_CONFIG]  = READ | UPDATE;
-            }
-
-            ProfileRight::updateProfileRights((int) $data['id'], $rights);
         }
     }
 

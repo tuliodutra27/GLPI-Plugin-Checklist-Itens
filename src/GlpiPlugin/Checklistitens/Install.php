@@ -29,15 +29,26 @@ class Install
     public const TABLE_USAGEPROBLEMS = 'glpi_plugin_checklistitens_usageproblems';
     public const TABLE_ITEMBLOCKS    = 'glpi_plugin_checklistitens_itemblocks';
     public const TABLE_SELFIEPURGES  = 'glpi_plugin_checklistitens_selfiepurges';
+    public const TABLE_USAGELAUDOS   = 'glpi_plugin_checklistitens_usagelaudos';
+    public const TABLE_DEFECTPHOTOS  = 'glpi_plugin_checklistitens_defectphotos';
 
     public static function install(Migration $migration): void
     {
         self::createTables();
         self::migrateColumns($migration);
+
+        // Os perfis padrão são criados antes da configuração (para o "Operador" entrar nos perfis
+        // que abrem o plugin) e antes dos direitos (para recebê-los)
+        $created = Profile::createDefaultProfiles();
         Config::installDefaults();
-        Profile::installRights();
+        if (!empty($created[Profile::DEFAULT_OPERATOR])) {
+            Config::addLandingProfile((int) $created[Profile::DEFAULT_OPERATOR]);
+        }
+        Profile::installRights($created);
+
         ProblemType::installDefaults();
         Selfie::createBaseDir();
+        DefectPhoto::createBaseDir();
         self::registerCronTasks();
         self::installDisplayPreferences();
         self::installNotifications();
@@ -89,6 +100,9 @@ class Install
                 'checkin_longitude'        => ['decimal(10,7) NULL DEFAULT NULL', 'checkin_latitude'],
                 'checkin_accuracy'         => ['int unsigned NULL DEFAULT NULL', 'checkin_longitude'],
                 'checkin_location_status'  => ['tinyint unsigned NOT NULL DEFAULT 0', 'checkin_accuracy'],
+                // 0.10.0: problema já conhecido (laudo em aberto), sem bloqueio
+                'checkout_known_issue'     => ['tinyint unsigned NOT NULL DEFAULT 0', 'checkout_is_ok'],
+                'checkin_known_issue'      => ['tinyint unsigned NOT NULL DEFAULT 0', 'checkin_is_ok'],
             ],
             self::TABLE_CONFIRMATIONS => [
                 'latitude'        => ['decimal(10,7) NULL DEFAULT NULL', 'selfie'],
@@ -261,6 +275,8 @@ class Install
             self::TABLE_USAGEPROBLEMS,
             self::TABLE_ITEMBLOCKS,
             self::TABLE_SELFIEPURGES,
+            self::TABLE_USAGELAUDOS,
+            self::TABLE_DEFECTPHOTOS,
         ];
     }
 
@@ -282,11 +298,13 @@ class Install
                 `date_checkout` timestamp NULL DEFAULT NULL,
                 `checkout_shift_start` timestamp NULL DEFAULT NULL,
                 `checkout_is_ok` tinyint NOT NULL DEFAULT 1,
+                `checkout_known_issue` tinyint unsigned NOT NULL DEFAULT 0,
                 `checkout_selfie` varchar(255) NOT NULL DEFAULT '',
                 `plugin_checklistitens_confirmations_id` int unsigned NOT NULL DEFAULT 0,
                 `date_checkin` timestamp NULL DEFAULT NULL,
                 `checkin_shift_start` timestamp NULL DEFAULT NULL,
                 `checkin_is_ok` tinyint NULL DEFAULT NULL,
+                `checkin_known_issue` tinyint unsigned NOT NULL DEFAULT 0,
                 `checkin_selfie` varchar(255) NOT NULL DEFAULT '',
                 `plugin_checklistitens_confirmations_id_checkin` int unsigned NOT NULL DEFAULT 0,
                 `date_alert_not_returned` timestamp NULL DEFAULT NULL,
@@ -411,6 +429,39 @@ class Install
                 `date_mod` timestamp NULL DEFAULT NULL,
                 PRIMARY KEY (`id`),
                 KEY `date_limit` (`date_limit`)
+            ",
+
+            // Cópia dos laudos em aberto (plugin Laudo) exibidos na retirada/devolução. Sem chave
+            // estrangeira para o Laudo, que pode ser desinstalado; o histórico não muda quando o
+            // laudo é editado ou concluído.
+            self::TABLE_USAGELAUDOS => "
+                `id` int unsigned NOT NULL AUTO_INCREMENT,
+                `plugin_checklistitens_usages_id` int unsigned NOT NULL DEFAULT 0,
+                `phase` tinyint unsigned NOT NULL DEFAULT 1,
+                `plugin_laudo_laudos_id` int unsigned NOT NULL DEFAULT 0,
+                `laudo_name` varchar(255) NOT NULL DEFAULT '',
+                `laudo_status` varchar(255) NOT NULL DEFAULT '',
+                `laudo_date` timestamp NULL DEFAULT NULL,
+                `laudo_summary` varchar(255) NOT NULL DEFAULT '',
+                `date_creation` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `usage_laudo_phase` (`plugin_checklistitens_usages_id`, `plugin_laudo_laudos_id`, `phase`),
+                KEY `plugin_laudo_laudos_id` (`plugin_laudo_laudos_id`)
+            ",
+
+            // Fotos do equipamento com defeito (de 1 a 5 por problema marcado). Nunca são apagadas
+            // pelo plugin; documents_id aponta o documento criado ao anexar no chamado.
+            self::TABLE_DEFECTPHOTOS => "
+                `id` int unsigned NOT NULL AUTO_INCREMENT,
+                `plugin_checklistitens_usages_id` int unsigned NOT NULL DEFAULT 0,
+                `phase` tinyint unsigned NOT NULL DEFAULT 1,
+                `filepath` varchar(255) NOT NULL DEFAULT '',
+                `size_bytes` int unsigned NOT NULL DEFAULT 0,
+                `documents_id` int unsigned NOT NULL DEFAULT 0,
+                `date_creation` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `usage_phase` (`plugin_checklistitens_usages_id`, `phase`),
+                KEY `documents_id` (`documents_id`)
             ",
         ];
 

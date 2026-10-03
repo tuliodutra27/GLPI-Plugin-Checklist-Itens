@@ -13,7 +13,7 @@ use GlpiPlugin\Checklistitens\Menu;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
 use GlpiPlugin\Checklistitens\Usage;
 
-define('PLUGIN_CHECKLISTITENS_VERSION', '0.9.0');
+define('PLUGIN_CHECKLISTITENS_VERSION', '0.10.0');
 define('PLUGIN_CHECKLISTITENS_MIN_GLPI_VERSION', '10.0.0');
 define('PLUGIN_CHECKLISTITENS_MAX_GLPI_VERSION', '10.0.99');
 
