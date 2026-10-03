@@ -21,6 +21,10 @@
                 <div class="alert alert-warning d-inline-block">
                     {{ __('O equipamento ficou bloqueado e será conferido pelo gestor.', 'checklistitens') }}
                 </div>
+            {% elseif known_issue %}
+                <div class="alert alert-info d-inline-block">
+                    {{ __('O problema já conhecido (laudo em aberto) foi registrado, com as fotos, para o gestor conferir.', 'checklistitens') }}
+                </div>
             {% endif %}
 
             {% if action == 'checkout' %}

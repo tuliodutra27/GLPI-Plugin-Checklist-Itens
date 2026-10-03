@@ -1,4 +1,5 @@
 {# Lista de equipamentos com a situação atual #}
+{% import '@checklistitens/parts/known_issue.html.twig' as known %}
 <div class="ci-page ci-page-wide container-fluid">
     <h2 class="ci-title mb-3"><i class="ti ti-history"></i> {{ __('Equipamentos', 'checklistitens') }}</h2>
 
@@ -59,6 +60,7 @@
                                 <span class="badge bg-{{ i.situation_color }}">{{ i.situation_label }}</span>
                                 {% if i.holder %}<div class="ci-small text-muted">{{ i.holder }}</div>{% endif %}
                                 {% if i.situation == 'out' and i.state %}<div class="ci-small text-muted">{{ i.state }}</div>{% endif %}
+                                {% if i.laudos|length %}<div class="mt-1">{{ known.badge(i.laudos) }}</div>{% endif %}
                             </td>
                             <td class="ci-small">{{ i.last_problem }}</td>
                             <td class="text-center">{{ i.tickets ?: '' }}</td>

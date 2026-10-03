@@ -19,8 +19,23 @@
                 {% endfor %}
             </div>
         {% endfor %}
-        <div class="alert alert-warning mt-2 mb-0"><i class="ti ti-lock"></i> {{ hint }}</div>
+        <div class="alert alert-warning mt-2 mb-0" data-ci-unknown-only><i class="ti ti-lock"></i> {{ hint }}</div>
     </div>
+{% endmacro %}
+
+{# Fotos do equipamento com defeito: obrigatórias quando há problema marcado #}
+{% macro defect_photos() %}
+    <div data-ci-section="photos" hidden class="mt-3">
+        {% include '@checklistitens/parts/defect_photos.html.twig' %}
+    </div>
+{% endmacro %}
+
+{# Alerta de problema já conhecido: um bloco por item com laudo em aberto, exibido quando o item é escolhido #}
+{% macro known_alerts(entries) %}
+    {% import '@checklistitens/parts/known_issue.html.twig' as known %}
+    {% for e in entries %}
+        <div data-ci-known-for="{{ e.key }}" hidden class="mb-3">{{ known.alert(e.laudos) }}</div>
+    {% endfor %}
 {% endmacro %}
 
 {% macro ok_question(number) %}
@@ -42,6 +57,7 @@
 {% endmacro %}
 
 {% import _self as ci %}
+{% import '@checklistitens/parts/known_issue.html.twig' as known %}
 
 <div class="ci-page container-fluid" data-ci-idle="{{ idle_seconds }}" data-ci-logout="{{ logout_url }}">
     <h2 class="ci-title mb-3">
@@ -142,10 +158,12 @@
                                 <div class="ci-item-list">
                                     {% for i in t.items %}
                                         <label class="ci-item" data-ci-search="{{ (i.label ~ ' ' ~ i.detail)|lower }}">
-                                            <input type="radio" name="items_id" value="{{ i.id }}" class="form-check-input">
+                                            <input type="radio" name="items_id" value="{{ i.id }}" class="form-check-input"
+                                                   data-ci-known-key="{{ t.itemtype }}:{{ i.id }}" data-ci-known="{{ i.laudos|length ? 1 : 0 }}">
                                             <span>
                                                 <strong>{{ i.label }}</strong>
                                                 {% if i.detail %}<br><small class="text-muted">{{ i.detail }}</small>{% endif %}
+                                                {% if i.laudos|length %}<br>{{ known.badge(i.laudos) }}{% endif %}
                                             </span>
                                         </label>
                                     {% endfor %}
@@ -158,11 +176,32 @@
 
             <div class="card mb-3" data-ci-section="check" hidden>
                 <div class="card-body">
+                    {% set entries = [] %}
+                    {% for t in types %}
+                        {% for i in t.items|filter(i => i.laudos|length) %}
+                            {% set entries = entries|merge([{key: t.itemtype ~ ':' ~ i.id, laudos: i.laudos}]) %}
+                        {% endfor %}
+                    {% endfor %}
+                    {{ ci.known_alerts(entries) }}
+
                     {{ ci.ok_question(3) }}
                     {{ ci.problems_list(types, __('Este equipamento será bloqueado e conferido pelo gestor. Depois você escolhe outro.', 'checklistitens')) }}
-                    <button type="submit" name="refuse" value="1" class="btn btn-warning btn-lg w-100 mt-3" data-ci-section="refuse" data-ci-require="problems" hidden>
+                    {{ ci.defect_photos() }}
+
+                    <button type="submit" name="refuse" value="1" class="btn btn-warning btn-lg w-100 mt-3" data-ci-section="refuse" data-ci-require="defect" hidden>
                         <i class="ti ti-lock"></i> {{ __('Bloquear e escolher outro', 'checklistitens') }}
                     </button>
+
+                    {# Item com laudo em aberto: o colaborador diz se o problema é o do laudo #}
+                    <div data-ci-section="known-choice" hidden class="mt-3">
+                        <label class="ci-choice ci-choice-ok">
+                            <input type="radio" name="known_issue" value="1" class="ci-choice-input">
+                            <span class="ci-choice-box"><i class="ti ti-file-check"></i> {{ __('Levar assim, é o problema do laudo', 'checklistitens') }}</span>
+                        </label>
+                        <button type="submit" name="refuse" value="1" class="btn btn-warning btn-lg w-100 mt-2" data-ci-require="defect">
+                            <i class="ti ti-lock"></i> {{ __('É outro problema: bloquear e escolher outro', 'checklistitens') }}
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -189,11 +228,13 @@
                         {% for u in my_usages %}
                             <label class="ci-item {{ u.can_return ? '' : 'ci-item-disabled' }}">
                                 <input type="radio" name="usage_id" value="{{ u.id }}" class="form-check-input"
-                                       data-ci-itemtype="{{ u.itemtype }}" {{ u.can_return ? '' : 'disabled' }}>
+                                       data-ci-itemtype="{{ u.itemtype }}" {{ u.can_return ? '' : 'disabled' }}
+                                       data-ci-known-key="u{{ u.id }}" data-ci-known="{{ u.laudos|default([])|length ? 1 : 0 }}">
                                 <span>
                                     <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong>
                                     {% if u.detail %}<small class="text-muted">{{ u.detail }}</small>{% endif %}
                                     <br><small class="text-muted">{{ __('Retirado em', 'checklistitens') }} {{ u.checkout }}</small>
+                                    {% if u.laudos|default([])|length %}<br>{{ known.badge(u.laudos) }}{% endif %}
                                     {% if not u.can_return %}
                                         <br><span class="badge bg-{{ u.status_color }}">{{ __('Aguardando conferência do gestor', 'checklistitens') }}</span>
                                     {% endif %}
@@ -208,8 +249,31 @@
 
             <div class="card mb-3" data-ci-section="check" hidden>
                 <div class="card-body">
+                    {% set entries = [] %}
+                    {% for u in my_usages|filter(u => u.laudos|default([])|length) %}
+                        {% set entries = entries|merge([{key: 'u' ~ u.id, laudos: u.laudos}]) %}
+                    {% endfor %}
+                    {{ ci.known_alerts(entries) }}
+
                     {{ ci.ok_question(2) }}
                     {{ ci.problems_list(types, __('O equipamento será devolvido e ficará bloqueado até o TI resolver.', 'checklistitens')) }}
+                    {{ ci.defect_photos() }}
+
+                    {# Item com laudo em aberto: o colaborador diz se o problema é o do laudo #}
+                    <div data-ci-section="known-choice" hidden class="row g-2 mt-1">
+                        <div class="col-12">
+                            <label class="ci-choice ci-choice-ok">
+                                <input type="radio" name="known_issue" value="1" class="ci-choice-input">
+                                <span class="ci-choice-box"><i class="ti ti-file-check"></i> {{ __('Devolver, é o problema do laudo', 'checklistitens') }}</span>
+                            </label>
+                        </div>
+                        <div class="col-12">
+                            <label class="ci-choice ci-choice-nok">
+                                <input type="radio" name="known_issue" value="0" class="ci-choice-input">
+                                <span class="ci-choice-box"><i class="ti ti-lock"></i> {{ __('É outro problema: devolver e bloquear', 'checklistitens') }}</span>
+                            </label>
+                        </div>
+                    </div>
                 </div>
             </div>
 

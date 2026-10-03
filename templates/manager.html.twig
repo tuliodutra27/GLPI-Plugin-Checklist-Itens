@@ -15,6 +15,31 @@
     {% endif %}
 {% endmacro %}
 
+{# Fotos do equipamento com defeito: miniaturas que abrem a foto inteira #}
+{% macro photos(list) %}
+    {% if list|length %}
+        <div class="ci-photo-strip mt-1">
+            {% for p in list %}
+                <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ __('Foto do defeito', 'checklistitens') }}">
+                    <img src="{{ p.url }}" class="ci-thumb ci-thumb-photo" alt="{{ __('Foto do defeito', 'checklistitens') }}" loading="lazy">
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{# Selo de resultado do checklist: Ok, problema já conhecido (laudo) ou com problema #}
+{% macro result_badge(u) %}
+    {% import '@checklistitens/parts/known_issue.html.twig' as known %}
+    {% if u.is_ok %}
+        <span class="badge bg-green-lt"><i class="ti ti-circle-check"></i> {{ __('Ok', 'checklistitens') }}</span>
+    {% elseif u.known_issue %}
+        {{ known.badge(u.laudos) }}
+    {% else %}
+        <span class="badge bg-orange-lt"><i class="ti ti-alert-triangle"></i> {{ __('Com problema', 'checklistitens') }}</span>
+    {% endif %}
+{% endmacro %}
+
 {% import _self as ci %}
 {% import '@checklistitens/parts/location.html.twig' as location %}
 
@@ -59,6 +84,7 @@
                             <ul class="ci-problem-tags mb-1">
                                 {% for p in b.problems %}<li>{{ p }}</li>{% endfor %}
                             </ul>
+                            {{ ci.photos(b.photos) }}
                             {{ ci.shift_badge(b) }}
                             {% if b.conferred %}<span class="badge bg-green-lt">{{ __('Conferido', 'checklistitens') }}</span>{% endif %}
                         </div>
@@ -98,10 +124,14 @@
                     <div class="flex-fill">
                         <i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted ci-small">{{ u.detail }}</span>
                         <div class="ci-small">{{ u.user }} · {{ u.when }}</div>
+                        {% if u.problems|length %}
+                            <ul class="ci-problem-tags mb-1">{% for p in u.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+                        {% endif %}
+                        {{ ci.photos(u.photos) }}
                         {{ ci.shift_badge(u) }}
                         <div class="mt-1">{{ location.map(u.location) }}</div>
                     </div>
-                    <span class="badge bg-green-lt"><i class="ti ti-circle-check"></i> {{ __('Ok', 'checklistitens') }}</span>
+                    {{ ci.result_badge(u) }}
                 </div>
             {% else %}
                 <div class="list-group-item text-muted">{{ __('Nenhuma retirada pendente.', 'checklistitens') }}</div>
@@ -124,14 +154,11 @@
                         {% if u.problems|length %}
                             <ul class="ci-problem-tags mb-1">{% for p in u.problems %}<li>{{ p }}</li>{% endfor %}</ul>
                         {% endif %}
+                        {{ ci.photos(u.photos) }}
                         {{ ci.shift_badge(u) }}
                         <div class="mt-1">{{ location.map(u.location) }}</div>
                     </div>
-                    {% if u.is_ok %}
-                        <span class="badge bg-green-lt"><i class="ti ti-circle-check"></i> {{ __('Ok', 'checklistitens') }}</span>
-                    {% else %}
-                        <span class="badge bg-orange-lt"><i class="ti ti-alert-triangle"></i> {{ __('Com problema', 'checklistitens') }}</span>
-                    {% endif %}
+                    {{ ci.result_badge(u) }}
                 </div>
             {% else %}
                 <div class="list-group-item text-muted">{{ __('Nenhuma devolução pendente.', 'checklistitens') }}</div>

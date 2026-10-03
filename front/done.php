@@ -18,13 +18,17 @@ if (!$usage->getFromDB((int) ($_GET['id'] ?? 0)) || (int) $usage->fields['users_
 }
 
 $item    = ItemProvider::describe((string) $usage->fields['itemtype'], (int) $usage->fields['items_id']);
-$blocked = $action === 'checkin' && (int) $usage->fields['checkin_is_ok'] === 0;
+$prefix  = $action === 'checkin' ? 'checkin_' : 'checkout_';
+// Problema já conhecido (laudo em aberto): registrado, mas o item não fica bloqueado
+$known   = (int) ($usage->fields[$prefix . 'known_issue'] ?? 0) === 1;
+$blocked = $action === 'checkin' && (int) $usage->fields['checkin_is_ok'] === 0 && !$known;
 
 Ui::header(__('Registro salvo', 'checklistitens'), 'home');
 Ui::render('done.html.twig', [
     'action'       => $action,
     'item'         => $item,
     'blocked'      => $blocked,
+    'known_issue'  => $known,
     'logout_url'   => Ui::logoutUrl(),
     'checkout_url' => Ui::url('front/kiosk.php?step=checkout'),
     'logout_after' => 5,

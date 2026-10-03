@@ -281,6 +281,18 @@
     flex-shrink: 0;
 }
 
+/* Fotos do defeito no painel do gestor e no registro do equipamento */
+.ci-photo-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+}
+
+.ci-thumb-photo {
+    width: 48px;
+    height: 48px;
+}
+
 .ci-thumb-empty {
     display: inline-flex;
     align-items: center;
@@ -306,4 +318,88 @@
     border-radius: 1rem;
     font-size: .8rem;
     background: rgba(245, 159, 0, .15);
+}
+
+/* Fotos do equipamento com defeito: botões grandes para o celular e miniaturas em grade.
+   Cores vêm das variáveis do tema (claro/escuro). */
+
+.ci-defect-button {
+    min-height: 3.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+}
+
+.ci-defect-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
+    gap: .5rem;
+}
+
+.ci-defect-grid:empty {
+    display: none;
+}
+
+.ci-defect-item {
+    position: relative;
+    min-height: 88px;
+    aspect-ratio: 1 / 1;
+    border: 1px solid var(--tblr-border-color, #dadfe5);
+    border-radius: .5rem;
+    overflow: hidden;
+    background: var(--tblr-bg-surface-secondary, #f1f5f9);
+}
+
+.ci-defect-thumb {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Arquivo original enviado sem prévia */
+.ci-defect-thumb-file {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--tblr-muted, #667382);
+}
+
+/* Botão × sobre a miniatura, com área de toque confortável */
+.ci-defect-remove {
+    position: absolute;
+    top: .25rem;
+    right: .25rem;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .6);
+    color: #fff;
+    font-size: 1.25rem;
+    line-height: 2rem;
+    text-align: center;
+    cursor: pointer;
+}
+
+.ci-defect-remove:hover,
+.ci-defect-remove:focus-visible {
+    background: var(--tblr-danger, #d63939);
+}
+
+.ci-defect-counter {
+    color: var(--tblr-muted, #667382);
+}
+
+.ci-defect-counter.ci-defect-counter-ok {
+    color: var(--tblr-success, #2fb344);
+    font-weight: 600;
+}
+
+.ci-defect-status.ci-defect-warning {
+    color: var(--tblr-warning, #f59f00);
+    font-weight: 600;
 }

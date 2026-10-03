@@ -145,7 +145,7 @@ class ItemProvider
         ];
     }
 
-    /** Descrição de uma linha só, ex.: "Rádio 19509A0882 - 3017 (Motorola DEM300)". */
+    /** Descrição de uma linha só, ex.: "Rádio ABC123 - 0001 (Fabricante Modelo)". */
     public static function describe(string $itemtype, int $items_id): string
     {
         $row = self::getRow($itemtype, $items_id);

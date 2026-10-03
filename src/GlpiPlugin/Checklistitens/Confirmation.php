@@ -242,6 +242,7 @@ class Confirmation extends CommonDBTM
         $usage    = Usage::present($row);
         $is_checkin = $phase === Usage::PHASE_CHECKIN;
         $shift    = $is_checkin ? $row['checkin_shift_start'] : $row['checkout_shift_start'];
+        $id       = (int) $row['id'];
 
         return $usage + [
             'user'           => Ui::text(getUserName((int) $row['users_id'])),
@@ -249,7 +250,11 @@ class Confirmation extends CommonDBTM
             'shift_label'    => Shift::label($shift),
             'previous_shift' => $shift !== null && $shift < $current_shift,
             'is_ok'          => $is_checkin ? (int) $row['checkin_is_ok'] === 1 : (int) $row['checkout_is_ok'] === 1,
-            'problems'       => $is_checkin ? array_column(UsageProblem::getFor((int) $row['id'], Usage::PHASE_CHECKIN), 'name') : [],
+            // Problema já conhecido (laudo em aberto): registrado sem bloqueio e sem chamado
+            'known_issue'    => (int) ($row[($is_checkin ? 'checkin_' : 'checkout_') . 'known_issue'] ?? 0) === 1,
+            'laudos'         => UsageLaudo::getForUsages([$id])[$id][$phase] ?? [],
+            'photos'         => DefectPhoto::getForUsages([$id])[$id][$phase] ?? [],
+            'problems'       => array_column(UsageProblem::getFor($id, $phase), 'name'),
             'selfie_url'     => ($is_checkin ? $row['checkin_selfie'] : $row['checkout_selfie']) !== ''
                 ? Selfie::getUrl($is_checkin ? Selfie::KIND_CHECKIN : Selfie::KIND_CHECKOUT, (int) $row['id'])
                 : '',
@@ -261,9 +266,12 @@ class Confirmation extends CommonDBTM
 
     private static function presentBlock(array $row, string $current_shift): array
     {
-        $block = ItemBlock::present($row);
+        $block    = ItemBlock::present($row);
+        $usage_id = (int) $row['plugin_checklistitens_usages_id'];
+        $phase    = (int) $row['reason'] === ItemBlock::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
 
         return $block + [
+            'photos'          => DefectPhoto::getForUsages([$usage_id])[$usage_id][$phase] ?? [],
             'previous_shift'  => $row['block_shift_start'] !== null && $row['block_shift_start'] < $current_shift,
             'can_open_ticket' => $block['ticket_id'] === 0 && $block['status'] === ItemBlock::STATUS_WAITING,
         ];

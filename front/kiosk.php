@@ -2,6 +2,7 @@
 
 use GlpiPlugin\Checklistitens\Config;
 use GlpiPlugin\Checklistitens\ItemProvider;
+use GlpiPlugin\Checklistitens\LaudoProvider;
 use GlpiPlugin\Checklistitens\ProblemType;
 use GlpiPlugin\Checklistitens\Profile;
 use GlpiPlugin\Checklistitens\Sector;
@@ -18,12 +19,35 @@ $sector   = Sector::forCurrentUser();
 
 $my_usages = array_map([Usage::class, 'present'], Usage::getOpenForUser($users_id));
 
+// Laudos em aberto (plugin Laudo) dos equipamentos com o colaborador, para o alerta na devolução
+if ($step === 'checkin') {
+    $by_type = [];
+    foreach ($my_usages as $u) {
+        $by_type[$u['itemtype']][] = $u['items_id'];
+    }
+    $open = [];
+    foreach ($by_type as $itemtype => $ids) {
+        $open[$itemtype] = LaudoProvider::getOpenFor($itemtype, $ids);
+    }
+    foreach ($my_usages as $k => $u) {
+        $my_usages[$k]['laudos'] = $open[$u['itemtype']][$u['items_id']] ?? [];
+    }
+}
+
 $types = [];
 foreach (Config::getEnabledTypes() as $itemtype) {
     $limit        = Config::getLimit($itemtype);
     $limitReached = $limit > 0 && Usage::countOpenForUser($users_id, $itemtype) >= $limit;
 
     $items = ($step === 'checkout' && !$limitReached) ? ItemProvider::getAvailable($itemtype, $sector) : [];
+
+    // Laudos em aberto de todos os itens da lista, numa consulta só: selo e alerta na retirada
+    if (count($items)) {
+        $open = LaudoProvider::getOpenFor($itemtype, array_column($items, 'id'));
+        foreach ($items as $k => $i) {
+            $items[$k]['laudos'] = $open[(int) $i['id']] ?? [];
+        }
+    }
 
     $types[] = [
         'itemtype'      => $itemtype,

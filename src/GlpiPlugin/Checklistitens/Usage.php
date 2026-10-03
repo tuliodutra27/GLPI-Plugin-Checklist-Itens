@@ -311,6 +311,7 @@ class Usage extends CommonDBTM
         return [
             'id'           => (int) $row['id'],
             'itemtype'     => $itemtype,
+            'items_id'     => (int) $row['items_id'],
             'type_label'   => ItemProvider::getTypeLabel($itemtype),
             'icon'         => ItemProvider::getTypeIcon($itemtype),
             'label'        => $info['label'],
@@ -325,12 +326,17 @@ class Usage extends CommonDBTM
     }
 
     /**
-     * Retirada com "Equipamento ok? Sim": exige selfie e cria o uso aberto (item bloqueado para
-     * os outros até a devolução).
+     * Retirada que leva o item: "Equipamento ok? Sim", ou "Não" com o problema já conhecido num
+     * laudo em aberto (sem bloqueio). Exige selfie e cria o uso aberto (item preso para os outros
+     * até a devolução).
      *
-     * @return array{ok: bool, message: string, id?: int}
+     * Se o colaborador disse que o problema é o do laudo, mas o laudo foi concluído nesse
+     * meio-tempo, vale a regra normal: a retirada vira recusa e o item é bloqueado.
+     *
+     * @param int[] $problem_ids
+     * @return array{ok: bool, message: string, id?: int, refused?: bool}
      */
-    public static function checkout(string $itemtype, int $items_id): array
+    public static function checkout(string $itemtype, int $items_id, bool $known_issue = false, array $problem_ids = []): array
     {
         $users_id = (int) Session::getLoginUserID();
 
@@ -347,6 +353,28 @@ class Usage extends CommonDBTM
                 $limit,
                 mb_strtolower(ItemProvider::getShortTypeLabel($itemtype))
             )];
+        }
+
+        $laudos   = LaudoProvider::getOpenForItem($itemtype, $items_id);
+        $problems = $photos = [];
+        if ($known_issue) {
+            $problems = ProblemType::getValidForType($itemtype, $problem_ids);
+            if (!count($problems)) {
+                return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
+            }
+            $photos = DefectPhoto::collectFromRequest();
+            if (count($photos) < DefectPhoto::MIN_PHOTOS) {
+                return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
+            }
+            if (!count($laudos)) {
+                $result = self::refuse($itemtype, $items_id, $problem_ids);
+                if ($result['ok']) {
+                    $result['message'] = __('O laudo deste equipamento foi concluído: o problema bloqueia o item.', 'checklistitens')
+                        . ' ' . $result['message'];
+                }
+
+                return $result + ['refused' => true];
+            }
         }
 
         $selfie = Selfie::storeFromRequest(Selfie::KIND_CHECKOUT, $users_id);
@@ -366,7 +394,8 @@ class Usage extends CommonDBTM
             'lock_open'            => 1,
             'date_checkout'        => $now,
             'checkout_shift_start' => Shift::startFor($now),
-            'checkout_is_ok'       => 1,
+            'checkout_is_ok'       => $known_issue ? 0 : 1,
+            'checkout_known_issue' => $known_issue ? 1 : 0,
             'checkout_selfie'      => $selfie,
         ] + Location::toFields('checkout_', Location::fromRequest()));
 
@@ -376,12 +405,21 @@ class Usage extends CommonDBTM
             return ['ok' => false, 'message' => __('Este item acabou de ser retirado por outra pessoa, escolha outro.', 'checklistitens')];
         }
 
+        if ($known_issue) {
+            UsageProblem::addAll($id, self::PHASE_CHECKOUT, $problems);
+            DefectPhoto::storeAll($id, self::PHASE_CHECKOUT, $photos);
+        }
+        // Cópia dos laudos em aberto: registra que o alerta foi exibido, mesmo no "Sim"
+        if (count($laudos)) {
+            UsageLaudo::recordAll($id, self::PHASE_CHECKOUT, $laudos);
+        }
+
         return ['ok' => true, 'message' => '', 'id' => $id];
     }
 
     /**
-     * Retirada com "Equipamento ok? Não": registra a recusa com os problemas e bloqueia o item.
-     * O colaborador não leva o item e escolhe outro.
+     * Retirada com "Equipamento ok? Não" e problema novo: registra a recusa com os problemas e as
+     * fotos do defeito e bloqueia o item. O colaborador não leva o item e escolhe outro.
      *
      * @param int[] $problem_ids
      * @return array{ok: bool, message: string, id?: int}
@@ -399,6 +437,10 @@ class Usage extends CommonDBTM
         $problems = ProblemType::getValidForType($itemtype, $problem_ids);
         if (!count($problems)) {
             return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
+        }
+        $photos = DefectPhoto::collectFromRequest();
+        if (count($photos) < DefectPhoto::MIN_PHOTOS) {
+            return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
         }
 
         $now   = Shift::now();
@@ -419,6 +461,11 @@ class Usage extends CommonDBTM
         }
 
         UsageProblem::addAll($id, self::PHASE_CHECKOUT, $problems);
+        DefectPhoto::storeAll($id, self::PHASE_CHECKOUT, $photos);
+        $laudos = LaudoProvider::getOpenForItem($itemtype, $items_id);
+        if (count($laudos)) {
+            UsageLaudo::recordAll($id, self::PHASE_CHECKOUT, $laudos);
+        }
         ItemBlock::createFor($usage->fields, ItemBlock::REASON_CHECKOUT);
 
         return [
@@ -432,13 +479,13 @@ class Usage extends CommonDBTM
     }
 
     /**
-     * Devolução: só dos próprios usos, depois da liberação do gestor. Com problema, o item volta
-     * bloqueado.
+     * Devolução: só dos próprios usos, depois da liberação do gestor. Com problema novo, o item
+     * volta bloqueado; com o problema já conhecido num laudo em aberto, não.
      *
      * @param int[] $problem_ids
-     * @return array{ok: bool, message: string, id?: int, blocked?: bool}
+     * @return array{ok: bool, message: string, id?: int, blocked?: bool, laudo_closed?: bool}
      */
-    public static function checkin(int $usages_id, int $is_ok, array $problem_ids): array
+    public static function checkin(int $usages_id, int $is_ok, array $problem_ids, bool $known_issue = false): array
     {
         $users_id = (int) Session::getLoginUserID();
         $usage    = new self();
@@ -454,13 +501,24 @@ class Usage extends CommonDBTM
             return ['ok' => false, 'message' => __('Responda se o equipamento está ok.', 'checklistitens')];
         }
 
-        $problems = [];
+        $itemtype = (string) $usage->fields['itemtype'];
+        $laudos   = LaudoProvider::getOpenForItem($itemtype, (int) $usage->fields['items_id']);
+
+        $problems = $photos = [];
         if ($is_ok === 0) {
-            $problems = ProblemType::getValidForType((string) $usage->fields['itemtype'], $problem_ids);
+            $problems = ProblemType::getValidForType($itemtype, $problem_ids);
             if (!count($problems)) {
                 return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
             }
+            $photos = DefectPhoto::collectFromRequest();
+            if (count($photos) < DefectPhoto::MIN_PHOTOS) {
+                return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
+            }
         }
+
+        // "É o problema do laudo" só vale se o laudo ainda estiver em aberto agora
+        $laudo_closed = $is_ok === 0 && $known_issue && !count($laudos);
+        $known        = $is_ok === 0 && $known_issue && count($laudos) > 0;
 
         $selfie = Selfie::storeFromRequest(Selfie::KIND_CHECKIN, $users_id);
         if ($selfie === null) {
@@ -475,6 +533,7 @@ class Usage extends CommonDBTM
             'date_checkin'        => $now,
             'checkin_shift_start' => Shift::startFor($now),
             'checkin_is_ok'       => $is_ok,
+            'checkin_known_issue' => $known ? 1 : 0,
             'checkin_selfie'      => $selfie,
         ] + Location::toFields('checkin_', Location::fromRequest()));
         if (!$updated) {
@@ -484,10 +543,23 @@ class Usage extends CommonDBTM
 
         if ($is_ok === 0) {
             UsageProblem::addAll($usages_id, self::PHASE_CHECKIN, $problems);
+            DefectPhoto::storeAll($usages_id, self::PHASE_CHECKIN, $photos);
+        }
+        if (count($laudos)) {
+            UsageLaudo::recordAll($usages_id, self::PHASE_CHECKIN, $laudos);
+        }
+        $blocked = $is_ok === 0 && !$known;
+        if ($blocked) {
             ItemBlock::createFor($usage->fields, ItemBlock::REASON_CHECKIN);
         }
 
-        return ['ok' => true, 'message' => '', 'id' => $usages_id, 'blocked' => $is_ok === 0];
+        return [
+            'ok'           => true,
+            'message'      => $laudo_closed ? __('O laudo deste equipamento foi concluído: o problema bloqueia o item.', 'checklistitens') : '',
+            'id'           => $usages_id,
+            'blocked'      => $blocked,
+            'laudo_closed' => $laudo_closed,
+        ];
     }
 
     /**

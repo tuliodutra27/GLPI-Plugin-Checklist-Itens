@@ -130,8 +130,11 @@ class EquipmentRecord extends CommonGLPI
             $blocks   = self::getActiveBlocks($itemtype);
             $tickets  = self::countTickets($itemtype);
             $problems = self::getLastProblems($itemtype);
+            $rows     = ItemProvider::getItems($itemtype, $groups);
+            // Laudos em aberto (plugin Laudo) de todos os itens da lista, numa consulta só
+            $laudos   = LaudoProvider::getOpenFor($itemtype, array_column($rows, 'id'));
 
-            foreach (ItemProvider::getItems($itemtype, $groups) as $row) {
+            foreach ($rows as $row) {
                 $id   = (int) $row['id'];
                 $item = ItemProvider::present($itemtype, $row);
 
@@ -166,6 +169,7 @@ class EquipmentRecord extends CommonGLPI
                     'holder'          => $holder,
                     'tickets'         => $tickets[$id] ?? 0,
                     'last_problem'    => $problems[$id] ?? '',
+                    'laudos'          => $laudos[$id] ?? [],
                     'url'             => self::getUrl($itemtype, $id),
                 ];
             }
@@ -307,9 +311,11 @@ class EquipmentRecord extends CommonGLPI
                 $problems[(int) $p['plugin_checklistitens_usages_id']][(int) $p['phase']][] = Ui::text($p['problem_name']);
             }
         }
+        $photos = DefectPhoto::getForUsages($ids);
+        $laudos = UsageLaudo::getForUsages($ids);
 
         $timeline = [];
-        $stats    = ['uses' => 0, 'refusals' => 0, 'with_problem' => 0, 'blocks' => 0, 'tickets' => [], 'repair_seconds' => 0, 'last_use' => ''];
+        $stats    = ['uses' => 0, 'refusals' => 0, 'with_problem' => 0, 'known_issue' => 0, 'blocks' => 0, 'tickets' => [], 'repair_seconds' => 0, 'last_use' => ''];
         $users    = [];
         $now      = strtotime(Shift::now());
 
@@ -326,8 +332,13 @@ class EquipmentRecord extends CommonGLPI
                     $stats['last_use'] = Ui::datetime($u['date_checkout']);
                 }
             }
-            if ($u['checkin_is_ok'] !== null && (int) $u['checkin_is_ok'] === 0) {
+            $known_out = (int) ($u['checkout_known_issue'] ?? 0) === 1;
+            $known_in  = (int) ($u['checkin_known_issue'] ?? 0) === 1;
+            if ($u['checkin_is_ok'] !== null && (int) $u['checkin_is_ok'] === 0 && !$known_in) {
                 $stats['with_problem']++;
+            }
+            if ($known_out || $known_in) {
+                $stats['known_issue']++;
             }
 
             $block = null;
@@ -358,7 +369,10 @@ class EquipmentRecord extends CommonGLPI
                     'when'     => Ui::datetime($u['date_checkout']),
                     'shift'    => Shift::label($u['checkout_shift_start']),
                     'is_ok'    => (int) $u['checkout_is_ok'] === 1,
+                    'known'    => $known_out,
                     'problems' => $problems[$id][Usage::PHASE_CHECKOUT] ?? [],
+                    'photos'   => $photos[$id][Usage::PHASE_CHECKOUT] ?? [],
+                    'laudos'   => $laudos[$id][Usage::PHASE_CHECKOUT] ?? [],
                     'selfie'   => self::selfieInfo((string) $u['checkout_selfie'], Selfie::KIND_CHECKOUT, $id, $u['date_checkout']),
                     'location' => Location::present($u, 'checkout_', __('Retirada', 'checklistitens') . ' — ' . $item['label']),
                 ],
@@ -367,7 +381,10 @@ class EquipmentRecord extends CommonGLPI
                     'when'     => Ui::datetime($u['date_checkin']),
                     'shift'    => Shift::label($u['checkin_shift_start']),
                     'is_ok'    => (int) $u['checkin_is_ok'] === 1,
+                    'known'    => $known_in,
                     'problems' => $problems[$id][Usage::PHASE_CHECKIN] ?? [],
+                    'photos'   => $photos[$id][Usage::PHASE_CHECKIN] ?? [],
+                    'laudos'   => $laudos[$id][Usage::PHASE_CHECKIN] ?? [],
                     'selfie'   => self::selfieInfo((string) $u['checkin_selfie'], Selfie::KIND_CHECKIN, $id, $u['date_checkin']),
                     'location' => Location::present($u, 'checkin_', __('Devolução', 'checklistitens') . ' — ' . $item['label']),
                 ] : null,
@@ -403,12 +420,14 @@ class EquipmentRecord extends CommonGLPI
             'state'           => Ui::text($row['state_name'] ?? ''),
             'situation_label' => $situations[$situation]['label'],
             'situation_color' => $situations[$situation]['color'],
+            'laudos'          => LaudoProvider::getOpenForItem($itemtype, $items_id),
             'active_block_id' => $active_block !== null ? (int) $active_block['id'] : 0,
             'can_release'     => $active_block !== null && Profile::canAdministrate(),
             'stats'           => [
                 'uses'         => $stats['uses'],
                 'refusals'     => $stats['refusals'],
                 'with_problem' => $stats['with_problem'],
+                'known_issue'  => $stats['known_issue'],
                 'blocks'       => $stats['blocks'],
                 'tickets'      => count($stats['tickets']),
                 'repair_time'  => $stats['repair_seconds'] ? Html::timestampToString($stats['repair_seconds'], false) : '—',
@@ -446,6 +465,8 @@ class EquipmentRecord extends CommonGLPI
             __('Chamado', 'checklistitens'), __('Duração', 'checklistitens'),
             __('Localização da retirada', 'checklistitens'), __('Localização da conferência', 'checklistitens'),
             __('Localização da devolução', 'checklistitens'), __('Localização da conferência da devolução', 'checklistitens'),
+            __('Problema conhecido na retirada', 'checklistitens'), __('Problema conhecido na devolução', 'checklistitens'),
+            __('Laudos em aberto', 'checklistitens'), __('Fotos do defeito', 'checklistitens'),
         ], ';');
 
         $label = trim($record['label'] . ' ' . $record['detail']);
@@ -471,6 +492,13 @@ class EquipmentRecord extends CommonGLPI
                 isset($entry['confirmation']['location']) ? Location::toText($entry['confirmation']['location']) : '',
                 isset($entry['checkin']['location']) ? Location::toText($entry['checkin']['location']) : '',
                 isset($entry['checkin_confirmation']['location']) ? Location::toText($entry['checkin_confirmation']['location']) : '',
+                $entry['checkout']['known'] ? __('Sim', 'checklistitens') : '',
+                !empty($entry['checkin']['known']) ? __('Sim', 'checklistitens') : '',
+                implode(', ', array_unique(array_map(
+                    static fn ($l) => $l['name'] . ' (' . $l['status'] . ')',
+                    array_merge($entry['checkout']['laudos'], $entry['checkin']['laudos'] ?? [])
+                ))),
+                count($entry['checkout']['photos']) + count($entry['checkin']['photos'] ?? []),
             ], ';');
         }
         fclose($out);

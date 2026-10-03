@@ -54,7 +54,26 @@ class TicketFactory
             $html .= '<li>' . htmlspecialchars($problem) . '</li>';
         }
         $html .= '</ul>';
-        $html .= '<p><em>' . htmlspecialchars(__('Chamado aberto na conferência do gestor (Checklist uso de equipamentos). O equipamento fica bloqueado para retirada até este chamado ser solucionado.', 'checklistitens')) . '</em></p>';
+
+        // O item tinha laudo em aberto e o colaborador disse que era outro problema: o TI vê o histórico
+        $laudos = UsageLaudo::getForUsages([(int) $usage->getID()])[(int) $usage->getID()][$phase] ?? [];
+        if (count($laudos)) {
+            $html .= '<p><strong>' . htmlspecialchars(__('Laudos em aberto do equipamento (informado como outro problema)', 'checklistitens')) . ':</strong></p><ul>';
+            foreach ($laudos as $laudo) {
+                $html .= '<li>' . htmlspecialchars(trim(sprintf(
+                    '%s · %s · %s %s',
+                    $laudo['name'],
+                    $laudo['status'],
+                    $laudo['date'] !== '' ? Ui::datetime($laudo['date']) : '',
+                    $laudo['items'] !== '' ? '— ' . $laudo['items'] : ''
+                ))) . '</li>';
+            }
+            $html .= '</ul>';
+        }
+
+        $has_photos = count(DefectPhoto::getForUsages([(int) $usage->getID()])[(int) $usage->getID()][$phase] ?? []) > 0;
+        $html .= '<p><em>' . htmlspecialchars(__('Chamado aberto na conferência do gestor (Checklist uso de equipamentos). O equipamento fica bloqueado para retirada até este chamado ser solucionado.', 'checklistitens'))
+            . ($has_photos ? ' ' . htmlspecialchars(__('As fotos do defeito estão anexadas.', 'checklistitens')) : '') . '</em></p>';
 
         $ticket = new Ticket();
         try {
@@ -81,11 +100,18 @@ class TicketFactory
             $link->add(['tickets_id' => $tickets_id, 'itemtype' => ItemProvider::PHONE, 'items_id' => $items_id]);
         }
 
+        // Primeiro liga o chamado ao bloqueio: se o anexo das fotos falhar no meio, a próxima
+        // conferência não abre um chamado repetido
         $block->update([
             'id'         => $block->getID(),
             'tickets_id' => $tickets_id,
             'status'     => ItemBlock::STATUS_REPAIR,
         ]);
+
+        // Fotos do defeito como documentos do chamado, na entidade do chamado (uma regra pode
+        // tê-la mudado); uma falha aqui não desfaz o chamado
+        $entities_id = (int) ($ticket->fields['entities_id'] ?? $block->fields['entities_id']);
+        DefectPhoto::attachToTicket((int) $usage->getID(), $phase, (int) $tickets_id, $entities_id);
 
         return (int) $tickets_id;
     }

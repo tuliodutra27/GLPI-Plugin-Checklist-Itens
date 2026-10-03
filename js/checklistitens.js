@@ -1,4 +1,324 @@
 /* Checklist uso de equipamentos: comportamento das telas do plugin (sem dependências). */
+
+/* Fotos do equipamento com defeito: módulo próprio, usado pelo fluxo de retirada/devolução abaixo. */
+(function () {
+    'use strict';
+
+    var MAX_SIDE = 1600;               // maior lado de cada foto, em pixels (DefectPhoto::MAX_SIDE)
+    var QUALITY = 0.8;                 // qualidade do JPEG gerado
+    var MAX_BYTES = 5 * 1024 * 1024;   // limite do arquivo original (DefectPhoto::MAX_BYTES)
+
+    function qsa(selector, root) {
+        return Array.prototype.slice.call((root || document).querySelectorAll(selector));
+    }
+
+    function notify(element, detail) {
+        var event;
+        if (typeof window.CustomEvent === 'function') {
+            event = new CustomEvent('ci:defectphotos', {bubbles: true, detail: detail});
+        } else {
+            event = document.createEvent('CustomEvent');
+            event.initCustomEvent('ci:defectphotos', true, false, detail);
+        }
+        element.dispatchEvent(event);
+    }
+
+    function count(container) {
+        return container ? qsa('[data-ci-defect-item]', container).length : 0;
+    }
+
+    /** Reduz a foto (maior lado MAX_SIDE) e devolve o JPEG em data URL, como na selfie. */
+    function resize(file, done, fail) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+
+        img.onload = function () {
+            URL.revokeObjectURL(url);
+            var data = '';
+            try {
+                var width = img.naturalWidth;
+                var height = img.naturalHeight;
+                var scale = Math.min(1, MAX_SIDE / Math.max(width, height));
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.round(width * scale);
+                canvas.height = Math.round(height * scale);
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                data = canvas.toDataURL('image/jpeg', QUALITY);
+            } catch (e) {
+                data = '';
+            }
+            // Canvas vazio ou grande demais para o aparelho devolve "data:,"
+            if (/^data:image\/(jpeg|png);base64,/.test(data)) {
+                done(data);
+            } else {
+                fail();
+            }
+        };
+
+        img.onerror = function () {
+            URL.revokeObjectURL(url);
+            fail();
+        };
+
+        img.src = url;
+    }
+
+    /**
+     * Quando o navegador não consegue reduzir a foto, o arquivo original vai num campo próprio
+     * (defect_photo_files[]), se couber no limite e o navegador permitir montar o campo.
+     */
+    function originalField(file) {
+        if (file.size > MAX_BYTES || typeof window.DataTransfer !== 'function') {
+            return null;
+        }
+        try {
+            var transfer = new DataTransfer();
+            transfer.items.add(file);
+            var field = document.createElement('input');
+            field.type = 'file';
+            field.name = 'defect_photo_files[]';
+            field.hidden = true;
+            field.files = transfer.files;
+            return field.files && field.files.length ? field : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Fotos do defeito: câmera traseira (capture) ou galeria (várias de uma vez), de 1 até o
+     * máximo do bloco. Cada foto vira uma miniatura com botão de remover e um campo oculto
+     * defect_photos[]. A cada mudança dispara "ci:defectphotos" no bloco (detail.count e
+     * detail.busy) e atualiza o atributo data-ci-defect-count, para o fluxo liberar o salvamento.
+     */
+    function setup(container) {
+        if (!container || container.ciDefectPhotos) {
+            return;
+        }
+
+        var inputs = qsa('[data-ci-defect-input]', container);
+        var pickers = qsa('[data-ci-defect-picker]', container);
+        var list = container.querySelector('[data-ci-defect-list]');
+        var fields = container.querySelector('[data-ci-defect-fields]');
+        var counter = container.querySelector('[data-ci-defect-counter]');
+        var status = container.querySelector('[data-ci-defect-status]');
+        var min = parseInt(container.getAttribute('data-ci-min'), 10) || 1;
+        var max = parseInt(container.getAttribute('data-ci-max'), 10) || 5;
+        var queue = [];
+        var current = null;
+        var notes = [];
+        var generation = 0; // muda ao limpar: descarta fotos que ainda estavam sendo processadas
+
+        if (!inputs.length || !list || !fields) {
+            return; // sem JS útil: os campos de arquivo seguem no envio como estão
+        }
+        container.ciDefectPhotos = true;
+
+        // Com o JS ativo, os campos de escolha só abrem a câmera/galeria: as fotos vão nos campos
+        // ocultos de cada miniatura
+        inputs.forEach(function (input) {
+            input.removeAttribute('name');
+        });
+
+        function setStatus(text, warning) {
+            if (status) {
+                status.textContent = text || '';
+                status.classList.toggle('ci-defect-warning', !!warning);
+            }
+        }
+
+        function pending() {
+            return queue.length + (current ? 1 : 0);
+        }
+
+        function refresh() {
+            var total = count(container);
+            var busy = pending() > 0;
+            var full = total + pending() >= max;
+
+            container.setAttribute('data-ci-defect-count', String(total));
+            if (busy) {
+                container.setAttribute('data-ci-defect-busy', '1');
+            } else {
+                container.removeAttribute('data-ci-defect-busy');
+            }
+            if (counter) {
+                counter.textContent = total + ' de ' + max;
+                counter.classList.toggle('ci-defect-counter-ok', total >= min);
+            }
+            pickers.forEach(function (picker) {
+                picker.classList.toggle('disabled', full);
+                picker.setAttribute('aria-disabled', full ? 'true' : 'false');
+            });
+            inputs.forEach(function (input) {
+                input.disabled = full;
+            });
+
+            notify(container, {count: total, busy: busy});
+        }
+
+        function addItem(field, preview) {
+            var item = document.createElement('div');
+            item.className = 'ci-defect-item';
+            item.setAttribute('data-ci-defect-item', '');
+
+            var thumb;
+            if (preview) {
+                thumb = document.createElement('img');
+                thumb.className = 'ci-defect-thumb';
+                thumb.alt = 'Foto do defeito';
+                thumb.src = preview;
+            } else {
+                // arquivo original: sem prévia
+                thumb = document.createElement('span');
+                thumb.className = 'ci-defect-thumb ci-defect-thumb-file';
+                thumb.innerHTML = '<i class="ti ti-photo"></i>';
+            }
+            item.appendChild(thumb);
+
+            var remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'ci-defect-remove';
+            remove.title = 'Remover foto';
+            remove.setAttribute('aria-label', 'Remover foto');
+            remove.textContent = '×';
+            remove.addEventListener('click', function () {
+                if (item.parentNode) {
+                    item.parentNode.removeChild(item);
+                }
+                if (field.parentNode) {
+                    field.parentNode.removeChild(field);
+                }
+                if (!current) {
+                    notes = [];
+                    setStatus('');
+                }
+                refresh();
+            });
+            item.appendChild(remove);
+
+            list.appendChild(item);
+            fields.appendChild(field);
+            refresh();
+        }
+
+        // Uma foto por vez, para não estourar a memória do celular
+        function next() {
+            current = queue.shift() || null;
+            if (!current) {
+                setStatus(notes.join(' '), notes.length > 0);
+                refresh();
+                return;
+            }
+
+            var file = current;
+            var gen = generation;
+            resize(file, function (data) {
+                if (gen !== generation) {
+                    return;
+                }
+                var field = document.createElement('input');
+                field.type = 'hidden';
+                field.name = 'defect_photos[]';
+                field.value = data;
+                addItem(field, data);
+                next();
+            }, function () {
+                if (gen !== generation) {
+                    return;
+                }
+                var field = originalField(file);
+                if (field) {
+                    addItem(field, null);
+                    notes.push('Uma foto não pôde ser reduzida aqui e será enviada como está.');
+                } else {
+                    notes.push('Não foi possível ler uma das fotos. Tire outra ou escolha outra imagem (JPEG ou PNG, até 5 MB).');
+                }
+                next();
+            });
+        }
+
+        inputs.forEach(function (input) {
+            input.addEventListener('change', function () {
+                var files = Array.prototype.slice.call(input.files || []);
+                // Limpa o campo para poder escolher (ou tirar) de novo a mesma foto
+                input.value = '';
+                if (!files.length) {
+                    return;
+                }
+
+                if (!current) {
+                    notes = [];
+                }
+                var room = Math.max(0, max - count(container) - pending());
+                if (files.length > room) {
+                    files = files.slice(0, room);
+                    notes.push('Máximo de ' + max + ' fotos: as que passaram disso não foram adicionadas.');
+                }
+                if (!files.length) {
+                    if (!current) {
+                        setStatus(notes.join(' '), true);
+                    }
+                    return;
+                }
+
+                queue = queue.concat(files);
+                if (!current) {
+                    setStatus(files.length > 1 ? 'Processando as fotos...' : 'Processando a foto...');
+                    next();
+                }
+            });
+        });
+
+        // Troca de equipamento: as fotos do anterior não podem ir para o novo
+        container.ciDefectClear = function () {
+            generation++;
+            queue = [];
+            current = null;
+            notes = [];
+            list.innerHTML = '';
+            fields.innerHTML = '';
+            setStatus('');
+            refresh();
+        };
+
+        refresh();
+    }
+
+    window.ChecklistDefectPhotos = {
+        setup: function (container) {
+            setup(container);
+        },
+        count: function (container) {
+            return count(container);
+        },
+        clear: function (container) {
+            if (!container) {
+                return;
+            }
+            var blocks = qsa('[data-ci-defect-photos]', container);
+            if (container.ciDefectClear) {
+                blocks.push(container);
+            }
+            blocks.forEach(function (block) {
+                if (block.ciDefectClear) {
+                    block.ciDefectClear();
+                }
+            });
+        }
+    };
+
+    function init() {
+        qsa('[data-ci-defect-photos]').forEach(setup);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
 (function () {
     'use strict';
 
@@ -329,6 +649,7 @@
      */
     function setupFlow(form) {
         var flow = form.getAttribute('data-ci-flow');
+        var lastKey = null;
 
         function checked(name) {
             return form.querySelector('input[name="' + name + '"]:checked');
@@ -344,22 +665,53 @@
             });
         }
 
-        function updateButtons(problems) {
+        function updateButtons(problems, photos) {
             var hasSelfie = qsa('[data-ci-selfie-box]', form).some(function (box) {
                 return box.hasAttribute('data-ci-selfie-ready');
             });
 
             qsa('[data-ci-require]', form).forEach(function (button) {
                 var requirement = button.getAttribute('data-ci-require');
-                var ready = requirement === 'problems' ? problems > 0 : (requirement === 'selfie' ? hasSelfie : true);
+                // Botão de uma parte escondida nunca envia (nem pelo Enter do teclado)
+                var ready = !button.closest('[hidden]');
+                if (requirement === 'problems') {
+                    ready = ready && problems > 0;
+                } else if (requirement === 'defect') {
+                    // problema marcado exige pelo menos uma foto do defeito
+                    ready = ready && problems > 0 && photos > 0;
+                } else if (requirement === 'selfie') {
+                    ready = ready && hasSelfie;
+                }
                 button.disabled = !ready;
+            });
+        }
+
+        /** Quantas fotos do defeito estão prontas para envio (redimensionadas ou arquivo nativo). */
+        function countPhotos() {
+            var section = form.querySelector('[data-ci-section="photos"]');
+            if (!section) {
+                return 0;
+            }
+            if (window.ChecklistDefectPhotos && window.ChecklistDefectPhotos.count) {
+                return window.ChecklistDefectPhotos.count(section);
+            }
+
+            return qsa('input[name="defect_photos[]"]', section).length;
+        }
+
+        /** Campos de uma parte escondida não vão no envio (ex.: a escolha "é o problema do laudo"). */
+        function enable(name, enabled) {
+            sections(name).forEach(function (el) {
+                qsa('input', el).forEach(function (input) {
+                    input.disabled = !enabled;
+                });
             });
         }
 
         function update() {
             // Conferência do gestor: só exige a selfie
             if (flow === 'confirm') {
-                updateButtons(0);
+                updateButtons(0, 0);
                 return;
             }
 
@@ -384,28 +736,61 @@
                 });
             });
 
-            var itemChosen = flow === 'checkout' ? !!checked('items_id') : itemtype !== '';
+            var chosen = flow === 'checkout' ? checked('items_id') : checked('usage_id');
+            var itemChosen = flow === 'checkout' ? !!chosen : itemtype !== '';
+
+            // Trocou de equipamento: as respostas e fotos do anterior não valem para o novo
+            var chosenKey = itemtype + ':' + (chosen ? chosen.value : '');
+            if (lastKey !== null && chosenKey !== lastKey) {
+                qsa('input[name="is_ok"], input[name="problems[]"], input[name="known_issue"]', form).forEach(function (input) {
+                    input.checked = false;
+                });
+                if (window.ChecklistDefectPhotos && window.ChecklistDefectPhotos.clear) {
+                    window.ChecklistDefectPhotos.clear(form.querySelector('[data-ci-section="photos"]'));
+                }
+            }
+            lastKey = chosenKey;
             var answer = checked('is_ok');
             var isOk = !!answer && answer.value === '1';
             var isNok = !!answer && answer.value === '0';
             var problems = qsa('input[name="problems[]"]:checked', form).filter(function (input) {
                 return !input.disabled;
             }).length;
+            var photos = countPhotos();
+
+            // Laudo em aberto (plugin Laudo): alerta do item escolhido e escolha "é o problema do laudo"
+            var knownKey = chosen ? chosen.getAttribute('data-ci-known-key') : '';
+            var known = !!chosen && chosen.getAttribute('data-ci-known') === '1';
+            qsa('[data-ci-known-for]', form).forEach(function (el) {
+                el.hidden = !itemChosen || el.getAttribute('data-ci-known-for') !== knownKey;
+            });
+            qsa('[data-ci-unknown-only]', form).forEach(function (el) {
+                el.hidden = known;
+            });
+
+            var defectReady = itemChosen && isNok && problems > 0 && photos > 0;
+            var knownChoiceVisible = defectReady && known;
+            enable('known-choice', knownChoiceVisible);
+            var knownChoice = knownChoiceVisible ? checked('known_issue') : null;
 
             show('item', flow === 'checkout' && itemtype !== '');
             show('check', itemChosen);
             show('problems', itemChosen && isNok);
-            show('refuse', itemChosen && isNok);
+            // As fotos podem ir no envio mesmo escondidas: o servidor só as usa com problema marcado
+            show('photos', itemChosen && isNok);
+            show('refuse', itemChosen && isNok && !known);
+            show('known-choice', knownChoiceVisible);
 
             var selfieVisible = flow === 'checkout'
-                ? itemChosen && isOk
-                : itemChosen && (isOk || (isNok && problems > 0));
+                ? itemChosen && (isOk || (knownChoice !== null && knownChoice.value === '1'))
+                : itemChosen && (isOk || (defectReady && (!known || knownChoice !== null)));
             show('selfie', selfieVisible);
-            updateButtons(problems);
+            updateButtons(problems, photos);
         }
 
         form.addEventListener('change', update);
         form.addEventListener('ci:change', update);
+        form.addEventListener('ci:defectphotos', update);
         function disableButtons() {
             qsa('button[type="submit"]', form).forEach(function (button) {
                 button.disabled = true;
@@ -415,7 +800,9 @@
         form.addEventListener('submit', function (event) {
             // Localização obrigatória sem bloquear: se a leitura de alguma selfie visível ainda
             // está em andamento, espera ela terminar (no máximo LOCATION_WAIT_MS) e envia.
-            if (!form.ciLocationWaited) {
+            // "Bloquear" não leva selfie nem localização: envia na hora
+            var blocking = !!event.submitter && event.submitter.name === 'refuse';
+            if (!form.ciLocationWaited && !blocking) {
                 var boxes = qsa('[data-ci-selfie-box]', form).filter(function (box) {
                     return box.ciLocation && box.offsetParent !== null;
                 });
@@ -472,6 +859,12 @@
 
     /** Busca na lista de equipamentos (número de série, nome, modelo). */
     function setupFilter(input) {
+        // Enter/"Ir" do teclado na busca não envia o formulário da retirada
+        input.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+            }
+        });
         input.addEventListener('input', function () {
             var query = input.value.toLowerCase().trim();
             var scope = input.form || document;
@@ -529,6 +922,9 @@
 
     function init(root) {
         qsa('[data-ci-selfie-box]', root).forEach(setupSelfie);
+        if (window.ChecklistDefectPhotos) {
+            qsa('[data-ci-defect-photos]', root).forEach(window.ChecklistDefectPhotos.setup);
+        }
         qsa('form[data-ci-flow]', root).forEach(setupFlow);
         qsa('[data-ci-filter]', root).forEach(setupFilter);
         qsa('[data-ci-idle]', root).forEach(setupIdle);

@@ -9,8 +9,37 @@
     {% endif %}
 {% endmacro %}
 
+{# Resultado do checklist numa fase: problemas, problema conhecido (laudo) e fotos do defeito #}
+{% macro result(phase) %}
+    {% import '@checklistitens/parts/known_issue.html.twig' as known %}
+    {% if phase.problems|length %}
+        <ul class="ci-problem-tags">{% for p in phase.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+        {% if phase.known %}{{ known.badge(phase.laudos) }}{% endif %}
+    {% else %}
+        <span class="badge bg-green-lt">{{ __('Equipamento ok', 'checklistitens') }}</span>
+    {% endif %}
+    {% if phase.photos|length %}
+        <div class="ci-photo-strip mt-1">
+            {% for p in phase.photos %}
+                <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ __('Foto do defeito', 'checklistitens') }}">
+                    <img src="{{ p.url }}" class="ci-thumb ci-thumb-photo" alt="{{ __('Foto do defeito', 'checklistitens') }}" loading="lazy">
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+    {% if phase.laudos|length and not phase.known %}
+        <div class="ci-small text-muted mt-1">
+            <i class="ti ti-file-alert"></i> {{ __('Laudos em aberto exibidos', 'checklistitens') }}:
+            {% for l in phase.laudos %}
+                {% if l.url %}<a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.name }}</a>{% else %}{{ l.name }}{% endif %} ({{ l.status }}){{ not loop.last ? ', ' }}
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endmacro %}
+
 {% import _self as ci %}
 {% import '@checklistitens/parts/location.html.twig' as location %}
+{% import '@checklistitens/parts/known_issue.html.twig' as known %}
 
 <div class="ci-page ci-page-wide container-fluid">
     {% if not embedded %}
@@ -24,6 +53,7 @@
                 <div class="fs-3 fw-bold">{{ label }}</div>
                 <div class="text-muted">{{ detail }}</div>
                 <div class="ci-small mt-1">{{ __('Setor', 'checklistitens') }}: {{ sector ?: '—' }} · {{ __('Estado no GLPI', 'checklistitens') }}: {{ state ?: '—' }}</div>
+                {% if laudos|default([])|length %}<div class="mt-2">{{ known.alert(laudos) }}</div>{% endif %}
             </div>
             <div class="text-end">
                 <span class="badge bg-{{ situation_color }} fs-5">{{ situation_label }}</span>
@@ -42,6 +72,7 @@
                 <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.uses }}</div><div class="ci-small text-muted">{{ __('Usos', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.refusals }}</div><div class="ci-small text-muted">{{ __('Recusas com problema', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.with_problem }}</div><div class="ci-small text-muted">{{ __('Devoluções com problema', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.known_issue }}</div><div class="ci-small text-muted">{{ __('Usos com problema conhecido', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ stats.tickets }}</div><div class="ci-small text-muted">{{ __('Chamados', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md"><div class="fw-bold">{{ stats.repair_time }}</div><div class="ci-small text-muted">{{ __('Tempo bloqueado', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md"><div class="fw-bold">{{ stats.last_use }}</div><div class="ci-small text-muted">{{ __('Último uso', 'checklistitens') }}</div></div>
@@ -88,11 +119,7 @@
                         <div class="flex-fill">
                             <div class="fw-bold"><i class="ti ti-login"></i> {{ e.status == 4 ? __('Tentativa de retirada', 'checklistitens') : __('Retirada', 'checklistitens') }}</div>
                             <div class="ci-small">{{ e.checkout.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkout.shift }}</div>
-                            {% if e.checkout.problems|length %}
-                                <ul class="ci-problem-tags">{% for p in e.checkout.problems %}<li>{{ p }}</li>{% endfor %}</ul>
-                            {% else %}
-                                <span class="badge bg-green-lt">{{ __('Equipamento ok', 'checklistitens') }}</span>
-                            {% endif %}
+                            {{ ci.result(e.checkout) }}
                             <div class="mt-1">{{ location.map(e.checkout.location) }}</div>
                         </div>
                     </div>
@@ -114,11 +141,7 @@
                             <div class="flex-fill">
                                 <div class="fw-bold"><i class="ti ti-logout"></i> {{ __('Devolução', 'checklistitens') }}</div>
                                 <div class="ci-small">{{ e.checkin.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkin.shift }}{% if e.duration %} · {{ __('duração', 'checklistitens') }} {{ e.duration }}{% endif %}</div>
-                                {% if e.checkin.problems|length %}
-                                    <ul class="ci-problem-tags">{% for p in e.checkin.problems %}<li>{{ p }}</li>{% endfor %}</ul>
-                                {% else %}
-                                    <span class="badge bg-green-lt">{{ __('Equipamento ok', 'checklistitens') }}</span>
-                                {% endif %}
+                                {{ ci.result(e.checkin) }}
                                 <div class="mt-1">{{ location.map(e.checkin.location) }}</div>
                             </div>
                         </div>
