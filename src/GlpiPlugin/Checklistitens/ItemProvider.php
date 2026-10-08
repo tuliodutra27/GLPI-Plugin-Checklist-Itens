@@ -38,7 +38,7 @@ class ItemProvider
             case self::RADIO:
                 return __('Rádio', 'checklistitens');
             case self::PHONE:
-                return __('Telefone (celular/tablet)', 'checklistitens');
+                return __('Celular ou tablet', 'checklistitens');
         }
 
         return $itemtype;
@@ -159,7 +159,7 @@ class ItemProvider
 
     public static function getShortTypeLabel(string $itemtype): string
     {
-        return $itemtype === self::RADIO ? __('Rádio', 'checklistitens') : __('Telefone', 'checklistitens');
+        return $itemtype === self::RADIO ? __('Rádio', 'checklistitens') : __('Celular ou tablet', 'checklistitens');
     }
 
     /**

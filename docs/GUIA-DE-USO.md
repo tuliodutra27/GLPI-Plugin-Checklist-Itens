@@ -40,7 +40,7 @@ O plugin controla a **retirada e a devolução de equipamentos compartilhados de
 | Conceito | O que é |
 |---|---|
 | **Setor** | Um **grupo do GLPI**. O colaborador vê os equipamentos dos grupos a que pertence e, com a herança ligada, também dos subgrupos. Ex.: quem está em "Operações" vê os itens de "Operações > Setor A". |
-| **Equipamento** | Um **Telefone** do GLPI (celular ou tablet) ou um **Rádio** do plugin Radios. O equipamento **não muda de usuário** no GLPI: quem está com ele fica registrado no plugin. |
+| **Equipamento** | Um **celular ou tablet** (ativo **Telefone** do GLPI) ou um **Rádio** do plugin Radios. O equipamento **não muda de usuário** no GLPI: quem está com ele fica registrado no plugin. |
 | **Uso** | Um ciclo retirada → conferência → devolução. Enquanto o uso está aberto, ninguém mais retira o mesmo equipamento. |
 | **Turno** | Período entre dois horários de início configurados. O padrão são turnos de 12 h, às 07:00 e às 19:00. O turno da noite pertence à data em que começou. |
 | **Conferência** | O gestor confere tudo o que está pendente no setor, tira a própria selfie e confirma. Isso libera a devolução. |
@@ -66,7 +66,7 @@ Itens a conferir no GLPI **antes** de liberar o plugin para os usuários:
 1. **Grupos (setores).** Cada setor que compartilha equipamentos precisa ser um grupo do GLPI, e
    os colaboradores e gestores precisam ser **membros** desse grupo (Administração > Grupos >
    Usuários).
-2. **Equipamentos.** Cada rádio/telefone compartilhado precisa ter o **grupo** do setor preenchido
+2. **Equipamentos.** Cada rádio, celular ou tablet compartilhado precisa ter o **grupo** do setor preenchido
    e um **estado** que signifique "disponível" (ex.: "Ativo"). Equipamento sem grupo não aparece
    para ninguém.
 3. **Contas e perfis.**
@@ -78,7 +78,7 @@ Itens a conferir no GLPI **antes** de liberar o plugin para os usuários:
    - Se já existir um perfil com um desses nomes, o plugin não o altera. Confira se ele usa a
      interface simplificada e, no caso do gestor, se pode **criar chamados**.
 4. **Categorias de chamado.** Tenha uma categoria ITIL de incidente para falha de rádio e outra
-   para falha de telefone/tablet, visíveis na interface simplificada.
+   para falha de celular/tablet, visíveis na interface simplificada.
    - Para o chamado chegar ao TI sozinho, a categoria precisa ter um **grupo técnico**, com a
      atribuição automática da entidade ligada, ou existir uma **regra de negócio** que atribua.
 5. **Ações automáticas.** O cron do GLPI precisa estar rodando (ex.: `php front/cron.php` a cada
@@ -93,8 +93,8 @@ Itens a conferir no GLPI **antes** de liberar o plugin para os usuários:
    cada). Ajuste `post_max_size` e `upload_max_filesize` no PHP com folga (ex.: 32M e 8M) e
    reinicie o serviço web.
 9. **Plugin Laudo (opcional).** Para o aviso de problema já conhecido, o plugin Laudo precisa
-   estar ativo e cada laudo precisa ter o **equipamento vinculado** (o mesmo rádio ou telefone do
-   GLPI).
+   estar ativo e cada laudo precisa ter o **equipamento vinculado** (o mesmo rádio, celular ou
+   tablet do GLPI).
 
 **Dica: login sem escolher a origem.** Se os colaboradores usam contas internas e os demais
 usuários usam o AD, você pode esconder a lista "origem do login" da tela de entrada: em
@@ -115,7 +115,7 @@ Sem a lista, o GLPI tenta primeiro a conta interna e depois o AD.
    login.
 
 Na instalação, o plugin:
-- cria as tabelas e o **catálogo de problemas** padrão (rádio e telefone);
+- cria as tabelas e o **catálogo de problemas** padrão (rádio e celular ou tablet);
 - cria os perfis abaixo, se ainda não existirem perfis com esses nomes (maiúsculas não importam):
   - **Operador**: interface simplificada, só o direito de uso do plugin e a FAQ da base de
     conhecimento. Ele entra na lista de perfis que abrem o plugin depois do login;
@@ -174,9 +174,9 @@ Em **Ativos > Checklist uso de equipamentos > Configuração**:
 
 | Opção | O que faz | Padrão |
 |---|---|---|
-| Tipos de equipamento habilitados | Rádio (precisa do plugin Radios) e/ou Telefone | os dois |
+| Tipos de equipamento habilitados | Rádio (precisa do plugin Radios) e/ou Celular ou tablet | os dois |
 | Estados disponíveis para retirada | Só equipamentos nesses estados aparecem para retirar | "Ativo" |
-| Limite por pessoa (por tipo) | Quantos itens do tipo a pessoa pode estar ao mesmo tempo; 0 = sem limite | Rádio 1, Telefone sem limite |
+| Limite por pessoa (por tipo) | Quantos itens do tipo a pessoa pode estar ao mesmo tempo; 0 = sem limite | Rádio 1, Celular ou tablet sem limite |
 | Grupo pai vê os itens dos subgrupos | Herança de setores, para colaborador e gestor | Sim |
 | Início dos turnos | Horários separados por vírgula | 07:00,19:00 |
 | Categoria do chamado (por tipo) | Categoria usada nos chamados abertos pelo plugin | categorias padrão, se existirem |
@@ -190,7 +190,7 @@ Em **Ativos > Checklist uso de equipamentos > Configuração**:
 ### 4.3 Catálogo de problemas
 
 Em **Ativos > Checklist uso de equipamentos > Problemas do checklist** fica a lista que o
-colaborador marca quando responde "Não". Ela já vem preenchida para rádio e para telefone,
+colaborador marca quando responde "Não". Ela já vem preenchida para rádio e para celular ou tablet,
 agrupada em Funcionamento, Bateria, Estrutura e acessórios e Outros.
 
 - **Desative** em vez de apagar: o histórico guarda o texto do problema como estava quando foi
@@ -219,11 +219,11 @@ Se não estiver com nenhum equipamento, abre direto a **retirada**.
 
 ### 5.1 Retirar um equipamento
 
-1. **Tipo de equipamento.** Toque em **Rádio** ou **Telefone**.
+1. **Tipo de equipamento.** Toque em **Rádio** ou **Celular ou tablet**.
 2. **Equipamento.**
    - A lista mostra os equipamentos do seu setor que estão **disponíveis agora**: no estado
      configurado, sem estar com ninguém e sem bloqueio.
-   - O rádio aparece pelo **número de série**, o telefone pelo **nome**. Use o campo de busca para
+   - O rádio aparece pelo **número de série**, o celular ou tablet pelo **nome**. Use o campo de busca para
      achar mais rápido.
    - Equipamento com laudo em aberto aparece com o selo **"Problema conhecido"**. Ele pode ser
      retirado normalmente.
@@ -373,7 +373,7 @@ No bloco **Itens bloqueados**, toque em **Abrir chamado**.
 - As **fotos do defeito** vão **anexadas** ao chamado, como documentos do GLPI.
 - Se o equipamento tinha laudo em aberto e o colaborador disse que era outro problema, a descrição
   lista também esses laudos.
-- O chamado fica **vinculado ao registro de uso** e, se for telefone, também ao telefone.
+- O chamado fica **vinculado ao registro de uso** e, se for celular ou tablet, também ao ativo Telefone do GLPI.
 
 ### 6.3 Confirmar a conferência do turno
 
@@ -408,7 +408,7 @@ Menu **Ativos > Checklist uso de equipamentos** (interface padrão).
 
 ### 7.1 Equipamentos e registro de uso
 
-**Equipamentos:** a lista de todos os rádios e telefones habilitados, com a **situação atual**:
+**Equipamentos:** a lista de todos os rádios, celulares e tablets habilitados, com a **situação atual**:
 - Disponível;
 - Em uso (por quem e desde quando);
 - Liberado para devolução;
@@ -433,7 +433,7 @@ Clique num equipamento para abrir o **Registro de uso**:
   colunas "Problema conhecido na retirada", "Problema conhecido na devolução", "Laudos em aberto"
   e "Fotos do defeito" (quantidade).
 
-Nos **telefones**, o mesmo registro aparece na aba **Registro de uso** do formulário do GLPI.
+Nos **celulares e tablets**, o mesmo registro aparece na aba **Registro de uso** do formulário do Telefone no GLPI.
 
 ### 7.2 Histórico geral
 

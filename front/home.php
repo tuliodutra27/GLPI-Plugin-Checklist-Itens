@@ -31,7 +31,7 @@ if (Profile::canUse()) {
 
     $cards[] = [
         'title'       => __('Iniciar uso', 'checklistitens'),
-        'description' => __('Retirar um rádio ou telefone do setor.', 'checklistitens'),
+        'description' => __('Retirar um rádio, celular ou tablet do setor.', 'checklistitens'),
         'url'         => Ui::url('front/kiosk.php?step=checkout'),
         'icon'        => 'ti ti-login',
         'color'       => 'primary',
@@ -68,7 +68,7 @@ if (Profile::isManager() || Profile::isAdmin()) {
     ];
     $cards[] = [
         'title'       => __('Equipamentos', 'checklistitens'),
-        'description' => __('Situação atual e registro de uso completo de cada rádio e telefone.', 'checklistitens'),
+        'description' => __('Situação atual e registro de uso completo de cada rádio, celular ou tablet.', 'checklistitens'),
         'url'         => Ui::url('front/equipment.php'),
         'icon'        => EquipmentRecord::getIcon(),
         'color'       => 'blue',

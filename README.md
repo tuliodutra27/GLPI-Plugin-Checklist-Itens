@@ -57,7 +57,7 @@ laudo técnico em aberto é avisado e não bloqueia o equipamento de novo.
   - linha do tempo completa: quem retirou, conferiu e devolveu, selfies, localização, problemas,
     fotos do defeito, problema conhecido, laudos exibidos, bloqueios e chamados.
 
-  Nos telefones, o registro também aparece numa aba do formulário.
+  Nos celulares e tablets, o registro também aparece numa aba do formulário do Telefone no GLPI.
 - **Alerta de equipamento não devolvido** no fim do turno, para os gestores do setor e o TI.
 - **Selfies e localizações** guardadas fora da pasta pública. As selfies ficam pelo menos 90
   dias e as localizações pelo prazo configurado. Depois disso, os administradores podem limpar.
@@ -65,7 +65,7 @@ laudo técnico em aberto é avisado e não bloqueia o equipamento de novo.
   entram na limpeza: o plugin nunca as apaga.
 - Histórico nativo do GLPI em todos os registros. Os registros de uso não são editáveis.
 
-O ativo (rádio/telefone) **não muda de usuário**: tudo fica nos registros do plugin.
+O ativo (rádio, celular ou tablet) **não muda de usuário**: tudo fica nos registros do plugin.
 
 ### Selfie e localização
 
@@ -110,7 +110,7 @@ Opcional. Com o plugin Laudo (laudos técnicos) ativo e a integração ligada na
 - PHP 8.0+, aceitando envios de alguns MB: a selfie com até 5 fotos do defeito chega a cerca de
   4 MB. Ajuste `post_max_size` e `upload_max_filesize` com folga.
 - Plugin [Radios](https://github.com/tuliodutra27/GLPI-Plugin-Radios): opcional. Ele habilita o
-  tipo Rádio; o tipo Telefone usa o ativo nativo do GLPI.
+  tipo Rádio; o tipo Celular ou tablet usa o ativo nativo Telefone do GLPI.
 - Plugin Laudo (laudos técnicos): opcional. Ele habilita o aviso de problema já conhecido.
 - Ações automáticas do GLPI rodando por cron, para o alerta de não devolvido e a liberação dos
   bloqueios.
