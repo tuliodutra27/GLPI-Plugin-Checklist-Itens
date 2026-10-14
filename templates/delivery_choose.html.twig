@@ -1,0 +1,34 @@
+{# Recebimento de volta: o gestor escolhe a entrega aberta que vai receber #}
+<div class="ci-page container-fluid">
+    <h2 class="ci-title mb-3"><i class="ti ti-arrow-back-up"></i> {{ __('Receber da embarcação', 'checklistitens') }}</h2>
+
+    <div class="card mb-3">
+        <div class="card-body">
+            <h3 class="ci-step-title"><span class="ci-step-number">1</span> {{ __('Qual entrega você vai receber?', 'checklistitens') }}</h3>
+            {% if deliveries|length %}
+                <form method="post" action="{{ post_url }}">
+                    <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+                    <div class="ci-item-list">
+                        {% for d in deliveries %}
+                            <button type="submit" name="start_receipt" value="{{ d.id }}" class="ci-item ci-item-button text-start">
+                                <span>
+                                    <i class="ti ti-ship"></i> <strong>{{ d.vessel }}</strong>
+                                    <br><small class="text-muted">{{ __('Entregue em', 'checklistitens') }} {{ d.when }} · {{ d.user }}</small>
+                                    <br><span class="badge bg-azure-lt text-wrap">{{ __('%1$d de %2$d rádio(s) com a embarcação', 'checklistitens')|format(d.on_vessel, d.total) }}</span>
+                                    {% if d.stale %}
+                                        <span class="badge bg-red-lt">{{ __('Aberta há %d dia(s)', 'checklistitens')|format(d.days) }}</span>
+                                    {% endif %}
+                                </span>
+                                <i class="ti ti-chevron-right ms-auto"></i>
+                            </button>
+                        {% endfor %}
+                    </div>
+                </form>
+            {% else %}
+                <div class="alert alert-info mb-0">{{ __('Nenhuma entrega aberta no seu setor: não há rádio com embarcação para receber.', 'checklistitens') }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <a href="{{ home_url }}" class="btn btn-outline-secondary"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>
+</div>

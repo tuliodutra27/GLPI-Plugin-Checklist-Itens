@@ -1,0 +1,24 @@
+{# Depois de concluir a entrega ou o recebimento: resumo e logoff automático #}
+<div class="ci-page container-fluid">
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="ti ti-circle-check ci-done-icon text-success"></i>
+            <h2 class="mb-1">
+                {{ kind == 'receipt' ? __('Recebimento registrado', 'checklistitens') : __('Entrega registrada', 'checklistitens') }}
+            </h2>
+            <p class="text-muted">{{ vessel }}</p>
+
+            {% if summary %}
+                <div class="alert alert-info d-inline-block">{{ summary }}</div>
+            {% endif %}
+
+            <p class="mt-3" data-ci-redirect="{{ logout_url }}" data-ci-redirect-after="{{ logout_after }}">
+                {{ __('Saindo do sistema em', 'checklistitens') }} <span data-ci-countdown>{{ logout_after }}</span> s...
+            </p>
+            <div class="d-flex flex-wrap gap-2 justify-content-center">
+                <a href="{{ logout_url }}" class="btn btn-lg btn-primary"><i class="ti ti-power"></i> {{ __('Sair agora', 'checklistitens') }}</a>
+                <a href="{{ detail_url }}" class="btn btn-lg btn-outline-secondary" data-ci-stay><i class="ti ti-list-details"></i> {{ __('Ver a entrega', 'checklistitens') }}</a>
+            </div>
+        </div>
+    </div>
+</div>

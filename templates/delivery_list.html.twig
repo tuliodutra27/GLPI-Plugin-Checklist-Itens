@@ -1,0 +1,80 @@
+{# Lista das entregas de rádios para embarcação #}
+<div class="ci-page ci-page-wide container-fluid">
+    <h2 class="ci-title mb-3"><i class="ti ti-ship"></i> {{ __('Entregas para embarcação', 'checklistitens') }}</h2>
+
+    <form method="get" action="{{ page_url }}" class="card mb-3">
+        <div class="card-body row g-2 align-items-end">
+            <div class="col-6 col-md-3">
+                <label class="form-label" for="ci-d-status">{{ __('Situação', 'checklistitens') }}</label>
+                <select id="ci-d-status" name="status" class="form-select">
+                    <option value="0">{{ __('Todas', 'checklistitens') }}</option>
+                    {% for id, label in statuses %}
+                        <option value="{{ id }}" {{ id == filters.status ? 'selected' }}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label" for="ci-d-vessel">{{ __('Embarcação', 'checklistitens') }}</label>
+                <select id="ci-d-vessel" name="vessels_id" class="form-select">
+                    <option value="0">{{ __('Todas', 'checklistitens') }}</option>
+                    {% for id, name in vessels %}
+                        <option value="{{ id }}" {{ id == filters.vessels_id ? 'selected' }}>{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% if sectors|length > 1 %}
+                <div class="col-12 col-md-3">
+                    <label class="form-label" for="ci-d-sector">{{ __('Setor', 'checklistitens') }}</label>
+                    <select id="ci-d-sector" name="groups_id" class="form-select">
+                        <option value="0">{{ __('Todos', 'checklistitens') }}</option>
+                        {% for id, name in sectors %}
+                            <option value="{{ id }}" {{ id == filters.groups_id ? 'selected' }}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            {% endif %}
+            <div class="col-6 col-md-2">
+                <label class="form-label" for="ci-d-from">{{ __('De', 'checklistitens') }}</label>
+                <input id="ci-d-from" type="date" name="date_from" value="{{ filters.date_from }}" class="form-control">
+            </div>
+            <div class="col-6 col-md-2">
+                <label class="form-label" for="ci-d-to">{{ __('Até', 'checklistitens') }}</label>
+                <input id="ci-d-to" type="date" name="date_to" value="{{ filters.date_to }}" class="form-control">
+            </div>
+            <div class="col-12 col-md-2">
+                <button type="submit" class="btn btn-primary w-100"><i class="ti ti-filter"></i> {{ __('Filtrar', 'checklistitens') }}</button>
+            </div>
+        </div>
+    </form>
+
+    {% if can_deliver %}
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <a href="{{ form_url }}" class="btn btn-primary"><i class="ti ti-ship"></i> {{ __('Entrega para embarcação', 'checklistitens') }}</a>
+            <a href="{{ form_url }}?receive=1" class="btn btn-success"><i class="ti ti-arrow-back-up"></i> {{ __('Receber da embarcação', 'checklistitens') }}</a>
+        </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="list-group list-group-flush">
+            {% for d in deliveries %}
+                <a href="{{ d.url }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-2">
+                    <div>
+                        <i class="ti ti-ship"></i> <strong>{{ d.vessel }}</strong>
+                        <div class="ci-small text-muted">{{ d.when }} · {{ d.user }}{% if d.sector %} · {{ d.sector }}{% endif %}</div>
+                        <div class="ci-small">
+                            {{ __('%d rádio(s)', 'checklistitens')|format(d.counts.total) }}
+                            {% if d.counts.on_vessel %} · {{ __('%d com a embarcação', 'checklistitens')|format(d.counts.on_vessel) }}{% endif %}
+                            {% if d.counts.returned %} · {{ __('%d devolvido(s)', 'checklistitens')|format(d.counts.returned) }}{% endif %}
+                            {% if d.counts.blocked %} · {{ __('%d saíram por problema', 'checklistitens')|format(d.counts.blocked) }}{% endif %}
+                        </div>
+                    </div>
+                    <span class="badge bg-{{ d.status_color }}">{{ d.status_label }}</span>
+                </a>
+            {% else %}
+                <div class="list-group-item text-muted">{{ __('Nenhuma entrega encontrada.', 'checklistitens') }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <a href="{{ home_url }}" class="btn btn-outline-secondary"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>
+</div>

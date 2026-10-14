@@ -37,6 +37,19 @@ class Ui
         echo Html::script($dir . '/js/checklistitens.js', ['version' => (string) @filemtime($root . '/js/checklistitens.js')]);
     }
 
+    /**
+     * Script extra de uma tela (ex.: a entrega para embarcação), com a mesma versão por data do
+     * arquivo. Chamar depois de header().
+     *
+     * @param string $file caminho dentro do plugin, ex.: "js/delivery.js"
+     */
+    public static function script(string $file): void
+    {
+        $file = ltrim($file, '/');
+        $path = Plugin::getPhpDir('checklistitens') . '/' . $file;
+        echo Html::script(Plugin::getWebDir('checklistitens', false) . '/' . $file, ['version' => (string) @filemtime($path)]);
+    }
+
     public static function footer(): void
     {
         if (self::isHelpdesk()) {

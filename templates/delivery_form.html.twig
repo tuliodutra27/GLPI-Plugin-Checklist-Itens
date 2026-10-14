@@ -1,0 +1,265 @@
+{#
+  Entrega de rádios para embarcação (mode = delivery) e recebimento de volta (mode = receipt).
+  A página traz só a estrutura; as listas (rádios, fotos) são desenhadas pelo js/delivery.js, que
+  guarda tudo primeiro no aparelho e envia ao servidor em partes (js/offline.js).
+#}
+{% set is_delivery = mode == 'delivery' %}
+
+<div class="ci-page container-fluid" data-ci-delivery>
+    <h2 class="ci-title mb-3">
+        <i class="ti {{ is_delivery ? 'ti-ship' : 'ti-arrow-back-up' }}"></i> {{ title }}
+    </h2>
+
+    <script type="application/json" data-ci-delivery-data>{{ data_json|raw }}</script>
+
+    {# Situação da conexão e do envio #}
+    <div class="ci-sync" data-ci-sync data-ci-sync-state="ok">
+        <i class="ti ti-wifi" data-ci-sync-icon></i>
+        <span data-ci-sync-text>{{ __('Carregando...', 'checklistitens') }}</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" data-ci-sync-retry hidden>
+            <i class="ti ti-refresh"></i> {{ __('Tentar agora', 'checklistitens') }}
+        </button>
+    </div>
+
+    <div class="alert alert-warning" data-ci-login hidden>
+        <i class="ti ti-lock"></i>
+        {{ __('Sua sessão expirou. Entre de novo para continuar o envio: nada do que você fez foi perdido.', 'checklistitens') }}
+        <button type="button" class="btn btn-warning ms-2" data-ci-login-button>{{ __('Entrar de novo', 'checklistitens') }}</button>
+    </div>
+    <div class="alert alert-warning" data-ci-nostore hidden>
+        <i class="ti ti-alert-triangle"></i>
+        {{ __('Este navegador não está guardando os dados (aba anônima?). Se a página fechar, o que ainda não foi enviado se perde.', 'checklistitens') }}
+    </div>
+    <div class="alert alert-danger" data-ci-message hidden></div>
+
+    <noscript>
+        <div class="alert alert-danger">{{ __('Esta tela precisa do JavaScript ativo no navegador.', 'checklistitens') }}</div>
+    </noscript>
+
+    {# Enquanto a conclusão está na fila de envio, a tela fica só mostrando o andamento #}
+    <div class="card mb-3" data-ci-finishing hidden>
+        <div class="card-body text-center py-4">
+            <i class="ti ti-cloud-upload ci-done-icon text-primary"></i>
+            <h3 class="mb-1" data-ci-finishing-title>{{ is_delivery ? __('Concluindo a entrega...', 'checklistitens') : __('Concluindo o recebimento...', 'checklistitens') }}</h3>
+            <p class="text-muted mb-0" data-ci-finishing-text></p>
+        </div>
+    </div>
+
+    <form data-ci-delivery-form autocomplete="off" novalidate>
+        {# ---------------------------------------------------------------- 1 EMBARCAÇÃO / ENTREGA #}
+        <div class="card mb-3">
+            <div class="card-body">
+                {% if is_delivery %}
+                    <h3 class="ci-step-title"><span class="ci-step-number">1</span> {{ __('Embarcação', 'checklistitens') }}</h3>
+                    {% if vessels|length %}
+                        {# A busca só aparece quando a lista é longa (o JS decide) #}
+                        <input type="search" class="form-control form-control-lg mb-2" data-ci-vessel-filter hidden
+                               placeholder="{{ __('Buscar embarcação', 'checklistitens') }}" aria-label="{{ __('Buscar embarcação', 'checklistitens') }}">
+                        <select class="form-select form-select-lg" name="vessels_id" data-ci-vessel aria-label="{{ __('Embarcação', 'checklistitens') }}">
+                            <option value="0">{{ __('Escolha a embarcação', 'checklistitens') }}</option>
+                            {% for v in vessels %}
+                                <option value="{{ v.id }}">{{ v.name }}</option>
+                            {% endfor %}
+                        </select>
+                    {% else %}
+                        <div class="alert alert-warning mb-0">
+                            {{ __('Nenhuma embarcação cadastrada. Peça ao TI para cadastrar em "Embarcações".', 'checklistitens') }}
+                            {% if is_admin %}<a href="{{ vessel_url }}">{{ __('Cadastrar agora', 'checklistitens') }}</a>{% endif %}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <h3 class="ci-step-title"><span class="ci-step-number">1</span> {{ __('Entrega', 'checklistitens') }}</h3>
+                    <div class="fs-3 fw-bold" data-ci-receipt-vessel></div>
+                    <div class="text-muted ci-small" data-ci-receipt-info></div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ---------------------------------------------------------------- 2 RÁDIOS #}
+        <div class="card mb-3">
+            <div class="card-body">
+                <h3 class="ci-step-title">
+                    <span class="ci-step-number">2</span>
+                    {{ is_delivery ? __('Rádios', 'checklistitens') : __('Rádios que voltaram', 'checklistitens') }}
+                    <span class="badge bg-blue-lt ms-1" data-ci-items-count></span>
+                </h3>
+
+                {# Rádios desta entrega (ou os que estão com a embarcação, no recebimento) #}
+                <div class="ci-delivery-items" data-ci-reserved></div>
+
+                {% if is_delivery %}
+                    <div data-ci-removed-box hidden>
+                        <div class="ci-small text-muted mt-3 mb-1">{{ __('Saíram da entrega por problema (bloqueados):', 'checklistitens') }}</div>
+                        <div class="ci-delivery-items" data-ci-removed></div>
+                    </div>
+
+                    <div class="mt-3" data-ci-add>
+                        <p class="fw-bold mb-2" data-ci-add-title>{{ __('Marque os rádios que vão para a embarcação:', 'checklistitens') }}</p>
+                        <input type="search" class="form-control form-control-lg mb-2" data-ci-add-filter
+                               placeholder="{{ __('Buscar pelo número de série', 'checklistitens') }}">
+                        <div class="ci-item-list" data-ci-available></div>
+                        <button type="button" class="btn btn-primary btn-lg w-100 mt-2" data-ci-reserve disabled>
+                            <i class="ti ti-lock"></i> <span data-ci-reserve-label>{{ __('Reservar rádios', 'checklistitens') }}</span>
+                        </button>
+                        <div class="ci-small text-muted mt-1" data-ci-reserve-hint></div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# ---------------------------------------------------------------- PROBLEMA EM UM RÁDIO #}
+        <div class="card mb-3 border-warning" data-ci-problem-panel hidden>
+            <div class="card-body">
+                <h3 class="ci-step-title"><i class="ti ti-alert-triangle"></i> {{ __('Problema no rádio', 'checklistitens') }} <span data-ci-problem-title></span></h3>
+                <div data-ci-problem-laudos></div>
+
+                <p class="fw-bold mb-2 mt-2">{{ __('Marque os problemas encontrados:', 'checklistitens') }}</p>
+                <div data-ci-problem-list>
+                    {% for group in problems %}
+                        <div class="ci-problem-group">
+                            <div class="ci-problem-group-title">{{ group.label }}</div>
+                            {% for p in group.problems %}
+                                <label class="ci-problem">
+                                    <input type="checkbox" value="{{ p.id }}" class="form-check-input" data-ci-problem-check>
+                                    <span>{{ p.name }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning">{{ __('Não há problemas cadastrados para rádio. Avise o TI.', 'checklistitens') }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="mt-3" data-ci-problem-photos>
+                    {% include '@checklistitens/parts/defect_photos.html.twig' %}
+                </div>
+
+                <button type="button" class="btn btn-success btn-lg w-100 mt-3" data-ci-problem-known hidden disabled>
+                    <i class="ti ti-file-check"></i>
+                    {{ is_delivery ? __('Vai assim, é o problema do laudo', 'checklistitens') : __('É o problema do laudo', 'checklistitens') }}
+                </button>
+                <button type="button" class="btn btn-warning btn-lg w-100 mt-2" data-ci-problem-block disabled>
+                    <i class="ti ti-lock"></i>
+                    <span data-ci-problem-block-label></span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary w-100 mt-2" data-ci-problem-cancel>
+                    {{ __('Fechar sem marcar', 'checklistitens') }}
+                </button>
+            </div>
+        </div>
+
+        {# Os passos seguintes só aparecem com rádios reservados (ou no recebimento) #}
+        <div data-ci-rest hidden>
+            {# ------------------------------------------------------------ 3 BATERIAS #}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h3 class="ci-step-title">
+                        <span class="ci-step-number">3</span>
+                        {{ is_delivery ? __('Baterias reserva', 'checklistitens') : __('Baterias devolvidas', 'checklistitens') }}
+                    </h3>
+                    <div class="ci-stepper">
+                        <button type="button" class="btn btn-outline-secondary btn-lg" data-ci-batteries-minus aria-label="{{ __('Menos uma', 'checklistitens') }}">−</button>
+                        <input type="number" class="form-control form-control-lg text-center" name="batteries" min="0" max="99" step="1" value="0"
+                               inputmode="numeric" data-ci-batteries aria-label="{{ __('Quantidade de baterias', 'checklistitens') }}">
+                        <button type="button" class="btn btn-outline-secondary btn-lg" data-ci-batteries-plus aria-label="{{ __('Mais uma', 'checklistitens') }}">+</button>
+                    </div>
+                </div>
+            </div>
+
+            {# ------------------------------------------------------------ 4 ITENS OK? #}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h3 class="ci-step-title"><span class="ci-step-number">4</span> {{ __('Itens ok?', 'checklistitens') }}</h3>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="ci-choice ci-choice-ok">
+                                <input type="radio" name="is_ok" value="1" class="ci-choice-input" data-ci-ok>
+                                <span class="ci-choice-box"><i class="ti ti-circle-check"></i> {{ __('SIM', 'checklistitens') }}</span>
+                            </label>
+                        </div>
+                        <div class="col-6">
+                            <label class="ci-choice ci-choice-nok">
+                                <input type="radio" name="is_ok" value="0" class="ci-choice-input" data-ci-ok>
+                                <span class="ci-choice-box"><i class="ti ti-alert-triangle"></i> {{ __('NÃO', 'checklistitens') }}</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="alert alert-warning mt-2 mb-0" data-ci-ok-hint hidden>
+                        <i class="ti ti-hand-finger"></i>
+                        {{ __('Toque em "Tem problema" no rádio com problema, na lista acima.', 'checklistitens') }}
+                    </div>
+                </div>
+            </div>
+
+            {# ------------------------------------------------------------ 5 OBSERVAÇÕES #}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h3 class="ci-step-title"><span class="ci-step-number">5</span> {{ __('Observações', 'checklistitens') }}</h3>
+                    <textarea class="form-control" name="comment" rows="3" maxlength="1000" data-ci-comment
+                              placeholder="{{ __('Opcional. Escreva o que for importante registrar.', 'checklistitens') }}"></textarea>
+                </div>
+            </div>
+
+            {# ------------------------------------------------------------ 6 FOTOS #}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h3 class="ci-step-title">
+                        <span class="ci-step-number">6</span> {{ __('Fotos', 'checklistitens') }}
+                        <span class="badge ms-1" data-ci-photos-count></span>
+                    </h3>
+                    <p class="text-muted ci-small mb-2">
+                        {% if is_delivery %}
+                            {{ __('Frente e costas de cada rádio, e as baterias.', 'checklistitens') }}
+                        {% else %}
+                            {{ __('Frente e costas de cada rádio que voltou, e as baterias.', 'checklistitens') }}
+                        {% endif %}
+                        {% if limits.min_photos > 0 %}
+                            {{ __('Mínimo de %d fotos.', 'checklistitens')|format(limits.min_photos) }}
+                        {% endif %}
+                    </p>
+                    <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                            <label class="btn btn-primary btn-lg w-100 ci-defect-button" data-ci-photo-picker>
+                                <i class="ti ti-camera"></i> <span>{{ __('Tirar foto', 'checklistitens') }}</span>
+                                <input type="file" accept="image/*" capture="environment" class="d-none" data-ci-photo-input>
+                            </label>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label class="btn btn-outline-primary btn-lg w-100 ci-defect-button" data-ci-photo-picker>
+                                <i class="ti ti-photo"></i> <span>{{ __('Escolher da galeria', 'checklistitens') }}</span>
+                                <input type="file" accept="image/*" multiple class="d-none" data-ci-photo-input>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="ci-defect-grid mt-2" data-ci-photos></div>
+                    <div class="ci-small text-muted mt-1" data-ci-photos-status role="status" aria-live="polite"></div>
+                </div>
+            </div>
+
+            {# ------------------------------------------------------------ 7 SELFIE #}
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h3 class="ci-step-title"><span class="ci-step-number">7</span> {{ __('Selfie', 'checklistitens') }}</h3>
+                    {% include '@checklistitens/parts/selfie_input.html.twig' with {'label': __('Tirar minha selfie', 'checklistitens')} %}
+                </div>
+            </div>
+
+            {# Sem conexão o JS troca o texto para "Enviar quando voltar a conexão" #}
+            <button type="button" class="btn btn-success btn-lg w-100" data-ci-finish disabled>
+                <i class="ti ti-checks"></i>
+                <span data-ci-finish-label>{{ is_delivery ? __('Concluir entrega', 'checklistitens') : __('Concluir recebimento', 'checklistitens') }}</span>
+            </button>
+            <div class="ci-small text-muted mt-1 mb-3" data-ci-finish-hint role="status" aria-live="polite"></div>
+        </div>
+
+        <button type="button" class="btn btn-outline-danger w-100 mb-3" data-ci-cancel hidden>
+            <i class="ti ti-x"></i>
+            {{ is_delivery ? __('Cancelar separação', 'checklistitens') : __('Cancelar recebimento', 'checklistitens') }}
+        </button>
+    </form>
+
+    <div class="d-flex gap-2 mt-2">
+        <a href="{{ home_url }}" class="btn btn-outline-secondary flex-fill"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>
+        <a href="{{ list_url }}" class="btn btn-outline-secondary flex-fill"><i class="ti ti-list-details"></i> {{ __('Entregas', 'checklistitens') }}</a>
+    </div>
+</div>

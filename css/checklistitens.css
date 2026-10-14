@@ -405,3 +405,168 @@
     color: var(--tblr-warning, #f59f00);
     font-weight: 600;
 }
+
+/* Entrega para embarcação: situação da conexão e do envio, no topo da tela */
+.ci-sync {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem .75rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--tblr-border-color, #dadfe5);
+    border-left: 4px solid var(--tblr-success, #2fb344);
+    border-radius: .5rem;
+    font-size: .9rem;
+}
+
+.ci-sync > span {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ci-sync > i {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.ci-sync[data-ci-sync-state="sending"] {
+    border-left-color: var(--tblr-primary, #206bc4);
+}
+
+.ci-sync[data-ci-sync-state="offline"],
+.ci-sync[data-ci-sync-state="error"] {
+    border-left-color: var(--tblr-warning, #f59f00);
+    font-weight: 600;
+}
+
+.ci-sync[data-ci-sync-state="login"] {
+    border-left-color: var(--tblr-danger, #d63939);
+    font-weight: 600;
+}
+
+/* Rádios da entrega (ou os que estão com a embarcação, no recebimento) */
+.ci-delivery-items {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.ci-delivery-item {
+    align-items: center;
+    cursor: default;
+}
+
+.ci-delivery-main {
+    display: flex;
+    align-items: flex-start;
+    gap: .75rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+}
+
+label.ci-delivery-main {
+    cursor: pointer;
+}
+
+.ci-delivery-main > span {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ci-delivery-main > i {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.ci-delivery-state {
+    font-size: .875em;
+    color: var(--tblr-muted, #667382);
+    margin-top: .15rem;
+}
+
+.ci-item-actions {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    flex: 0 0 auto;
+}
+
+/* Entrega escolhida no recebimento: a linha inteira é o botão */
+.ci-item-button {
+    width: 100%;
+    align-items: center;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+}
+
+.ci-item-button:hover,
+.ci-item-button:focus-visible {
+    border-color: var(--tblr-primary, #206bc4);
+    background: rgba(32, 107, 196, .06);
+}
+
+/* Quantidade de baterias: menos, número, mais */
+.ci-stepper {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    max-width: 16rem;
+}
+
+.ci-stepper .btn {
+    flex: 0 0 3.5rem;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.ci-stepper .form-control {
+    font-size: 1.4rem;
+    font-weight: 600;
+}
+
+/* Fotos da entrega: marca de enviada ou aguardando envio em cada miniatura */
+.ci-photo-mark {
+    position: absolute;
+    left: .25rem;
+    bottom: .25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    font-size: .9rem;
+    color: #fff;
+    background: var(--tblr-success, #2fb344);
+}
+
+.ci-photo-waiting .ci-photo-mark {
+    background: var(--tblr-warning, #f59f00);
+}
+
+.ci-photo-waiting .ci-defect-thumb {
+    opacity: .7;
+}
+
+/* Fotos no detalhe da entrega */
+.ci-photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: .5rem;
+}
+
+.ci-photo-grid img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: .375rem;
+    cursor: zoom-in;
+}
+
+/* Observações digitadas pelo gestor: mantém as quebras de linha */
+.ci-prewrap {
+    white-space: pre-wrap;
+}

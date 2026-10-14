@@ -1,0 +1,198 @@
+{# Detalhe de uma entrega para embarcação: dados, rádios, fotos, selfie e recebimentos #}
+{% macro selfie(info) %}
+    {% if info.url %}
+        <a href="{{ info.url }}" target="_blank" rel="noopener" title="{{ __('Ver selfie', 'checklistitens') }}">
+            <img src="{{ info.url }}" class="ci-thumb" alt="{{ __('Selfie', 'checklistitens') }}" loading="lazy">
+        </a>
+    {% elseif info.removed %}
+        <span class="ci-small text-muted">{{ info.removed }}</span>
+    {% endif %}
+{% endmacro %}
+
+{% macro photos(list, title) %}
+    {% if list|length %}
+        <div class="ci-photo-strip mt-1">
+            {% for p in list %}
+                <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ title }}">
+                    <img src="{{ p.url }}" class="ci-thumb ci-thumb-photo" alt="{{ title }}" loading="lazy">
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{# Resultado do checklist de um rádio numa fase: problemas, problema conhecido e fotos do defeito #}
+{% macro result(phase) %}
+    {% import _self as m %}
+    {% import '@checklistitens/parts/known_issue.html.twig' as known %}
+    {% if phase.problems|length %}
+        <ul class="ci-problem-tags mb-1">{% for p in phase.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+        {% if phase.known %}{{ known.badge(phase.laudos) }}{% endif %}
+    {% endif %}
+    {{ m.photos(phase.photos, __('Foto do defeito', 'checklistitens')) }}
+{% endmacro %}
+
+{% import _self as ci %}
+{# "geo" e não "location": a entrega já traz uma variável location com os dados do mapa #}
+{% import '@checklistitens/parts/location.html.twig' as geo %}
+
+<div class="ci-page ci-page-wide container-fluid">
+    <h2 class="ci-title mb-3"><i class="ti ti-ship"></i> {{ vessel }}</h2>
+
+    <div class="card mb-3">
+        <div class="card-body d-flex flex-wrap justify-content-between gap-3">
+            <div class="d-flex gap-3 align-items-center">
+                {{ ci.selfie(selfie) }}
+                <div>
+                    <div class="text-muted ci-small">{{ __('Entrega para embarcação', 'checklistitens') }} #{{ id }}</div>
+                    <div class="fs-3 fw-bold">{{ vessel }}</div>
+                    <div class="ci-small">
+                        {{ __('Gestor', 'checklistitens') }}: {{ user }}{% if sector %} · {{ sector }}{% endif %}
+                    </div>
+                    <div class="ci-small">
+                        {% if date_delivery %}
+                            {{ __('Entregue em', 'checklistitens') }} {{ date_delivery }}{% if shift %} · {{ __('turno', 'checklistitens') }} {{ shift }}{% endif %}
+                        {% else %}
+                            {{ __('Separação iniciada em', 'checklistitens') }} {{ date_start }}
+                        {% endif %}
+                        {% if date_return %} · {{ __('Devolvida em', 'checklistitens') }} {{ date_return }}{% endif %}
+                    </div>
+                    {% if date_delivery %}<div class="mt-1">{{ geo.map(location) }}</div>{% endif %}
+                </div>
+            </div>
+            <div class="text-end">
+                <span class="badge bg-{{ status_color }} fs-5">{{ status_label }}</span>
+                <div class="d-flex flex-wrap gap-2 justify-content-end mt-2">
+                    {% if can_receive %}
+                        <form method="post" action="{{ form_url }}?receive=1">
+                            <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" name="start_receipt" value="{{ id }}" class="btn btn-sm btn-success">
+                                <i class="ti ti-arrow-back-up"></i> {{ __('Receber da embarcação', 'checklistitens') }}
+                            </button>
+                        </form>
+                    {% endif %}
+                    {% if can_cancel %}
+                        {# Só o TI: quem iniciou a separação cancela pela tela da entrega #}
+                        <form method="post" action="{{ list_url }}"
+                              onsubmit="return confirm('{{ __('Cancelar esta separação? Os rádios voltam a ficar disponíveis e as fotos já enviadas são descartadas.', 'checklistitens')|e('js') }}');">
+                            <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" name="cancel_delivery" value="{{ id }}" class="btn btn-sm btn-outline-danger">
+                                <i class="ti ti-x"></i> {{ __('Cancelar separação', 'checklistitens') }}
+                            </button>
+                        </form>
+                    {% endif %}
+                    <a href="{{ csv_url }}" class="btn btn-sm btn-outline-secondary"><i class="ti ti-file-spreadsheet"></i> CSV</a>
+                </div>
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="row text-center g-2">
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ counts.total }}</div><div class="ci-small text-muted">{{ __('Rádios entregues', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ counts.on_vessel }}</div><div class="ci-small text-muted">{{ __('Com a embarcação', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ counts.returned }}</div><div class="ci-small text-muted">{{ __('Devolvidos', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ counts.blocked }}</div><div class="ci-small text-muted">{{ __('Saíram por problema', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ spare_batteries }}</div><div class="ci-small text-muted">{{ __('Baterias reserva', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md">
+                    <div class="fs-3 fw-bold">{{ is_ok is null ? '—' : (is_ok ? __('Sim', 'checklistitens') : __('Não', 'checklistitens')) }}</div>
+                    <div class="ci-small text-muted">{{ __('Itens ok?', 'checklistitens') }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if comment %}
+        <div class="card mb-3">
+            <div class="card-header"><h3 class="card-title"><i class="ti ti-notes"></i> {{ __('Observações', 'checklistitens') }}</h3></div>
+            <div class="card-body ci-prewrap">{{ comment }}</div>
+        </div>
+    {% endif %}
+
+    {# ---------------------------------------------------------------- RÁDIOS #}
+    <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title"><i class="ti ti-radio"></i> {{ __('Rádios', 'checklistitens') }} <span class="badge bg-blue ms-1">{{ items|length }}</span></h3></div>
+        <div class="list-group list-group-flush">
+            {% for i in items %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                        <div>
+                            <a href="{{ i.record_url }}"><strong>{{ i.label }}</strong></a>
+                            <span class="text-muted ci-small">{{ i.detail }}</span>
+                            {{ ci.result(i.checkout) }}
+                            {% if i.checkin %}
+                                <div class="ci-small mt-1">
+                                    <i class="ti ti-arrow-back-up"></i> {{ __('Recebido em', 'checklistitens') }} {{ i.checkin.when }}
+                                    {% if i.checkin.is_ok %}· <span class="badge bg-green-lt">{{ __('Ok', 'checklistitens') }}</span>{% endif %}
+                                </div>
+                                {{ ci.result(i.checkin) }}
+                            {% endif %}
+                            {% if i.block %}
+                                <div class="ci-small mt-1">
+                                    <i class="ti ti-lock"></i> {{ i.block.status_label }}
+                                    {% if i.block.ticket_id %}
+                                        · <a href="{{ i.block.ticket_url }}" target="_blank" rel="noopener">{{ __('Chamado', 'checklistitens') }} #{{ i.block.ticket_id }}</a>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        <span class="badge bg-{{ i.status_color }} text-wrap">{{ i.status_label }}</span>
+                    </div>
+                </div>
+            {% else %}
+                <div class="list-group-item text-muted">{{ __('Nenhum rádio nesta entrega.', 'checklistitens') }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ---------------------------------------------------------------- FOTOS DA ENTREGA #}
+    <div class="card mb-3">
+        <div class="card-header"><h3 class="card-title"><i class="ti ti-photo"></i> {{ __('Fotos da entrega', 'checklistitens') }} <span class="badge bg-secondary ms-1">{{ photos|length }}</span></h3></div>
+        <div class="card-body">
+            {% if photos|length %}
+                <div class="ci-photo-grid">
+                    {% for p in photos %}
+                        <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ __('Foto da entrega', 'checklistitens') }}">
+                            <img src="{{ p.url }}" alt="{{ __('Foto da entrega', 'checklistitens') }}" loading="lazy">
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <span class="text-muted">{{ __('Nenhuma foto.', 'checklistitens') }}</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ---------------------------------------------------------------- RECEBIMENTOS #}
+    {% for r in receipts %}
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title"><i class="ti ti-arrow-back-up"></i> {{ __('Recebimento de', 'checklistitens') }} {{ r.when }}</h3>
+                <span class="badge bg-green-lt">{{ __('%d rádio(s)', 'checklistitens')|format(r.items) }}</span>
+            </div>
+            <div class="card-body">
+                <div class="d-flex gap-3 align-items-center">
+                    {{ ci.selfie(r.selfie) }}
+                    <div>
+                        <div class="ci-small">{{ __('Recebido por', 'checklistitens') }}: {{ r.user }}</div>
+                        <div class="ci-small">
+                            {{ __('Baterias devolvidas', 'checklistitens') }}: {{ r.returned_batteries }}
+                            · {{ __('Itens ok?', 'checklistitens') }} {{ r.is_ok is null ? '—' : (r.is_ok ? __('Sim', 'checklistitens') : __('Não', 'checklistitens')) }}
+                        </div>
+                        <div class="mt-1">{{ geo.map(r.location) }}</div>
+                    </div>
+                </div>
+                {% if r.comment %}<div class="ci-prewrap mt-2">{{ r.comment }}</div>{% endif %}
+                {% if r.photos|length %}
+                    <div class="ci-photo-grid mt-2">
+                        {% for p in r.photos %}
+                            <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ __('Foto do recebimento', 'checklistitens') }}">
+                                <img src="{{ p.url }}" alt="{{ __('Foto do recebimento', 'checklistitens') }}" loading="lazy">
+                            </a>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    {% endfor %}
+
+    <a href="{{ list_url }}" class="btn btn-outline-secondary"><i class="ti ti-arrow-left"></i> {{ __('Entregas', 'checklistitens') }}</a>
+</div>
