@@ -163,6 +163,10 @@
                                inputmode="numeric" data-ci-batteries aria-label="{{ __('Quantidade de baterias', 'checklistitens') }}">
                         <button type="button" class="btn btn-outline-secondary btn-lg" data-ci-batteries-plus aria-label="{{ __('Mais uma', 'checklistitens') }}">+</button>
                     </div>
+                    {% if not is_delivery %}
+                        {# Quantas foram entregues e quantas ainda faltam voltar (preenchido pelo JS) #}
+                        <div class="ci-small text-muted mt-1" data-ci-batteries-hint></div>
+                    {% endif %}
                 </div>
             </div>
 

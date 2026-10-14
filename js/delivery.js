@@ -82,8 +82,16 @@
         return parseInt(value, 10) || 0;
     }
 
+    /** No recebimento, no máximo as baterias reserva da entrega que ainda não voltaram. */
+    function maxBatteries() {
+        if (!isDelivery && server && server.delivery && server.delivery.batteries_left !== undefined) {
+            return Math.min(99, Math.max(0, toInt(server.delivery.batteries_left)));
+        }
+        return 99;
+    }
+
     function clampBatteries(value) {
-        return Math.min(99, Math.max(0, toInt(value)));
+        return Math.min(maxBatteries(), Math.max(0, toInt(value)));
     }
 
     function plural(count, singular, many) {
@@ -1996,8 +2004,16 @@
         ui.cancel.hidden = !(draft.serverId || draft.photos.length);
         ui.cancel.disabled = false;
 
+        draft.batteries = clampBatteries(draft.batteries);
+        ui.batteries.max = String(maxBatteries());
+        ui.batteriesMinus.disabled = draft.batteries <= 0;
+        ui.batteriesPlus.disabled = draft.batteries >= maxBatteries();
         if (document.activeElement !== ui.batteries) {
             ui.batteries.value = String(draft.batteries);
+        }
+        if (ui.batteriesHint && !isDelivery && server && server.delivery && server.delivery.batteries_left !== undefined) {
+            ui.batteriesHint.textContent = 'Entregues com a embarcação: ' + toInt(server.delivery.spare_batteries)
+                + '. Ainda não voltaram: ' + maxBatteries() + '.';
         }
         ui.ok.forEach(function (input) {
             input.checked = draft.isOk !== null && input.value === String(draft.isOk);
@@ -2059,6 +2075,8 @@
     function setBatteries(value) {
         draft.batteries = clampBatteries(value);
         ui.batteries.value = String(draft.batteries);
+        ui.batteriesMinus.disabled = draft.batteries <= 0;
+        ui.batteriesPlus.disabled = draft.batteries >= maxBatteries();
         saveDraft();
     }
 
@@ -2313,6 +2331,7 @@
         ui.batteries = get('batteries');
         ui.batteriesMinus = get('batteries-minus');
         ui.batteriesPlus = get('batteries-plus');
+        ui.batteriesHint = get('batteries-hint');
         ui.ok = qsa('[data-ci-ok]', root);
         ui.okHint = get('ok-hint');
         ui.comment = get('comment');

@@ -270,6 +270,8 @@ class DeliveryReceipt extends CommonDBTM
                 'vessel_name'         => Ui::text($delivery['vessel_name'] ?? ''),
                 'date_delivery'       => (string) ($delivery['date_delivery'] ?? ''),
                 'date_delivery_label' => Ui::datetime($delivery['date_delivery'] ?? null),
+                'spare_batteries'     => (int) ($delivery['spare_batteries'] ?? 0),
+                'batteries_left'      => self::batteriesLeft($deliveries_id),
             ],
             'date_start'  => (string) $row['date_start'],
             'expires_at'  => Delivery::expiresAt($row['date_mod'] ?: $row['date_start']),
@@ -417,6 +419,32 @@ class DeliveryReceipt extends CommonDBTM
     }
 
     /**
+     * Baterias reserva da entrega que ainda não voltaram: as entregues menos as devolvidas nos
+     * recebimentos já concluídos (a volta pode ser em partes).
+     */
+    public static function batteriesLeft(int $deliveries_id): int
+    {
+        global $DB;
+
+        $delivery = Delivery::getRow($deliveries_id);
+        if ($delivery === null) {
+            return 0;
+        }
+
+        $returned = 0;
+        $iterator = $DB->request([
+            'SELECT' => 'returned_batteries',
+            'FROM'   => self::getTable(),
+            'WHERE'  => ['plugin_checklistitens_deliveries_id' => $deliveries_id, 'status' => self::STATUS_DONE],
+        ]);
+        foreach ($iterator as $row) {
+            $returned += (int) $row['returned_batteries'];
+        }
+
+        return max(0, (int) $delivery['spare_batteries'] - $returned);
+    }
+
+    /**
      * Marca atividade no recebimento: é a data da última atividade que decide a expiração.
      */
     public static function touch(int $id): void
@@ -524,6 +552,14 @@ class DeliveryReceipt extends CommonDBTM
         $batteries = Delivery::readQuantity('returned_batteries');
         if ($batteries === null) {
             return Delivery::fail(__('Informe as baterias devolvidas com um número de 0 a 99.', 'checklistitens'), $state());
+        }
+        // Não volta mais bateria do que foi entregue (descontando os recebimentos anteriores)
+        $left = self::batteriesLeft($deliveries_id);
+        if ($batteries > $left) {
+            return Delivery::fail(sprintf(
+                __('Esta entrega tem %d bateria(s) reserva para voltar. Informe no máximo esse número.', 'checklistitens'),
+                $left
+            ), $state());
         }
         $comment = Delivery::readComment();
 
