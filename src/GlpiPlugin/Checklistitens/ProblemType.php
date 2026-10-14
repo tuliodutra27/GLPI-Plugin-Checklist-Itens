@@ -37,6 +37,28 @@ class ProblemType extends CommonDropdown
         return Profile::isAdmin();
     }
 
+    // O direito de administração só tem "ver" e "configurar". O padrão do core pediria os bits de
+    // criar e de apagar, que esse direito não tem: quem configura cria, altera e apaga.
+    public static function canCreate()
+    {
+        return Profile::canAdministrate();
+    }
+
+    public static function canUpdate()
+    {
+        return Profile::canAdministrate();
+    }
+
+    public static function canDelete()
+    {
+        return Profile::canAdministrate();
+    }
+
+    public static function canPurge()
+    {
+        return Profile::canAdministrate();
+    }
+
     /** @return array<int, string> */
     public static function getCategories(): array
     {
