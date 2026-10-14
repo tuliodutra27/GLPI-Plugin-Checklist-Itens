@@ -37,12 +37,13 @@ class Selfie
     }
 
     /**
-     * Na desinstalação as tabelas são apagadas; as imagens ficariam sem vínculo nenhum
-     * (dado pessoal órfão), então são removidas junto.
+     * Na desinstalação as tabelas são apagadas; as selfies ficariam sem vínculo nenhum (dado
+     * pessoal órfão), então são removidas junto. As fotos do defeito e das entregas ficam: são o
+     * registro do estado dos equipamentos e nunca são apagadas.
      */
     public static function removeBaseDir(): void
     {
-        $dir = GLPI_PLUGIN_DOC_DIR . '/checklistitens';
+        $dir = self::getBaseDir();
         if (is_dir($dir)) {
             Toolbox::deleteDir($dir);
         }
