@@ -92,6 +92,7 @@
                 <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ counts.returned }}</div><div class="ci-small text-muted">{{ __('Devolvidos', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ counts.blocked }}</div><div class="ci-small text-muted">{{ __('Saíram por problema', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ spare_batteries }}</div><div class="ci-small text-muted">{{ __('Baterias reserva', 'checklistitens') }}</div></div>
+                <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ spare_covers }}</div><div class="ci-small text-muted">{{ __('Capas', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md">
                     <div class="fs-3 fw-bold">{{ is_ok is null ? '—' : (is_ok ? __('Sim', 'checklistitens') : __('Não', 'checklistitens')) }}</div>
                     <div class="ci-small text-muted">{{ __('Itens ok?', 'checklistitens') }}</div>
@@ -175,8 +176,19 @@
                         <div class="ci-small">{{ __('Recebido por', 'checklistitens') }}: {{ r.user }}</div>
                         <div class="ci-small">
                             {{ __('Baterias devolvidas', 'checklistitens') }}: {{ r.returned_batteries }}
+                            · {{ __('Capas devolvidas', 'checklistitens') }}: {{ r.returned_covers }}
                             · {{ __('Itens ok?', 'checklistitens') }} {{ r.is_ok is null ? '—' : (r.is_ok ? __('Sim', 'checklistitens') : __('Não', 'checklistitens')) }}
                         </div>
+                        {% if r.defective_batteries > 0 or r.covers_ok is same as(false) %}
+                            <div class="mt-1 d-flex flex-wrap gap-1">
+                                {% if r.defective_batteries > 0 %}
+                                    <span class="badge bg-orange-lt"><i class="ti ti-battery-off"></i> {{ __('%d bateria(s) com defeito', 'checklistitens')|format(r.defective_batteries) }}</span>
+                                {% endif %}
+                                {% if r.covers_ok is same as(false) %}
+                                    <span class="badge bg-orange-lt"><i class="ti ti-alert-triangle"></i> {{ __('Capas com dano', 'checklistitens') }}</span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
                         <div class="mt-1">{{ geo.map(r.location) }}</div>
                     </div>
                 </div>

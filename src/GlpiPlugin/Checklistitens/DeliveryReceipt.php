@@ -161,6 +161,30 @@ class DeliveryReceipt extends CommonDBTM
                 'datatype'      => 'number',
                 'massiveaction' => false,
             ],
+            [
+                'id'            => '9',
+                'table'         => $table,
+                'field'         => 'defective_batteries',
+                'name'          => __('Baterias com defeito', 'checklistitens'),
+                'datatype'      => 'number',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '10',
+                'table'         => $table,
+                'field'         => 'returned_covers',
+                'name'          => __('Capas devolvidas', 'checklistitens'),
+                'datatype'      => 'number',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '11',
+                'table'         => $table,
+                'field'         => 'covers_ok',
+                'name'          => __('Capas em bom estado', 'checklistitens'),
+                'datatype'      => 'bool',
+                'massiveaction' => false,
+            ],
         ];
     }
 
@@ -272,6 +296,8 @@ class DeliveryReceipt extends CommonDBTM
                 'date_delivery_label' => Ui::datetime($delivery['date_delivery'] ?? null),
                 'spare_batteries'     => (int) ($delivery['spare_batteries'] ?? 0),
                 'batteries_left'      => self::batteriesLeft($deliveries_id),
+                'spare_covers'        => (int) ($delivery['spare_covers'] ?? 0),
+                'covers_left'         => self::coversLeft($deliveries_id),
             ],
             'date_start'  => (string) $row['date_start'],
             'expires_at'  => Delivery::expiresAt($row['date_mod'] ?: $row['date_start']),
@@ -424,6 +450,21 @@ class DeliveryReceipt extends CommonDBTM
      */
     public static function batteriesLeft(int $deliveries_id): int
     {
+        return self::remaining($deliveries_id, 'spare_batteries', 'returned_batteries');
+    }
+
+    /** Capas da entrega que ainda não voltaram, como em batteriesLeft(). */
+    public static function coversLeft(int $deliveries_id): int
+    {
+        return self::remaining($deliveries_id, 'spare_covers', 'returned_covers');
+    }
+
+    /**
+     * Quantidade entregue (coluna da entrega) menos a devolvida nos recebimentos concluídos
+     * (coluna do recebimento). Os nomes das colunas vêm só do código.
+     */
+    private static function remaining(int $deliveries_id, string $delivered_field, string $returned_field): int
+    {
         global $DB;
 
         $delivery = Delivery::getRow($deliveries_id);
@@ -433,15 +474,15 @@ class DeliveryReceipt extends CommonDBTM
 
         $returned = 0;
         $iterator = $DB->request([
-            'SELECT' => 'returned_batteries',
+            'SELECT' => $returned_field,
             'FROM'   => self::getTable(),
             'WHERE'  => ['plugin_checklistitens_deliveries_id' => $deliveries_id, 'status' => self::STATUS_DONE],
         ]);
         foreach ($iterator as $row) {
-            $returned += (int) $row['returned_batteries'];
+            $returned += (int) $row[$returned_field];
         }
 
-        return max(0, (int) $delivery['spare_batteries'] - $returned);
+        return max(0, (int) ($delivery[$delivered_field] ?? 0) - $returned);
     }
 
     /**
@@ -561,6 +602,28 @@ class DeliveryReceipt extends CommonDBTM
                 $left
             ), $state());
         }
+        // Bateria com defeito é uma das devolvidas (as baterias não são controladas uma a uma)
+        $defective = Delivery::readQuantity('defective_batteries');
+        if ($defective === null || $defective > $batteries) {
+            return Delivery::fail(__('As baterias com defeito não podem passar das baterias devolvidas.', 'checklistitens'), $state());
+        }
+
+        $covers = Delivery::readQuantity('returned_covers');
+        if ($covers === null) {
+            return Delivery::fail(__('Informe as capas devolvidas com um número de 0 a 99.', 'checklistitens'), $state());
+        }
+        $covers_left = self::coversLeft($deliveries_id);
+        if ($covers > $covers_left) {
+            return Delivery::fail(sprintf(
+                __('Esta entrega tem %d capa(s) para voltar. Informe no máximo esse número.', 'checklistitens'),
+                $covers_left
+            ), $state());
+        }
+        // "As capas estão em bom estado?" só vale quando alguma capa voltou
+        $covers_ok = $covers > 0 ? Delivery::readYesNo('covers_ok') : null;
+        if ($covers > 0 && $covers_ok === null) {
+            return Delivery::fail(__('Responda se as capas devolvidas estão em bom estado.', 'checklistitens'), $state());
+        }
         $comment = Delivery::readComment();
 
         $selfie = Selfie::storeFromRequest(Selfie::KIND_RECEIPT, $users_id);
@@ -577,15 +640,19 @@ class DeliveryReceipt extends CommonDBTM
         $now    = Shift::now();
         $shift  = Shift::startFor($now);
         $fields = [
-            'id'                 => $id,
-            'status'             => self::STATUS_DONE,
-            'lock_draft'         => 'NULL',
-            'date_receipt'       => $now,
+            'id'                  => $id,
+            'status'              => self::STATUS_DONE,
+            'lock_draft'          => 'NULL',
+            'date_receipt'        => $now,
             // como texto: o update() do GLPI não enxerga a troca de vazio (NULL) para o número 0
-            'is_ok'              => (string) $is_ok,
-            'returned_batteries' => $batteries,
-            'comment'            => $comment,
-            'selfie'             => $selfie,
+            'is_ok'               => (string) $is_ok,
+            'returned_batteries'  => $batteries,
+            'defective_batteries' => $defective,
+            'returned_covers'     => $covers,
+            // como texto, pelo mesmo motivo do is_ok; sem capa devolvida fica vazio
+            'covers_ok'           => $covers_ok === null ? 'NULL' : (string) $covers_ok,
+            'comment'             => $comment,
+            'selfie'              => $selfie,
         ] + Location::toFields('', Location::fromRequest());
 
         $blocked      = 0;

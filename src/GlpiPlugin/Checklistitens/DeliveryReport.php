@@ -414,16 +414,19 @@ class DeliveryReport
         foreach ($iterator as $r) {
             $rid        = (int) $r['id'];
             $receipts[] = [
-                'id'                 => $rid,
-                'when'               => Ui::datetime($r['date_receipt']),
-                'user'               => Ui::text(getUserName((int) $r['users_id'])),
-                'is_ok'              => $r['is_ok'] === null ? null : (int) $r['is_ok'] === 1,
-                'returned_batteries' => (int) $r['returned_batteries'],
-                'comment'            => Ui::text($r['comment'] ?? ''),
-                'selfie'             => self::selfieInfo((string) $r['selfie'], Selfie::KIND_RECEIPT, $rid, $r['date_receipt']),
-                'location'           => Location::present($r, '', __('Recebimento', 'checklistitens') . ' — ' . $vessel),
-                'photos'             => DeliveryPhoto::getFor($id, $rid),
-                'items'              => count(array_filter($items, static fn ($i) => $i['receipt_id'] === $rid)),
+                'id'                  => $rid,
+                'when'                => Ui::datetime($r['date_receipt']),
+                'user'                => Ui::text(getUserName((int) $r['users_id'])),
+                'is_ok'               => $r['is_ok'] === null ? null : (int) $r['is_ok'] === 1,
+                'returned_batteries'  => (int) $r['returned_batteries'],
+                'defective_batteries' => (int) $r['defective_batteries'],
+                'returned_covers'     => (int) $r['returned_covers'],
+                'covers_ok'           => $r['covers_ok'] === null ? null : (int) $r['covers_ok'] === 1,
+                'comment'             => Ui::text($r['comment'] ?? ''),
+                'selfie'              => self::selfieInfo((string) $r['selfie'], Selfie::KIND_RECEIPT, $rid, $r['date_receipt']),
+                'location'            => Location::present($r, '', __('Recebimento', 'checklistitens') . ' — ' . $vessel),
+                'photos'              => DeliveryPhoto::getFor($id, $rid),
+                'items'               => count(array_filter($items, static fn ($i) => $i['receipt_id'] === $rid)),
             ];
         }
 
@@ -441,6 +444,7 @@ class DeliveryReport
             'shift'           => Shift::label($row['shift_start']),
             'is_ok'           => $row['is_ok'] === null ? null : (int) $row['is_ok'] === 1,
             'spare_batteries' => (int) $row['spare_batteries'],
+            'spare_covers'    => (int) $row['spare_covers'],
             'comment'         => Ui::text($row['comment'] ?? ''),
             'selfie'          => self::selfieInfo((string) $row['selfie'], Selfie::KIND_DELIVERY, $id, $row['date_delivery']),
             'location'        => Location::present($row, '', __('Entrega', 'checklistitens') . ' — ' . $vessel),
@@ -471,17 +475,23 @@ class DeliveryReport
         fputcsv($out, [
             __('Entrega', 'checklistitens'), __('Embarcação', 'checklistitens'), __('Situação da entrega', 'checklistitens'),
             __('Gestor', 'checklistitens'), __('Entregue em', 'checklistitens'), __('Baterias reserva', 'checklistitens'),
+            __('Capas', 'checklistitens'),
             __('Itens ok', 'checklistitens'), __('Observações', 'checklistitens'), __('Fotos da entrega', 'checklistitens'),
             __('Localização da entrega', 'checklistitens'),
             __('Rádio', 'checklistitens'), __('Situação do rádio', 'checklistitens'),
             __('Problemas na entrega', 'checklistitens'), __('Problema conhecido na entrega', 'checklistitens'),
             __('Recebido em', 'checklistitens'), __('Problemas no recebimento', 'checklistitens'),
             __('Problema conhecido no recebimento', 'checklistitens'), __('Chamado', 'checklistitens'),
+            // do recebimento em que o rádio voltou
+            __('Baterias devolvidas', 'checklistitens'), __('Baterias com defeito', 'checklistitens'),
+            __('Capas devolvidas', 'checklistitens'), __('Capas em bom estado', 'checklistitens'),
         ], ';');
 
-        $yes = __('Sim', 'checklistitens');
-        $no  = __('Não', 'checklistitens');
+        $yes      = __('Sim', 'checklistitens');
+        $no       = __('Não', 'checklistitens');
+        $receipts = array_column($detail['receipts'], null, 'id');
         foreach ($detail['items'] as $item) {
+            $receipt = $receipts[$item['receipt_id']] ?? null;
             fputcsv($out, [
                 $detail['id'],
                 $detail['vessel'],
@@ -489,6 +499,7 @@ class DeliveryReport
                 $detail['user'],
                 $detail['date_delivery'],
                 $detail['spare_batteries'],
+                $detail['spare_covers'],
                 $detail['is_ok'] === null ? '' : ($detail['is_ok'] ? $yes : $no),
                 $detail['comment'],
                 count($detail['photos']),
@@ -501,6 +512,10 @@ class DeliveryReport
                 implode(', ', $item['checkin']['problems'] ?? []),
                 !empty($item['checkin']['known']) ? $yes : '',
                 $item['block']['ticket_id'] ?? '',
+                $receipt['returned_batteries'] ?? '',
+                $receipt['defective_batteries'] ?? '',
+                $receipt['returned_covers'] ?? '',
+                $receipt === null || $receipt['covers_ok'] === null ? '' : ($receipt['covers_ok'] ? $yes : $no),
             ], ';');
         }
         fclose($out);

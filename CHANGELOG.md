@@ -9,10 +9,11 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 Requer Atualizar em Configurar > Plugins.
 
 ### Adicionado
-- Entrega de rádios para embarcação: o gestor separa vários rádios e as baterias reserva,
-  fotografa, tira a selfie e entrega a uma embarcação cadastrada pelo TI.
+- Entrega de rádios para embarcação: o gestor separa vários rádios, as baterias reserva e as
+  capas, fotografa, tira a selfie e entrega a uma embarcação cadastrada pelo TI.
 - Recebimento de volta da embarcação no mesmo modelo, inclusive em partes, com fotos e selfie.
-- No recebimento, as baterias devolvidas ficam limitadas às que foram entregues.
+- No recebimento, as baterias e as capas devolvidas ficam limitadas às que foram entregues; o
+  gestor marca quantas baterias voltaram com defeito e se as capas estão em bom estado.
 - Rádio com problema na entrega ou no recebimento: problema novo bloqueia o rádio; problema já
   conhecido (laudo em aberto) segue sem bloqueio.
 - O que o gestor faz na entrega fica guardado no aparelho e é enviado em partes: a conexão pode

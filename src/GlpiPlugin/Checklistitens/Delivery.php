@@ -200,6 +200,14 @@ class Delivery extends CommonDBTM
                 'datatype'      => 'number',
                 'massiveaction' => false,
             ],
+            [
+                'id'            => '11',
+                'table'         => $table,
+                'field'         => 'spare_covers',
+                'name'          => __('Capas', 'checklistitens'),
+                'datatype'      => 'number',
+                'massiveaction' => false,
+            ],
         ];
     }
 
@@ -1383,6 +1391,10 @@ class Delivery extends CommonDBTM
         if ($batteries === null) {
             return self::fail(__('Informe as baterias reserva com um número de 0 a 99.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
+        $covers = self::readQuantity('spare_covers');
+        if ($covers === null) {
+            return self::fail(__('Informe as capas com um número de 0 a 99.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+        }
         $comment = self::readComment();
 
         $selfie = Selfie::storeFromRequest(Selfie::KIND_DELIVERY, $users_id);
@@ -1400,6 +1412,7 @@ class Delivery extends CommonDBTM
             // como texto: o update() do GLPI não enxerga a troca de vazio (NULL) para o número 0
             'is_ok'           => (string) $is_ok,
             'spare_batteries' => $batteries,
+            'spare_covers'    => $covers,
             'comment'         => $comment,
             'selfie'          => $selfie,
         ] + Location::toFields('', Location::fromRequest());

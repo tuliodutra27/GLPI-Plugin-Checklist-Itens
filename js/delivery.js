@@ -82,16 +82,36 @@
         return parseInt(value, 10) || 0;
     }
 
-    /** No recebimento, no máximo as baterias reserva da entrega que ainda não voltaram. */
-    function maxBatteries() {
-        if (!isDelivery && server && server.delivery && server.delivery.batteries_left !== undefined) {
-            return Math.min(99, Math.max(0, toInt(server.delivery.batteries_left)));
+    // Contadores do passo 3 (data-ci-counter); a ordem importa: as baterias com defeito dependem
+    // das devolvidas
+    var COUNTERS = ['batteries', 'defective', 'covers'];
+
+    function clamp99(value) {
+        return Math.min(99, Math.max(0, toInt(value)));
+    }
+
+    /**
+     * Limite de cada contador. No recebimento, baterias e capas vão no máximo até o que foi com a
+     * embarcação e ainda não voltou; as baterias com defeito, até as devolvidas agora.
+     */
+    function counterMax(name) {
+        var delivery = !isDelivery && server && server.delivery ? server.delivery : null;
+        var left;
+
+        if (name === 'defective') {
+            return draft ? draft.batteries : 0;
+        }
+        if (delivery) {
+            left = name === 'covers' ? delivery.covers_left : delivery.batteries_left;
+            if (left !== undefined) {
+                return clamp99(left);
+            }
         }
         return 99;
     }
 
-    function clampBatteries(value) {
-        return Math.min(maxBatteries(), Math.max(0, toInt(value)));
+    function clampCounter(name, value) {
+        return Math.min(counterMax(name), Math.max(0, toInt(value)));
     }
 
     function plural(count, singular, many) {
@@ -171,7 +191,10 @@
             deliveryId: 0,          // recebimento: entrega a que ele pertence
             vessel: 0,
             picked: [],             // rádios marcados e ainda não reservados
-            batteries: 0,
+            batteries: 0,           // baterias reserva (entrega) ou devolvidas (recebimento)
+            defective: 0,           // recebimento: das devolvidas, quantas com defeito
+            covers: 0,              // capas entregues ou devolvidas
+            coversOk: null,         // recebimento: as capas devolvidas estão em bom estado?
             isOk: null,
             comment: '',
             photos: [],             // {uuid, sent, url}
@@ -200,7 +223,11 @@
                 return id > 0;
             });
         }
-        base.batteries = clampBatteries(saved.batteries);
+        // os limites de verdade só são conhecidos com o estado do servidor (renderCounters)
+        base.batteries = clamp99(saved.batteries);
+        base.defective = clamp99(saved.defective);
+        base.covers = clamp99(saved.covers);
+        base.coversOk = saved.coversOk === 0 || saved.coversOk === 1 ? saved.coversOk : null;
         base.isOk = saved.isOk === 0 || saved.isOk === 1 ? saved.isOk : null;
         base.comment = typeof saved.comment === 'string' ? saved.comment : '';
         if (Array.isArray(saved.photos)) {
@@ -1835,6 +1862,9 @@
         } else if (!returnedItems().length) {
             list.push('marcar pelo menos um rádio que voltou');
         }
+        if (!isDelivery && draft.covers > 0 && draft.coversOk === null) {
+            list.push('responder se as capas estão em bom estado');
+        }
 
         if (draft.isOk === null) {
             list.push('responder "Itens ok?"');
@@ -1921,9 +1951,15 @@
                 if (isDelivery) {
                     fields.push(['delivery_id', draft.serverId]);
                     fields.push(['spare_batteries', draft.batteries]);
+                    fields.push(['spare_covers', draft.covers]);
                 } else {
                     fields.push(['receipt_id', draft.serverId]);
                     fields.push(['returned_batteries', draft.batteries]);
+                    fields.push(['defective_batteries', draft.defective]);
+                    fields.push(['returned_covers', draft.covers]);
+                    if (draft.covers > 0) {
+                        fields.push(['covers_ok', draft.coversOk]);
+                    }
                     returnedItems().forEach(function (item) {
                         var problem = draft.problems[item.usage_id];
                         fields.push(['usages[]', item.usage_id]);
@@ -2004,17 +2040,7 @@
         ui.cancel.hidden = !(draft.serverId || draft.photos.length);
         ui.cancel.disabled = false;
 
-        draft.batteries = clampBatteries(draft.batteries);
-        ui.batteries.max = String(maxBatteries());
-        ui.batteriesMinus.disabled = draft.batteries <= 0;
-        ui.batteriesPlus.disabled = draft.batteries >= maxBatteries();
-        if (document.activeElement !== ui.batteries) {
-            ui.batteries.value = String(draft.batteries);
-        }
-        if (ui.batteriesHint && !isDelivery && server && server.delivery && server.delivery.batteries_left !== undefined) {
-            ui.batteriesHint.textContent = 'Entregues com a embarcação: ' + toInt(server.delivery.spare_batteries)
-                + '. Ainda não voltaram: ' + maxBatteries() + '.';
-        }
+        renderCounters();
         ui.ok.forEach(function (input) {
             input.checked = draft.isOk !== null && input.value === String(draft.isOk);
             // com rádio com problema a resposta só pode ser Não
@@ -2072,12 +2098,62 @@
         return target && target.closest ? target.closest(selector) : null;
     }
 
-    function setBatteries(value) {
-        draft.batteries = clampBatteries(value);
-        ui.batteries.value = String(draft.batteries);
-        ui.batteriesMinus.disabled = draft.batteries <= 0;
-        ui.batteriesPlus.disabled = draft.batteries >= maxBatteries();
+    /** "Entregues com a embarcação: N. Ainda não voltaram: M." no recebimento. */
+    function counterHint(name) {
+        var delivery = !isDelivery && server && server.delivery ? server.delivery : null;
+
+        if (!delivery) {
+            return '';
+        }
+        if (name === 'batteries' && delivery.batteries_left !== undefined) {
+            return 'Entregues com a embarcação: ' + toInt(delivery.spare_batteries) + '. Ainda não voltaram: ' + counterMax('batteries') + '.';
+        }
+        if (name === 'covers' && delivery.covers_left !== undefined) {
+            return 'Entregues com a embarcação: ' + toInt(delivery.spare_covers) + '. Ainda não voltaram: ' + counterMax('covers') + '.';
+        }
+        if (name === 'defective') {
+            return 'Conte só as baterias devolvidas agora que estão com defeito.';
+        }
+        return '';
+    }
+
+    function renderCounters() {
+        COUNTERS.forEach(function (name) {
+            var box = ui.counters[name];
+            var max;
+            if (!box) {
+                return;
+            }
+            max = counterMax(name);
+            draft[name] = clampCounter(name, draft[name]);
+            box.input.max = String(max);
+            box.minus.disabled = draft[name] <= 0;
+            box.plus.disabled = draft[name] >= max;
+            if (document.activeElement !== box.input) {
+                box.input.value = String(draft[name]);
+            }
+            if (box.hint) {
+                box.hint.textContent = counterHint(name);
+            }
+        });
+
+        // "As capas estão em bom estado?" só quando alguma capa voltou
+        if (ui.coversOkBox) {
+            ui.coversOkBox.hidden = draft.covers <= 0;
+            if (draft.covers <= 0) {
+                draft.coversOk = null;
+            }
+            ui.coversOk.forEach(function (input) {
+                input.checked = draft.coversOk !== null && input.value === String(draft.coversOk);
+            });
+        }
+    }
+
+    function setCounter(name, value) {
+        draft[name] = clampCounter(name, value);
+        renderCounters();
         saveDraft();
+        renderFinish();
     }
 
     function bind() {
@@ -2191,26 +2267,42 @@
             render();
         });
 
-        ui.batteriesMinus.addEventListener('click', function () {
-            if (ready) {
-                setBatteries(draft.batteries - 1);
+        COUNTERS.forEach(function (name) {
+            var box = ui.counters[name];
+            if (!box) {
+                return;
             }
+            box.minus.addEventListener('click', function () {
+                if (ready) {
+                    setCounter(name, draft[name] - 1);
+                }
+            });
+            box.plus.addEventListener('click', function () {
+                if (ready) {
+                    setCounter(name, draft[name] + 1);
+                }
+            });
+            box.input.addEventListener('input', function () {
+                if (ready) {
+                    draft[name] = clampCounter(name, box.input.value);
+                    saveSoon();
+                }
+            });
+            box.input.addEventListener('change', function () {
+                if (ready) {
+                    setCounter(name, box.input.value);
+                }
+            });
         });
-        ui.batteriesPlus.addEventListener('click', function () {
-            if (ready) {
-                setBatteries(draft.batteries + 1);
-            }
-        });
-        ui.batteries.addEventListener('input', function () {
-            if (ready) {
-                draft.batteries = clampBatteries(ui.batteries.value);
-                saveSoon();
-            }
-        });
-        ui.batteries.addEventListener('change', function () {
-            if (ready) {
-                setBatteries(ui.batteries.value);
-            }
+        ui.coversOk.forEach(function (input) {
+            input.addEventListener('change', function () {
+                if (!ready || !input.checked) {
+                    return;
+                }
+                draft.coversOk = input.value === '1' ? 1 : 0;
+                saveDraft();
+                renderFinish();
+            });
         });
 
         ui.ok.forEach(function (input) {
@@ -2328,10 +2420,17 @@
         ui.problemBlockLabel = get('problem-block-label');
         ui.problemCancel = get('problem-cancel');
         ui.rest = get('rest');
-        ui.batteries = get('batteries');
-        ui.batteriesMinus = get('batteries-minus');
-        ui.batteriesPlus = get('batteries-plus');
-        ui.batteriesHint = get('batteries-hint');
+        ui.counters = {};
+        qsa('[data-ci-counter]', root).forEach(function (box) {
+            ui.counters[box.getAttribute('data-ci-counter')] = {
+                input: box.querySelector('[data-ci-counter-input]'),
+                minus: box.querySelector('[data-ci-counter-minus]'),
+                plus: box.querySelector('[data-ci-counter-plus]'),
+                hint: box.querySelector('[data-ci-counter-hint]')
+            };
+        });
+        ui.coversOkBox = get('covers-ok-box');
+        ui.coversOk = qsa('[data-ci-covers-ok]', root);
         ui.ok = qsa('[data-ci-ok]', root);
         ui.okHint = get('ok-hint');
         ui.comment = get('comment');

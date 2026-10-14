@@ -3,6 +3,20 @@
   A página traz só a estrutura; as listas (rádios, fotos) são desenhadas pelo js/delivery.js, que
   guarda tudo primeiro no aparelho e envia ao servidor em partes (js/offline.js).
 #}
+{# Contador de quantidade (baterias, capas): menos, número e mais #}
+{% macro counter(name, label) %}
+    <div class="mb-3" data-ci-counter="{{ name }}">
+        <div class="fw-bold mb-1">{{ label }}</div>
+        <div class="ci-stepper">
+            <button type="button" class="btn btn-outline-secondary btn-lg" data-ci-counter-minus aria-label="{{ __('Menos um', 'checklistitens') }}">−</button>
+            <input type="number" class="form-control form-control-lg text-center" min="0" max="99" step="1" value="0"
+                   inputmode="numeric" data-ci-counter-input aria-label="{{ label }}">
+            <button type="button" class="btn btn-outline-secondary btn-lg" data-ci-counter-plus aria-label="{{ __('Mais um', 'checklistitens') }}">+</button>
+        </div>
+        <div class="ci-small text-muted mt-1" data-ci-counter-hint></div>
+    </div>
+{% endmacro %}
+{% import _self as ci %}
 {% set is_delivery = mode == 'delivery' %}
 
 <div class="ci-page container-fluid" data-ci-delivery>
@@ -150,22 +164,38 @@
 
         {# Os passos seguintes só aparecem com rádios reservados (ou no recebimento) #}
         <div data-ci-rest hidden>
-            {# ------------------------------------------------------------ 3 BATERIAS #}
+            {# ------------------------------------------------------------ 3 BATERIAS E CAPAS #}
+            {# Cada contador: menos, número, mais; o limite e a dica (quanto foi e quanto falta voltar) vêm do JS #}
             <div class="card mb-3">
                 <div class="card-body">
                     <h3 class="ci-step-title">
                         <span class="ci-step-number">3</span>
-                        {{ is_delivery ? __('Baterias reserva', 'checklistitens') : __('Baterias devolvidas', 'checklistitens') }}
+                        {{ is_delivery ? __('Baterias e capas', 'checklistitens') : __('Baterias e capas devolvidas', 'checklistitens') }}
                     </h3>
-                    <div class="ci-stepper">
-                        <button type="button" class="btn btn-outline-secondary btn-lg" data-ci-batteries-minus aria-label="{{ __('Menos uma', 'checklistitens') }}">−</button>
-                        <input type="number" class="form-control form-control-lg text-center" name="batteries" min="0" max="99" step="1" value="0"
-                               inputmode="numeric" data-ci-batteries aria-label="{{ __('Quantidade de baterias', 'checklistitens') }}">
-                        <button type="button" class="btn btn-outline-secondary btn-lg" data-ci-batteries-plus aria-label="{{ __('Mais uma', 'checklistitens') }}">+</button>
-                    </div>
+                    {{ ci.counter('batteries', is_delivery ? __('Baterias reserva', 'checklistitens') : __('Baterias devolvidas', 'checklistitens')) }}
                     {% if not is_delivery %}
-                        {# Quantas foram entregues e quantas ainda faltam voltar (preenchido pelo JS) #}
-                        <div class="ci-small text-muted mt-1" data-ci-batteries-hint></div>
+                        {{ ci.counter('defective', __('Destas, quantas estão com defeito?', 'checklistitens')) }}
+                    {% endif %}
+                    {{ ci.counter('covers', is_delivery ? __('Capas', 'checklistitens') : __('Capas devolvidas', 'checklistitens')) }}
+                    {% if not is_delivery %}
+                        <div data-ci-covers-ok-box hidden>
+                            <p class="fw-bold mb-2">{{ __('As capas devolvidas estão todas em bom estado?', 'checklistitens') }}</p>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="ci-choice ci-choice-ok">
+                                        <input type="radio" name="covers_ok" value="1" class="ci-choice-input" data-ci-covers-ok>
+                                        <span class="ci-choice-box"><i class="ti ti-circle-check"></i> {{ __('SIM', 'checklistitens') }}</span>
+                                    </label>
+                                </div>
+                                <div class="col-6">
+                                    <label class="ci-choice ci-choice-nok">
+                                        <input type="radio" name="covers_ok" value="0" class="ci-choice-input" data-ci-covers-ok>
+                                        <span class="ci-choice-box"><i class="ti ti-alert-triangle"></i> {{ __('NÃO', 'checklistitens') }}</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="ci-small text-muted mt-1">{{ __('Se alguma estiver danificada, descreva nas observações.', 'checklistitens') }}</div>
+                        </div>
                     {% endif %}
                 </div>
             </div>

@@ -117,6 +117,16 @@ class Install
                 'plugin_checklistitens_deliveries_id'       => ['int unsigned NOT NULL DEFAULT 0', 'plugin_checklistitens_confirmations_id_checkin'],
                 'plugin_checklistitens_deliveryreceipts_id' => ['int unsigned NOT NULL DEFAULT 0', 'plugin_checklistitens_deliveries_id'],
             ],
+            // 0.11.0: capas entregues e devolvidas, estado das capas e baterias que voltaram com defeito
+            self::TABLE_DELIVERIES => [
+                'spare_covers' => ['int unsigned NOT NULL DEFAULT 0', 'spare_batteries'],
+            ],
+            self::TABLE_DELIVERYRECEIPTS => [
+                // todas depois de returned_batteries, na ordem inversa: a coluna de referência já existe
+                'covers_ok'           => ['tinyint NULL DEFAULT NULL', 'returned_batteries'],
+                'returned_covers'     => ['int unsigned NOT NULL DEFAULT 0', 'returned_batteries'],
+                'defective_batteries' => ['int unsigned NOT NULL DEFAULT 0', 'returned_batteries'],
+            ],
             // 0.11.0: identificador gerado no aparelho, para reenviar a mesma foto sem duplicar
             self::TABLE_DEFECTPHOTOS => [
                 'client_uuid' => ["varchar(36) NOT NULL DEFAULT ''", 'phase'],
@@ -563,6 +573,7 @@ class Install
                 `date_delivery` timestamp NULL DEFAULT NULL,
                 `is_ok` tinyint NULL DEFAULT NULL,
                 `spare_batteries` int unsigned NOT NULL DEFAULT 0,
+                `spare_covers` int unsigned NOT NULL DEFAULT 0,
                 `comment` text,
                 `selfie` varchar(255) NOT NULL DEFAULT '',
                 `latitude` decimal(10,7) NULL DEFAULT NULL,
@@ -598,6 +609,9 @@ class Install
                 `date_receipt` timestamp NULL DEFAULT NULL,
                 `is_ok` tinyint NULL DEFAULT NULL,
                 `returned_batteries` int unsigned NOT NULL DEFAULT 0,
+                `defective_batteries` int unsigned NOT NULL DEFAULT 0,
+                `returned_covers` int unsigned NOT NULL DEFAULT 0,
+                `covers_ok` tinyint NULL DEFAULT NULL,
                 `comment` text,
                 `selfie` varchar(255) NOT NULL DEFAULT '',
                 `latitude` decimal(10,7) NULL DEFAULT NULL,
