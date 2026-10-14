@@ -176,9 +176,10 @@ A entrega só aparece com o tipo **Rádio** habilitado.
 ### Desinstalar
 
 Em **Configurar > Plugins**, **Desativar** e depois **Desinstalar**. A desinstalação apaga as
-tabelas do plugin, as selfies, as fotos do defeito e as fotos das entregas e dos recebimentos
-guardadas pelo plugin, as ações automáticas e a notificação. As fotos já anexadas aos chamados
-continuam lá, como documentos do GLPI. A desinstalação **não apaga perfis**.
+tabelas do plugin, as selfies, as ações automáticas e a notificação. As **fotos do defeito** e as
+**fotos das entregas e dos recebimentos** não são apagadas: os arquivos continuam na pasta de
+arquivos do plugin no servidor (sem o vínculo com os registros, que ficavam nas tabelas). As fotos
+anexadas aos chamados continuam lá, como documentos do GLPI. A desinstalação **não apaga perfis**.
 
 ---
 
@@ -421,10 +422,10 @@ celular/tablet, que é necessário para a selfie, e no computador.
   **Mapa**, que abre a localização no **Apple Maps** ou no **Google Maps**.
 - **Devoluções não conferidas:** com a selfie, o mapa e os problemas, se houver.
 - **Liberados, aguardando devolução:** equipamentos já conferidos e ainda com o colaborador.
-- **Com embarcações:** as entregas do setor que ainda têm rádio com a embarcação, com a data, o
-  gestor e quantos rádios faltam voltar (ex.: "5 de 8 rádio(s) com a embarcação"). O bloco é só
-  informativo: toque numa entrega para abrir o detalhe. Veja a
-  [seção 7](#7-entrega-de-rádios-para-embarcação).
+- Os rádios entregues a embarcações **não aparecem** no painel: a entrega é feita pelo próprio
+  gestor e não passa pela conferência. Rádio que saiu da entrega por problema aparece nos itens
+  bloqueados, como os demais. As entregas abertas ficam em **Entregas para embarcação**
+  ([seção 7.5](#75-acompanhar-as-entregas)).
 
 Cada retirada e devolução mostra um selo com o resultado do checklist:
 - **Ok**;
@@ -604,7 +605,9 @@ vários recebimentos, até o último rádio voltar.
 3. **Rádios que voltaram.** Todos os rádios que estão com a embarcação já vêm marcados. **Desmarque
    os que não voltaram**: eles aparecem como "Continua com a embarcação." O contador mostra quantos
    estão marcados (ex.: "6 de 8").
-4. **Baterias devolvidas.** Informe a quantidade, de 0 a 99.
+4. **Baterias devolvidas.** Informe a quantidade. O máximo é o número de baterias reserva que foram
+   com a embarcação e ainda não voltaram (a tela mostra "Entregues com a embarcação: N. Ainda não
+   voltaram: M."). Num recebimento em partes, o que já voltou antes é descontado.
 5. **Itens ok?**
    - **SIM:** segue.
    - **NÃO:** toque em **Tem problema** no rádio, marque os problemas e tire de 1 a 5 fotos do
@@ -687,8 +690,6 @@ Toque numa entrega para abrir o **detalhe**:
 - para o TI, o botão **Cancelar separação**, enquanto a entrega estiver em separação.
 
 A entrega também aparece em outras telas:
-- **Conferência do setor:** bloco **Com embarcações**, com as entregas abertas do setor
-  ([seção 6.1](#61-ler-o-painel)).
 - **Equipamentos:** o rádio aparece como **"Em separação para embarcação"** ou **"Com a
   embarcação"**, com o nome da embarcação e a data.
 - **Registro de uso do rádio:** a entrega entra na linha do tempo, com o nome da embarcação e o
@@ -696,7 +697,7 @@ A entrega também aparece em outras telas:
   coluna "Embarcação".
 
 Se a opção "Destacar entrega aberta há mais de (dias)" estiver ligada, as entregas abertas há mais
-tempo ganham o selo "Aberta há N dia(s)" na conferência do setor e na escolha do recebimento. É só
+tempo ganham o selo "Aberta há N dia(s)" na escolha do recebimento. É só
 um destaque: nenhum aviso é enviado.
 
 ### 7.6 Sem conexão: o que fica guardado no aparelho

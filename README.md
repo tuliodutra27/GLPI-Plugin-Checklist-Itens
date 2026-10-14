@@ -135,8 +135,8 @@ Rádio habilitado.
 - As entregas não passam pela conferência do turno, não contam no limite por pessoa e não entram
   no alerta de não devolvido.
 - **Acompanhamento:** a lista "Entregas para embarcação" mostra o que foi entregue a cada
-  embarcação e o que já voltou, com fotos, observações, selfie com mapa e CSV. O painel do gestor
-  ganha o bloco "Com embarcações", e a entrega aparece no registro de uso de cada rádio.
+  embarcação e o que já voltou, com fotos, observações, selfie com mapa e CSV. A entrega não passa pela
+  conferência do setor e aparece no registro de uso de cada rádio.
 - **TI:** cadastra as embarcações, vê as entregas de todos os setores e ajusta os limites. Não há
   direito novo: faz a entrega e o recebimento quem tem "Conferir e abrir chamado".
 - As selfies da entrega e do recebimento entram na limpeza, como as outras. As fotos da entrega e
