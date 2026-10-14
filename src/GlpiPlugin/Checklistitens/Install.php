@@ -31,11 +31,16 @@ class Install
     public const TABLE_SELFIEPURGES  = 'glpi_plugin_checklistitens_selfiepurges';
     public const TABLE_USAGELAUDOS   = 'glpi_plugin_checklistitens_usagelaudos';
     public const TABLE_DEFECTPHOTOS  = 'glpi_plugin_checklistitens_defectphotos';
+    public const TABLE_VESSELS          = 'glpi_plugin_checklistitens_vessels';
+    public const TABLE_DELIVERIES       = 'glpi_plugin_checklistitens_deliveries';
+    public const TABLE_DELIVERYRECEIPTS = 'glpi_plugin_checklistitens_deliveryreceipts';
+    public const TABLE_DELIVERYPHOTOS   = 'glpi_plugin_checklistitens_deliveryphotos';
 
     public static function install(Migration $migration): void
     {
         self::createTables();
         self::migrateColumns($migration);
+        self::fixCheckinAnswers();
 
         // Os perfis padrão são criados antes da configuração (para o "Operador" entrar nos perfis
         // que abrem o plugin) e antes dos direitos (para recebê-los)
@@ -49,13 +54,15 @@ class Install
         ProblemType::installDefaults();
         Selfie::createBaseDir();
         DefectPhoto::createBaseDir();
+        DeliveryPhoto::createBaseDir();
         self::registerCronTasks();
         self::installDisplayPreferences();
         self::installNotifications();
     }
 
     /**
-     * Colunas padrão das listas (histórico de usos e catálogo), se ainda não houver nenhuma.
+     * Colunas padrão das listas (histórico de usos, catálogo e embarcações), se ainda não houver
+     * nenhuma.
      */
     private static function installDisplayPreferences(): void
     {
@@ -64,6 +71,8 @@ class Install
         $defaults = [
             Usage::class       => [2, 3, 4, 5, 6, 7, 9],
             ProblemType::class => [101, 102, 103, 104, 105],
+            // ativa, observação e última atualização (o nome já é a primeira coluna)
+            Vessel::class      => [101, 16, 19],
         ];
 
         foreach ($defaults as $itemtype => $nums) {
@@ -103,6 +112,14 @@ class Install
                 // 0.10.0: problema já conhecido (laudo em aberto), sem bloqueio
                 'checkout_known_issue'     => ['tinyint unsigned NOT NULL DEFAULT 0', 'checkout_is_ok'],
                 'checkin_known_issue'      => ['tinyint unsigned NOT NULL DEFAULT 0', 'checkin_is_ok'],
+                // 0.11.0: entrega de rádios para embarcação (0 = retirada comum) e o recebimento
+                // em que o rádio voltou (0 = ainda não voltou)
+                'plugin_checklistitens_deliveries_id'       => ['int unsigned NOT NULL DEFAULT 0', 'plugin_checklistitens_confirmations_id_checkin'],
+                'plugin_checklistitens_deliveryreceipts_id' => ['int unsigned NOT NULL DEFAULT 0', 'plugin_checklistitens_deliveries_id'],
+            ],
+            // 0.11.0: identificador gerado no aparelho, para reenviar a mesma foto sem duplicar
+            self::TABLE_DEFECTPHOTOS => [
+                'client_uuid' => ["varchar(36) NOT NULL DEFAULT ''", 'phase'],
             ],
             self::TABLE_CONFIRMATIONS => [
                 'latitude'        => ['decimal(10,7) NULL DEFAULT NULL', 'selfie'],
@@ -125,6 +142,37 @@ class Install
                 }
             }
         }
+
+        // Índices das colunas novas (addKey não repete um índice que já existe)
+        $keys = [
+            self::TABLE_USAGES       => ['plugin_checklistitens_deliveries_id', 'plugin_checklistitens_deliveryreceipts_id'],
+            self::TABLE_DEFECTPHOTOS => ['client_uuid'],
+        ];
+        foreach ($keys as $table => $fields) {
+            if (!$DB->tableExists($table)) {
+                continue;
+            }
+            foreach ($fields as $field) {
+                $migration->addKey($table, $field);
+            }
+        }
+    }
+
+    /**
+     * Devolução com problema gravada sem a resposta "Equipamento ok? Não": até a 0.10.0 o valor 0
+     * não chegava ao banco (o update() do GLPI trata coluna vazia e o número 0 como iguais), e a
+     * coluna ficava vazia. Toda devolução grava a resposta, então devolução sem ela foi um "Não".
+     */
+    private static function fixCheckinAnswers(): void
+    {
+        global $DB;
+
+        if ($DB->tableExists(self::TABLE_USAGES)) {
+            $DB->update(self::TABLE_USAGES, ['checkin_is_ok' => 0], [
+                'status'        => Usage::STATUS_RETURNED,
+                'checkin_is_ok' => null,
+            ]);
+        }
     }
 
     /**
@@ -141,6 +189,11 @@ class Install
             'mode'    => CronTask::MODE_EXTERNAL,
             'state'   => CronTask::STATE_WAITING,
             'comment' => __('Alerta os gestores do setor e o TI sobre equipamentos não devolvidos no fim do turno.', 'checklistitens'),
+        ]);
+        CronTask::register(Delivery::class, Delivery::CRON_NAME, HOUR_TIMESTAMP, [
+            'mode'    => CronTask::MODE_EXTERNAL,
+            'state'   => CronTask::STATE_WAITING,
+            'comment' => __('Cancela a separação de entrega para embarcação parada além do prazo e libera os rádios.', 'checklistitens'),
         ]);
     }
 
@@ -259,7 +312,7 @@ class Install
 
         // Vínculos de chamados com registros de uso que deixam de existir
         $DB->delete(Item_Ticket::getTable(), ['itemtype' => Usage::class]);
-        $DB->delete('glpi_displaypreferences', ['itemtype' => [Usage::class, ProblemType::class]]);
+        $DB->delete('glpi_displaypreferences', ['itemtype' => [Usage::class, ProblemType::class, Vessel::class]]);
         self::uninstallNotifications();
     }
 
@@ -277,6 +330,10 @@ class Install
             self::TABLE_SELFIEPURGES,
             self::TABLE_USAGELAUDOS,
             self::TABLE_DEFECTPHOTOS,
+            self::TABLE_VESSELS,
+            self::TABLE_DELIVERIES,
+            self::TABLE_DELIVERYRECEIPTS,
+            self::TABLE_DELIVERYPHOTOS,
         ];
     }
 
@@ -307,6 +364,8 @@ class Install
                 `checkin_known_issue` tinyint unsigned NOT NULL DEFAULT 0,
                 `checkin_selfie` varchar(255) NOT NULL DEFAULT '',
                 `plugin_checklistitens_confirmations_id_checkin` int unsigned NOT NULL DEFAULT 0,
+                `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
+                `plugin_checklistitens_deliveryreceipts_id` int unsigned NOT NULL DEFAULT 0,
                 `date_alert_not_returned` timestamp NULL DEFAULT NULL,
                 `checkout_latitude` decimal(10,7) NULL DEFAULT NULL,
                 `checkout_longitude` decimal(10,7) NULL DEFAULT NULL,
@@ -326,7 +385,9 @@ class Install
                 KEY `groups_shift` (`groups_id`, `checkout_shift_start`),
                 KEY `entities_id` (`entities_id`),
                 KEY `plugin_checklistitens_confirmations_id` (`plugin_checklistitens_confirmations_id`),
-                KEY `plugin_checklistitens_confirmations_id_checkin` (`plugin_checklistitens_confirmations_id_checkin`)
+                KEY `plugin_checklistitens_confirmations_id_checkin` (`plugin_checklistitens_confirmations_id_checkin`),
+                KEY `plugin_checklistitens_deliveries_id` (`plugin_checklistitens_deliveries_id`),
+                KEY `plugin_checklistitens_deliveryreceipts_id` (`plugin_checklistitens_deliveryreceipts_id`)
             ",
 
             // Conferência do gestor (selfie do gestor + o que foi conferido aponta para cá).
@@ -455,13 +516,118 @@ class Install
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `plugin_checklistitens_usages_id` int unsigned NOT NULL DEFAULT 0,
                 `phase` tinyint unsigned NOT NULL DEFAULT 1,
+                `client_uuid` varchar(36) NOT NULL DEFAULT '',
                 `filepath` varchar(255) NOT NULL DEFAULT '',
                 `size_bytes` int unsigned NOT NULL DEFAULT 0,
                 `documents_id` int unsigned NOT NULL DEFAULT 0,
                 `date_creation` timestamp NULL DEFAULT NULL,
                 PRIMARY KEY (`id`),
                 KEY `usage_phase` (`plugin_checklistitens_usages_id`, `phase`),
-                KEY `documents_id` (`documents_id`)
+                KEY `documents_id` (`documents_id`),
+                KEY `client_uuid` (`client_uuid`)
+            ",
+
+            // Embarcações que recebem rádios (cadastro do TI). Desativar em vez de apagar.
+            self::TABLE_VESSELS => "
+                `id` int unsigned NOT NULL AUTO_INCREMENT,
+                `name` varchar(255) DEFAULT NULL,
+                `is_active` tinyint NOT NULL DEFAULT 1,
+                `comment` text,
+                `entities_id` int unsigned NOT NULL DEFAULT 0,
+                `is_recursive` tinyint NOT NULL DEFAULT 1,
+                `date_creation` timestamp NULL DEFAULT NULL,
+                `date_mod` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `name` (`name`),
+                KEY `is_active` (`is_active`),
+                KEY `entities_id` (`entities_id`),
+                KEY `is_recursive` (`is_recursive`)
+            ",
+
+            // Entrega de vários rádios para uma embarcação, feita pelo gestor. Cada rádio é um uso
+            // (usages.plugin_checklistitens_deliveries_id). lock_draft vale 1 enquanto a entrega
+            // está em separação e NULL depois: uma separação aberta por gestor. client_uuid é o
+            // identificador gerado no aparelho, para reenviar sem duplicar.
+            self::TABLE_DELIVERIES => "
+                `id` int unsigned NOT NULL AUTO_INCREMENT,
+                `entities_id` int unsigned NOT NULL DEFAULT 0,
+                `groups_id` int unsigned NOT NULL DEFAULT 0,
+                `users_id` int unsigned NOT NULL DEFAULT 0,
+                `plugin_checklistitens_vessels_id` int unsigned NOT NULL DEFAULT 0,
+                `vessel_name` varchar(255) NOT NULL DEFAULT '',
+                `status` tinyint unsigned NOT NULL DEFAULT 1,
+                `lock_draft` tinyint unsigned NULL DEFAULT NULL,
+                `client_uuid` varchar(36) NOT NULL DEFAULT '',
+                `date_start` timestamp NULL DEFAULT NULL,
+                `shift_start` timestamp NULL DEFAULT NULL,
+                `date_delivery` timestamp NULL DEFAULT NULL,
+                `is_ok` tinyint NULL DEFAULT NULL,
+                `spare_batteries` int unsigned NOT NULL DEFAULT 0,
+                `comment` text,
+                `selfie` varchar(255) NOT NULL DEFAULT '',
+                `latitude` decimal(10,7) NULL DEFAULT NULL,
+                `longitude` decimal(10,7) NULL DEFAULT NULL,
+                `accuracy` int unsigned NULL DEFAULT NULL,
+                `location_status` tinyint unsigned NOT NULL DEFAULT 0,
+                `date_return` timestamp NULL DEFAULT NULL,
+                `date_creation` timestamp NULL DEFAULT NULL,
+                `date_mod` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `user_draft` (`users_id`, `lock_draft`),
+                KEY `status` (`status`),
+                KEY `plugin_checklistitens_vessels_id` (`plugin_checklistitens_vessels_id`),
+                KEY `groups_id` (`groups_id`),
+                KEY `entities_id` (`entities_id`),
+                KEY `client_uuid` (`client_uuid`),
+                KEY `date_delivery` (`date_delivery`)
+            ",
+
+            // Recebimento dos rádios de volta da embarcação. Uma entrega pode ter vários, porque a
+            // volta pode ser parcial. lock_draft: um recebimento em andamento por gestor.
+            self::TABLE_DELIVERYRECEIPTS => "
+                `id` int unsigned NOT NULL AUTO_INCREMENT,
+                `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
+                `entities_id` int unsigned NOT NULL DEFAULT 0,
+                `groups_id` int unsigned NOT NULL DEFAULT 0,
+                `users_id` int unsigned NOT NULL DEFAULT 0,
+                `status` tinyint unsigned NOT NULL DEFAULT 1,
+                `lock_draft` tinyint unsigned NULL DEFAULT NULL,
+                `client_uuid` varchar(36) NOT NULL DEFAULT '',
+                `date_start` timestamp NULL DEFAULT NULL,
+                `shift_start` timestamp NULL DEFAULT NULL,
+                `date_receipt` timestamp NULL DEFAULT NULL,
+                `is_ok` tinyint NULL DEFAULT NULL,
+                `returned_batteries` int unsigned NOT NULL DEFAULT 0,
+                `comment` text,
+                `selfie` varchar(255) NOT NULL DEFAULT '',
+                `latitude` decimal(10,7) NULL DEFAULT NULL,
+                `longitude` decimal(10,7) NULL DEFAULT NULL,
+                `accuracy` int unsigned NULL DEFAULT NULL,
+                `location_status` tinyint unsigned NOT NULL DEFAULT 0,
+                `date_creation` timestamp NULL DEFAULT NULL,
+                `date_mod` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `user_draft` (`users_id`, `lock_draft`),
+                KEY `plugin_checklistitens_deliveries_id` (`plugin_checklistitens_deliveries_id`),
+                KEY `status` (`status`),
+                KEY `entities_id` (`entities_id`),
+                KEY `client_uuid` (`client_uuid`)
+            ",
+
+            // Fotos da entrega (deliveryreceipts_id = 0) e de cada recebimento. Enviadas uma a uma
+            // pelo aparelho; o índice único evita duplicar a mesma foto num reenvio. Nunca são
+            // apagadas pelo plugin depois de a entrega ou o recebimento ser concluído.
+            self::TABLE_DELIVERYPHOTOS => "
+                `id` int unsigned NOT NULL AUTO_INCREMENT,
+                `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
+                `plugin_checklistitens_deliveryreceipts_id` int unsigned NOT NULL DEFAULT 0,
+                `client_uuid` varchar(36) NOT NULL DEFAULT '',
+                `filepath` varchar(255) NOT NULL DEFAULT '',
+                `size_bytes` int unsigned NOT NULL DEFAULT 0,
+                `date_creation` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `delivery_uuid` (`plugin_checklistitens_deliveries_id`, `client_uuid`),
+                KEY `plugin_checklistitens_deliveryreceipts_id` (`plugin_checklistitens_deliveryreceipts_id`)
             ",
         ];
 

@@ -62,6 +62,13 @@ class Config extends CommonGLPI
             'location_retention_days' => (string) self::DEFAULT_LOCATION_RETENTION_DAYS,
             'laudo_enabled'         => '1',
             'laudo_done_statuses'   => '',
+            // Entrega de rádios para embarcação
+            'delivery_max_items'    => '8',
+            'delivery_min_photos'   => '10',
+            'receipt_min_photos'    => '10',
+            'delivery_max_photos'   => '40',
+            'delivery_draft_hours'  => '12',
+            'delivery_alert_days'   => '0',
         ];
     }
 
@@ -208,6 +215,42 @@ class Config extends CommonGLPI
         return max(1, (int) self::getValue('location_retention_days'));
     }
 
+    /** Entrega para embarcação: quantos rádios o gestor separa de uma vez (padrão 8). */
+    public static function getDeliveryMaxItems(): int
+    {
+        return max(1, (int) self::getValue('delivery_max_items'));
+    }
+
+    /** Fotos exigidas para concluir a entrega (padrão 10; 0 = não exige). */
+    public static function getDeliveryMinPhotos(): int
+    {
+        return min(max(0, (int) self::getValue('delivery_min_photos')), self::getDeliveryMaxPhotos());
+    }
+
+    /** Fotos exigidas para concluir o recebimento de volta (padrão 10; 0 = não exige). */
+    public static function getReceiptMinPhotos(): int
+    {
+        return min(max(0, (int) self::getValue('receipt_min_photos')), self::getDeliveryMaxPhotos());
+    }
+
+    /** Teto de fotos por entrega ou por recebimento (padrão 40). */
+    public static function getDeliveryMaxPhotos(): int
+    {
+        return min(max(1, (int) self::getValue('delivery_max_photos')), 200);
+    }
+
+    /** Horas até uma separação (ou recebimento) parada ser cancelada sozinha (padrão 12). */
+    public static function getDeliveryDraftHours(): int
+    {
+        return max(1, (int) self::getValue('delivery_draft_hours'));
+    }
+
+    /** Dias até uma entrega aberta ganhar destaque no painel do gestor (0 = desligado). */
+    public static function getDeliveryAlertDays(): int
+    {
+        return max(0, (int) self::getValue('delivery_alert_days'));
+    }
+
     /**
      * Perfis que abrem a tela do plugin logo depois do login. Enquanto a opção nunca foi gravada
      * (plugin instalado antes dela existir), vale o perfil de nome "operador".
@@ -292,6 +335,12 @@ class Config extends CommonGLPI
             'location_retention_days' => (string) max(1, (int) ($input['location_retention_days'] ?? self::DEFAULT_LOCATION_RETENTION_DAYS)),
             'laudo_enabled'         => !empty($input['laudo_enabled']) ? '1' : '0',
             'laudo_done_statuses'   => implode(',', array_filter(array_map('intval', (array) ($input['laudo_done_statuses'] ?? [])))),
+            'delivery_max_items'    => (string) max(1, (int) ($input['delivery_max_items'] ?? 8)),
+            'delivery_min_photos'   => (string) max(0, (int) ($input['delivery_min_photos'] ?? 10)),
+            'receipt_min_photos'    => (string) max(0, (int) ($input['receipt_min_photos'] ?? 10)),
+            'delivery_max_photos'   => (string) min(max(1, (int) ($input['delivery_max_photos'] ?? 40)), 200),
+            'delivery_draft_hours'  => (string) max(1, (int) ($input['delivery_draft_hours'] ?? 12)),
+            'delivery_alert_days'   => (string) max(0, (int) ($input['delivery_alert_days'] ?? 0)),
         ]);
 
         Session::addMessageAfterRedirect(__('Configuração salva.', 'checklistitens'));
@@ -388,6 +437,28 @@ class Config extends CommonGLPI
                 'multiple' => true,
             ]);
             echo "<div class='text-muted'>" . __('Laudo em qualquer outra situação conta como em aberto.', 'checklistitens') . "</div>";
+            echo "</td></tr>";
+        }
+
+        echo "<tr><th colspan='2'>" . __('Entrega de rádios para embarcação', 'checklistitens') . "</th></tr>";
+
+        $rows = [
+            ['delivery_max_items', __('Máximo de rádios por entrega', 'checklistitens'), self::getDeliveryMaxItems(), 1, ''],
+            ['delivery_min_photos', __('Mínimo de fotos por entrega (0 = não exige)', 'checklistitens'), self::getDeliveryMinPhotos(), 0,
+                __('Sem esse número de fotos, o botão de concluir a entrega não libera.', 'checklistitens')],
+            ['receipt_min_photos', __('Mínimo de fotos por recebimento (0 = não exige)', 'checklistitens'), self::getReceiptMinPhotos(), 0, ''],
+            ['delivery_max_photos', __('Máximo de fotos por entrega ou recebimento', 'checklistitens'), self::getDeliveryMaxPhotos(), 1, ''],
+            ['delivery_draft_hours', __('Cancelar separação parada há mais de (horas)', 'checklistitens'), self::getDeliveryDraftHours(), 1,
+                __('Depois desse prazo, a separação não concluída é cancelada e os rádios são liberados.', 'checklistitens')],
+            ['delivery_alert_days', __('Destacar entrega aberta há mais de (dias, 0 = desligado)', 'checklistitens'), self::getDeliveryAlertDays(), 0,
+                __('Só um destaque no painel do gestor; não envia aviso.', 'checklistitens')],
+        ];
+        foreach ($rows as [$name, $label, $value, $min, $hint]) {
+            echo "<tr class='tab_bg_1'><td>" . $label . "</td><td>";
+            echo "<input type='number' min='" . $min . "' class='form-control' style='max-width:8rem' name='" . $name . "' value='" . (int) $value . "'>";
+            if ($hint !== '') {
+                echo "<div class='text-muted'>" . $hint . "</div>";
+            }
             echo "</td></tr>";
         }
 

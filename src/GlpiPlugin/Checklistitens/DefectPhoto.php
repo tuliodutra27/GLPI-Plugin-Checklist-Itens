@@ -125,53 +125,176 @@ class DefectPhoto extends CommonDBChild
      */
     public static function storeAll(int $usages_id, int $phase, array $images): int
     {
-        global $DB;
-
         $stored = 0;
         foreach (array_slice(array_values($images), 0, self::MAX_PHOTOS) as $data) {
             $type = is_string($data) ? self::imageType($data) : null;
             if ($type === null) {
                 continue;
             }
-
-            $relative = sprintf(
-                '%s/%s/%d_%d_%s.%s',
-                date('Y'),
-                date('m'),
-                $usages_id,
-                $phase,
-                bin2hex(random_bytes(8)),
-                $type === IMAGETYPE_PNG ? 'png' : 'jpg'
-            );
-            $path = self::getBaseDir() . '/' . $relative;
-
-            if (!is_dir(dirname($path)) && !@mkdir(dirname($path), 0770, true)) {
-                Toolbox::logError('checklistitens: não foi possível criar ' . dirname($path));
-                continue;
+            if (self::storeImage($usages_id, $phase, $data, $type)) {
+                $stored++;
             }
-            if (file_put_contents($path, $data) === false) {
-                Toolbox::logError('checklistitens: não foi possível gravar a foto de defeito ' . $path);
-                continue;
-            }
-
-            $ok = $DB->insert(self::getTable(), [
-                'plugin_checklistitens_usages_id' => $usages_id,
-                'phase'                           => $phase,
-                'filepath'                        => $relative,
-                'size_bytes'                      => strlen($data),
-                'documents_id'                    => 0,
-                'date_creation'                   => Shift::now(),
-            ]);
-            if (!$ok) {
-                // arquivo sem registro: ninguém chegaria até ele
-                @unlink($path);
-                Toolbox::logError(sprintf('checklistitens: não foi possível registrar a foto de defeito do uso %d', $usages_id));
-                continue;
-            }
-            $stored++;
         }
 
         return $stored;
+    }
+
+    /**
+     * Grava o arquivo e o registro de uma foto já validada.
+     *
+     * @param string $uuid identificador gerado no aparelho (vazio nas fotos enviadas no formulário
+     *                     da retirada comum, que não reenvia)
+     */
+    private static function storeImage(int $usages_id, int $phase, string $data, int $type, string $uuid = ''): bool
+    {
+        global $DB;
+
+        $relative = sprintf(
+            '%s/%s/%d_%d_%s.%s',
+            date('Y'),
+            date('m'),
+            $usages_id,
+            $phase,
+            bin2hex(random_bytes(8)),
+            $type === IMAGETYPE_PNG ? 'png' : 'jpg'
+        );
+        $path = self::getBaseDir() . '/' . $relative;
+
+        if (!is_dir(dirname($path)) && !@mkdir(dirname($path), 0770, true)) {
+            Toolbox::logError('checklistitens: não foi possível criar ' . dirname($path));
+            return false;
+        }
+        if (file_put_contents($path, $data) === false) {
+            Toolbox::logError('checklistitens: não foi possível gravar a foto de defeito ' . $path);
+            return false;
+        }
+
+        $fields = [
+            'plugin_checklistitens_usages_id' => $usages_id,
+            'phase'                           => $phase,
+            'filepath'                        => $relative,
+            'size_bytes'                      => strlen($data),
+            'documents_id'                    => 0,
+            'date_creation'                   => Shift::now(),
+        ];
+        // A coluna só entra quando há identificador: a retirada comum grava como sempre gravou
+        if ($uuid !== '') {
+            $fields['client_uuid'] = $uuid;
+        }
+
+        $ok = $DB->insert(self::getTable(), $fields);
+        if (!$ok) {
+            // arquivo sem registro: ninguém chegaria até ele
+            @unlink($path);
+            Toolbox::logError(sprintf('checklistitens: não foi possível registrar a foto de defeito do uso %d', $usages_id));
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Grava uma foto do defeito enviada sozinha em $_FILES['image'] (entrega para embarcação e
+     * recebimento de volta, em que o aparelho envia uma foto por vez). Reenviar a mesma foto, com o
+     * mesmo identificador, não grava outra. Quem chama já conferiu que o uso é do usuário.
+     *
+     * @return array{ok: bool, message: string, count: int, retry?: bool}
+     */
+    public static function storeUploaded(int $usages_id, int $phase, string $uuid): array
+    {
+        $fail = static fn (string $message, bool $retry = false): array => [
+            'ok'      => false,
+            'message' => $message,
+            'retry'   => $retry,
+            'count'   => self::countFor($usages_id, $phase),
+        ];
+
+        if (
+            $usages_id <= 0
+            || !in_array($phase, [Usage::PHASE_CHECKOUT, Usage::PHASE_CHECKIN], true)
+            || !DeliveryPhoto::isValidUuid($uuid)
+        ) {
+            return $fail(__('Foto sem identificação. Tire a foto de novo.', 'checklistitens'));
+        }
+
+        // Reenvio da mesma foto (a resposta anterior se perdeu no caminho): já está gravada
+        $already = countElementsInTable(self::getTable(), [
+            'plugin_checklistitens_usages_id' => $usages_id,
+            'phase'                           => $phase,
+            'client_uuid'                     => $uuid,
+        ]);
+        if ($already > 0) {
+            return ['ok' => true, 'message' => '', 'count' => self::countFor($usages_id, $phase)];
+        }
+
+        if (self::countFor($usages_id, $phase) >= self::MAX_PHOTOS) {
+            return $fail(sprintf(__('O limite é de %d fotos do defeito por equipamento.', 'checklistitens'), self::MAX_PHOTOS));
+        }
+
+        $image = DeliveryPhoto::readUploadedImage();
+        if (!$image['ok']) {
+            return $fail($image['message'], $image['retry']);
+        }
+
+        if (!self::storeImage($usages_id, $phase, $image['data'], $image['type'], $uuid)) {
+            return $fail(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'), true);
+        }
+
+        return ['ok' => true, 'message' => '', 'count' => self::countFor($usages_id, $phase)];
+    }
+
+    public static function countFor(int $usages_id, int $phase): int
+    {
+        if ($usages_id <= 0) {
+            return 0;
+        }
+
+        return countElementsInTable(self::getTable(), [
+            'plugin_checklistitens_usages_id' => $usages_id,
+            'phase'                           => $phase,
+        ]);
+    }
+
+    /**
+     * Apaga as fotos (linhas e arquivos) de um uso e fase que ainda não viraram documento de
+     * chamado. Só para rascunho descartado: fotos enviadas antes de o problema ser registrado, numa
+     * separação cancelada, num recebimento descartado ou num rádio cuja marcação foi desfeita.
+     * Foto de problema registrado continua sem ser apagada.
+     *
+     * @return int quantas foram apagadas
+     */
+    public static function deleteFor(int $usages_id, int $phase): int
+    {
+        global $DB;
+
+        if ($usages_id <= 0) {
+            return 0;
+        }
+
+        $rows = iterator_to_array($DB->request([
+            'SELECT' => ['id', 'filepath'],
+            'FROM'   => self::getTable(),
+            'WHERE'  => [
+                'plugin_checklistitens_usages_id' => $usages_id,
+                'phase'                           => $phase,
+                'documents_id'                    => 0,
+            ],
+        ]), false);
+
+        $deleted = 0;
+        foreach ($rows as $row) {
+            // Primeiro a linha: se o banco recusar, o arquivo continua no lugar
+            if (!$DB->delete(self::getTable(), ['id' => (int) $row['id']])) {
+                continue;
+            }
+            $path = self::getFullPath((string) $row['filepath']);
+            if ($path !== null && !@unlink($path)) {
+                Toolbox::logError('checklistitens: não foi possível apagar a foto de defeito ' . $path);
+            }
+            $deleted++;
+        }
+
+        return $deleted;
     }
 
     /**

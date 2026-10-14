@@ -20,6 +20,8 @@ class Selfie
     public const KIND_CHECKOUT     = 'checkout';
     public const KIND_CHECKIN      = 'checkin';
     public const KIND_CONFIRMATION = 'confirmation';
+    public const KIND_DELIVERY     = 'delivery';     // selfie do gestor na entrega para embarcação
+    public const KIND_RECEIPT      = 'receipt';      // selfie do gestor no recebimento de volta
 
     public static function getBaseDir(): string
     {
@@ -100,7 +102,7 @@ class Selfie
 
     public static function isValidPath(string $relative): bool
     {
-        return preg_match('#^\d{4}/\d{2}/(checkout|checkin|confirmation)_\d+_[0-9a-f]{16}\.(jpg|png)$#', $relative) === 1;
+        return preg_match('#^\d{4}/\d{2}/(checkout|checkin|confirmation|delivery|receipt)_\d+_[0-9a-f]{16}\.(jpg|png)$#', $relative) === 1;
     }
 
     public static function getFullPath(string $relative): ?string

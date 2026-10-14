@@ -24,6 +24,17 @@ switch ($kind) {
         $field = 'selfie';
         break;
 
+    // Selfie do gestor na entrega para embarcação e no recebimento de volta
+    case Selfie::KIND_DELIVERY:
+        $row   = $DB->request(['FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['id' => $id]])->current();
+        $field = 'selfie';
+        break;
+
+    case Selfie::KIND_RECEIPT:
+        $row   = $DB->request(['FROM' => Install::TABLE_DELIVERYRECEIPTS, 'WHERE' => ['id' => $id]])->current();
+        $field = 'selfie';
+        break;
+
     default:
         $row = null;
 }

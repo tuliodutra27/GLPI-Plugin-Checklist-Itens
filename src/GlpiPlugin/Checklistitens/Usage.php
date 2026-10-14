@@ -21,6 +21,11 @@ class Usage extends CommonDBTM
     public const STATUS_RETURNED = 3;
     public const STATUS_REFUSED  = 4; // retirada recusada: item com problema, bloqueado
 
+    // Entrega para embarcação (o uso pertence a uma entrega: plugin_checklistitens_deliveries_id)
+    public const STATUS_DELIVERY_DRAFT     = 5; // rádio reservado, entrega em separação
+    public const STATUS_ON_VESSEL          = 6; // entrega concluída: rádio com a embarcação
+    public const STATUS_DELIVERY_CANCELLED = 7; // separação cancelada ou expirada: não prende o item
+
     public const PHASE_CHECKOUT = 1;
     public const PHASE_CHECKIN  = 2;
 
@@ -262,6 +267,9 @@ class Usage extends CommonDBTM
             self::STATUS_RELEASED => __('Liberado para devolução', 'checklistitens'),
             self::STATUS_RETURNED => __('Devolvido', 'checklistitens'),
             self::STATUS_REFUSED  => __('Recusado com problema', 'checklistitens'),
+            self::STATUS_DELIVERY_DRAFT     => __('Em separação para embarcação', 'checklistitens'),
+            self::STATUS_ON_VESSEL          => __('Com a embarcação', 'checklistitens'),
+            self::STATUS_DELIVERY_CANCELLED => __('Separação cancelada', 'checklistitens'),
         ];
     }
 
@@ -274,26 +282,39 @@ class Usage extends CommonDBTM
                 return 'green';
             case self::STATUS_REFUSED:
                 return 'orange';
+            case self::STATUS_DELIVERY_DRAFT:
+                return 'yellow';
+            case self::STATUS_ON_VESSEL:
+                return 'azure';
         }
 
         return 'secondary';
     }
 
-    /** Usos abertos (retirados e ainda não devolvidos) do usuário. */
+    /**
+     * Usos abertos (retirados e ainda não devolvidos) do usuário. Os rádios que um gestor
+     * entregou a embarcações não entram: não estão com ele.
+     */
     public static function getOpenForUser(int $users_id): array
     {
         global $DB;
 
         return iterator_to_array($DB->request([
             'FROM'  => self::getTable(),
-            'WHERE' => ['users_id' => $users_id, 'lock_open' => 1],
+            'WHERE' => ['users_id' => $users_id, 'lock_open' => 1, 'plugin_checklistitens_deliveries_id' => 0],
             'ORDER' => 'date_checkout',
         ]), false);
     }
 
     public static function countOpenForUser(int $users_id, string $itemtype): int
     {
-        return countElementsInTable(self::getTable(), ['users_id' => $users_id, 'itemtype' => $itemtype, 'lock_open' => 1]);
+        return countElementsInTable(self::getTable(), [
+            'users_id'  => $users_id,
+            'itemtype'  => $itemtype,
+            'lock_open' => 1,
+            // entregas para embarcação não contam no limite por pessoa
+            'plugin_checklistitens_deliveries_id' => 0,
+        ]);
     }
 
     /**
@@ -532,7 +553,9 @@ class Usage extends CommonDBTM
             'lock_open'           => 'NULL',
             'date_checkin'        => $now,
             'checkin_shift_start' => Shift::startFor($now),
-            'checkin_is_ok'       => $is_ok,
+            // Em texto: a coluna começa vazia e o update() do GLPI trata vazio e o número 0 como
+            // iguais, então o "Não" (0) em número nunca chegava ao banco
+            'checkin_is_ok'       => (string) $is_ok,
             'checkin_known_issue' => $known ? 1 : 0,
             'checkin_selfie'      => $selfie,
         ] + Location::toFields('checkin_', Location::fromRequest()));
