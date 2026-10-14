@@ -190,10 +190,8 @@ Rádio habilitado.
 
 **Atualização:** substitua os arquivos da pasta. Se a versão nova mudar o banco, clique em
 **Atualizar** em **Configurar > Plugins**. Os registros, os direitos e a configuração existentes
-são mantidos.
-- A 0.10.0 muda o banco.
-- A 0.11.0 **exige o Atualizar**: ela cria as tabelas novas da entrega para embarcação
-  (embarcações, entregas, recebimentos e fotos).
+são mantidos. O [CHANGELOG](CHANGELOG.md) diz o que mudou em cada versão e quais exigem o
+**Atualizar**. O padrão de versões e de commits está em [docs/VERSIONAMENTO.md](docs/VERSIONAMENTO.md).
 
 Detalhes de cada passo, uso por perfil e solução de problemas estão no
 [guia de uso](docs/GUIA-DE-USO.md).
