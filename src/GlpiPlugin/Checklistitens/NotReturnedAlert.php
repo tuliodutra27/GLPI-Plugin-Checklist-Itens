@@ -43,6 +43,8 @@ class NotReturnedAlert extends CommonGLPI
                 'lock_open'               => 1,
                 'date_alert_not_returned' => null,
                 'checkout_shift_start'    => ['<', $current_shift],
+                // rádios entregues a embarcações ficam fora por mais de um turno: não entram no alerta
+                'plugin_checklistitens_deliveries_id' => 0,
             ],
             'ORDER' => ['groups_id', 'checkout_shift_start', 'date_checkout'],
         ]);

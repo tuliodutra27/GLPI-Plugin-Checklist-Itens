@@ -89,6 +89,7 @@ class Confirmation extends CommonDBTM
             'checkouts'     => [],
             'checkins'      => [],
             'released'      => [],
+            'vessels'       => [],
             'alerts'        => [],
             'pending_count' => 0,
             'tickets_to_open' => 0,
@@ -123,8 +124,19 @@ class Confirmation extends CommonDBTM
             $data['pending_count']++;
         }
 
-        // Devoluções ainda não conferidas
-        foreach ($DB->request(['FROM' => Usage::getTable(), 'WHERE' => ['groups_id' => $scope, 'status' => Usage::STATUS_RETURNED, 'plugin_checklistitens_confirmations_id_checkin' => 0], 'ORDER' => 'date_checkin']) as $row) {
+        // Devoluções ainda não conferidas. Rádio recebido de volta de uma embarcação não entra:
+        // quem recebe já é o gestor.
+        $iterator = $DB->request([
+            'FROM'  => Usage::getTable(),
+            'WHERE' => [
+                'groups_id' => $scope,
+                'status'    => Usage::STATUS_RETURNED,
+                'plugin_checklistitens_confirmations_id_checkin' => 0,
+                'plugin_checklistitens_deliveries_id'            => 0,
+            ],
+            'ORDER' => 'date_checkin',
+        ]);
+        foreach ($iterator as $row) {
             $data['checkins'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKIN);
             $data['pending_count']++;
         }
@@ -132,6 +144,11 @@ class Confirmation extends CommonDBTM
         // Liberados, aguardando devolução
         foreach ($DB->request(['FROM' => Usage::getTable(), 'WHERE' => ['groups_id' => $scope, 'status' => Usage::STATUS_RELEASED], 'ORDER' => 'date_checkout']) as $row) {
             $data['released'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKOUT);
+        }
+
+        // Entregas para embarcação ainda abertas (só informativo)
+        if (DeliveryReport::isFeatureAvailable()) {
+            $data['vessels'] = DeliveryReport::getOpenDeliveries($scope);
         }
 
         $data['alerts'] = self::getAlerts($groups_id, $scope, $current_shift, $data);

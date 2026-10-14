@@ -40,6 +40,19 @@ class TicketFactory
             ? sprintf(__('Devolução em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkin']), Shift::label($usage->fields['checkin_shift_start']))
             : sprintf(__('Retirada em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkout']), Shift::label($usage->fields['checkout_shift_start']));
 
+        // Problema visto numa entrega para embarcação (na separação ou no recebimento de volta)
+        $vessel      = '';
+        $delivery_id = (int) ($usage->fields['plugin_checklistitens_deliveries_id'] ?? 0);
+        if ($delivery_id > 0) {
+            global $DB;
+
+            $delivery = $DB->request(['SELECT' => 'vessel_name', 'FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['id' => $delivery_id]])->current();
+            $vessel   = $delivery ? Ui::text($delivery['vessel_name']) : '';
+            $when     = $phase === Usage::PHASE_CHECKIN
+                ? sprintf(__('Recebimento da embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkin']), Shift::label($usage->fields['checkin_shift_start']))
+                : sprintf(__('Separação para a embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkout']), Shift::label($usage->fields['checkout_shift_start']));
+        }
+
         $name = sprintf('[Checklist] %s — %s', $item, implode(', ', $names));
         if (mb_strlen($name) > 250) {
             $name = mb_substr($name, 0, 247) . '...';
@@ -49,6 +62,9 @@ class TicketFactory
         $html .= '<p><strong>' . htmlspecialchars(__('Setor', 'checklistitens')) . ':</strong> ' . htmlspecialchars(Sector::getName((int) $block->fields['groups_id'])) . '</p>';
         $html .= '<p><strong>' . htmlspecialchars(__('Colaborador', 'checklistitens')) . ':</strong> ' . htmlspecialchars(Ui::text(getUserName((int) $usage->fields['users_id']))) . '</p>';
         $html .= '<p><strong>' . htmlspecialchars(__('Quando', 'checklistitens')) . ':</strong> ' . htmlspecialchars($when) . '</p>';
+        if ($vessel !== '') {
+            $html .= '<p><strong>' . htmlspecialchars(__('Embarcação', 'checklistitens')) . ':</strong> ' . htmlspecialchars($vessel) . '</p>';
+        }
         $html .= '<p><strong>' . htmlspecialchars(__('Problemas marcados', 'checklistitens')) . ':</strong></p><ul>';
         foreach ($names as $problem) {
             $html .= '<li>' . htmlspecialchars($problem) . '</li>';

@@ -6,7 +6,17 @@
     </h2>
 
     {% for notice in notices|default([]) %}
-        <div class="alert alert-{{ notice.type }}">{{ notice.text }}</div>
+        <div class="alert alert-{{ notice.type }} d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <span>{{ notice.text }}</span>
+            {% if notice.url is defined and notice.url %}
+                <span class="d-flex flex-wrap gap-2">
+                    <a href="{{ notice.url }}" class="btn btn-{{ notice.type }}">{{ notice.action }}</a>
+                    {% if notice.url2 is defined and notice.url2 %}
+                        <a href="{{ notice.url2 }}" class="btn btn-outline-secondary">{{ notice.action2 }}</a>
+                    {% endif %}
+                </span>
+            {% endif %}
+        </div>
     {% endfor %}
 
     <div class="row g-3">

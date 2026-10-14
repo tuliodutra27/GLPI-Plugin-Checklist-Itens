@@ -57,6 +57,18 @@ class Menu extends CommonGLPI
                 'icon'  => Usage::getIcon(),
                 'links' => ['search' => Ui::path('front/usage.php')],
             ];
+
+            // Entrega de rádios para embarcação (só com o tipo Rádio habilitado)
+            if (DeliveryReport::isFeatureAvailable()) {
+                $menu['options']['delivery'] = [
+                    'title' => Delivery::getTypeName(2),
+                    'page'  => Ui::path('front/delivery.php'),
+                    'icon'  => Delivery::getIcon(),
+                    'links' => [
+                        'search' => Ui::path('front/delivery.php'),
+                    ] + (Delivery::canDeliver() ? ['add' => Ui::path('front/delivery.form.php')] : []),
+                ];
+            }
         }
 
         if (Profile::isAdmin()) {
@@ -73,6 +85,15 @@ class Menu extends CommonGLPI
                 'links' => [
                     'search' => ProblemType::getSearchURL(false),
                 ] + (Profile::canAdministrate() ? ['add' => ProblemType::getFormURL(false)] : []),
+            ];
+
+            $menu['options']['vessel'] = [
+                'title' => Vessel::getTypeName(2),
+                'page'  => Vessel::getSearchURL(false),
+                'icon'  => Vessel::getIcon(),
+                'links' => [
+                    'search' => Vessel::getSearchURL(false),
+                ] + (Profile::canAdministrate() ? ['add' => Vessel::getFormURL(false)] : []),
             ];
 
             $menu['options']['selfiepurge'] = [

@@ -117,8 +117,27 @@
                     <div class="list-group-item d-flex gap-3 align-items-center">
                         {{ ci.selfie(e.checkout.selfie) }}
                         <div class="flex-fill">
-                            <div class="fw-bold"><i class="ti ti-login"></i> {{ e.status == 4 ? __('Tentativa de retirada', 'checklistitens') : __('Retirada', 'checklistitens') }}</div>
-                            <div class="ci-small">{{ e.checkout.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkout.shift }}</div>
+                            {% if e.delivery %}
+                                {# Uso que faz parte de uma entrega para embarcação, feita pelo gestor #}
+                                <div class="fw-bold">
+                                    <i class="ti ti-ship"></i>
+                                    {% if e.status == 4 %}
+                                        {{ __('Saiu da entrega por problema', 'checklistitens') }}
+                                    {% elseif e.status == 5 %}
+                                        {{ __('Em separação para a embarcação', 'checklistitens') }}
+                                    {% else %}
+                                        {{ __('Entrega para a embarcação', 'checklistitens') }}
+                                    {% endif %}
+                                    {{ e.delivery.vessel }}
+                                </div>
+                                <div class="ci-small">
+                                    {{ e.checkout.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkout.shift }}
+                                    · <a href="{{ e.delivery.url }}">{{ __('Ver a entrega', 'checklistitens') }}</a>
+                                </div>
+                            {% else %}
+                                <div class="fw-bold"><i class="ti ti-login"></i> {{ e.status == 4 ? __('Tentativa de retirada', 'checklistitens') : __('Retirada', 'checklistitens') }}</div>
+                                <div class="ci-small">{{ e.checkout.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkout.shift }}</div>
+                            {% endif %}
                             {{ ci.result(e.checkout) }}
                             <div class="mt-1">{{ location.map(e.checkout.location) }}</div>
                         </div>
@@ -139,7 +158,7 @@
                         <div class="list-group-item d-flex gap-3 align-items-center">
                             {{ ci.selfie(e.checkin.selfie) }}
                             <div class="flex-fill">
-                                <div class="fw-bold"><i class="ti ti-logout"></i> {{ __('Devolução', 'checklistitens') }}</div>
+                                <div class="fw-bold"><i class="ti ti-logout"></i> {{ e.delivery ? __('Recebimento da embarcação', 'checklistitens') : __('Devolução', 'checklistitens') }}</div>
                                 <div class="ci-small">{{ e.checkin.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkin.shift }}{% if e.duration %} · {{ __('duração', 'checklistitens') }} {{ e.duration }}{% endif %}</div>
                                 {{ ci.result(e.checkin) }}
                                 <div class="mt-1">{{ location.map(e.checkin.location) }}</div>

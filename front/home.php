@@ -2,6 +2,9 @@
 
 use GlpiPlugin\Checklistitens\Config;
 use GlpiPlugin\Checklistitens\Confirmation;
+use GlpiPlugin\Checklistitens\Delivery;
+use GlpiPlugin\Checklistitens\DeliveryReceipt;
+use GlpiPlugin\Checklistitens\DeliveryReport;
 use GlpiPlugin\Checklistitens\EquipmentRecord;
 use GlpiPlugin\Checklistitens\ItemBlock;
 use GlpiPlugin\Checklistitens\ProblemType;
@@ -10,6 +13,7 @@ use GlpiPlugin\Checklistitens\Sector;
 use GlpiPlugin\Checklistitens\SelfiePurge;
 use GlpiPlugin\Checklistitens\Ui;
 use GlpiPlugin\Checklistitens\Usage;
+use GlpiPlugin\Checklistitens\Vessel;
 
 include('../../../inc/includes.php');
 
@@ -54,7 +58,13 @@ if (Profile::isManager() || Profile::isAdmin()) {
     $scope   = Sector::forCurrentUser();
     if (count($scope)) {
         $pending = countElementsInTable(Usage::getTable(), ['groups_id' => $scope, 'status' => Usage::STATUS_IN_USE])
-            + countElementsInTable(Usage::getTable(), ['groups_id' => $scope, 'status' => Usage::STATUS_RETURNED, 'plugin_checklistitens_confirmations_id_checkin' => 0])
+            + countElementsInTable(Usage::getTable(), [
+                'groups_id' => $scope,
+                'status'    => Usage::STATUS_RETURNED,
+                'plugin_checklistitens_confirmations_id_checkin' => 0,
+                // rádio recebido de volta da embarcação não passa pela conferência do turno
+                'plugin_checklistitens_deliveries_id' => 0,
+            ])
             + countElementsInTable(ItemBlock::getTable(), ['groups_id' => $scope, 'plugin_checklistitens_confirmations_id' => 0]);
     }
     $cards[] = [
@@ -66,6 +76,68 @@ if (Profile::isManager() || Profile::isAdmin()) {
         'badge'       => $pending ? sprintf(_n('%d pendente', '%d pendentes', $pending, 'checklistitens'), $pending) : '',
         'badge_color' => 'orange',
     ];
+
+    // Entrega de rádios para embarcação (só com o tipo Rádio habilitado)
+    if (DeliveryReport::isFeatureAvailable()) {
+        $users_id = (int) Session::getLoginUserID();
+        if (Delivery::canDeliver()) {
+            $draft = Delivery::getDraftFor($users_id);
+            if ($draft !== null) {
+                $notices[] = [
+                    'type'    => 'warning',
+                    'text'    => sprintf(
+                        __('Você tem uma entrega em separação para %1$s, iniciada em %2$s.', 'checklistitens'),
+                        Ui::text($draft['vessel_name']),
+                        Ui::datetime($draft['date_start'])
+                    ),
+                    'action'  => __('Continuar', 'checklistitens'),
+                    'url'     => Ui::url('front/delivery.form.php'),
+                    // o cancelamento passa pela tela da entrega, que também limpa o que está no aparelho
+                    'action2' => __('Cancelar separação', 'checklistitens'),
+                    'url2'    => Ui::url('front/delivery.form.php?cancel=1'),
+                ];
+            }
+            $receipt = DeliveryReceipt::getDraftFor($users_id);
+            if ($receipt !== null) {
+                $notices[] = [
+                    'type'    => 'warning',
+                    'text'    => __('Você tem um recebimento de embarcação em andamento.', 'checklistitens'),
+                    'action'  => __('Continuar', 'checklistitens'),
+                    'url'     => Ui::url('front/delivery.form.php?receive=1'),
+                    'action2' => __('Cancelar recebimento', 'checklistitens'),
+                    'url2'    => Ui::url('front/delivery.form.php?receive=1&cancel=1'),
+                ];
+            }
+
+            $on_vessel = DeliveryReport::countOpenDeliveries();
+            $cards[] = [
+                'title'       => __('Entrega para embarcação', 'checklistitens'),
+                'description' => __('Separar vários rádios e as baterias, fotografar e entregar a uma embarcação.', 'checklistitens'),
+                'url'         => Ui::url('front/delivery.form.php'),
+                'icon'        => Delivery::getIcon(),
+                'color'       => 'primary',
+                'badge'       => $draft !== null ? __('em separação', 'checklistitens') : '',
+                'badge_color' => 'yellow',
+            ];
+            $cards[] = [
+                'title'       => __('Receber da embarcação', 'checklistitens'),
+                'description' => __('Receber de volta os rádios entregues, com fotos e selfie.', 'checklistitens'),
+                'url'         => Ui::url('front/delivery.form.php?receive=1'),
+                'icon'        => 'ti ti-arrow-back-up',
+                'color'       => 'green',
+                'badge'       => $on_vessel ? sprintf(_n('%d entrega aberta', '%d entregas abertas', $on_vessel, 'checklistitens'), $on_vessel) : '',
+                'badge_color' => 'azure',
+            ];
+        }
+        $cards[] = [
+            'title'       => Delivery::getTypeName(2),
+            'description' => __('O que foi entregue a cada embarcação, o que já voltou, fotos e observações.', 'checklistitens'),
+            'url'         => Ui::url('front/delivery.php'),
+            'icon'        => 'ti ti-list-details',
+            'color'       => 'azure',
+        ];
+    }
+
     $cards[] = [
         'title'       => __('Equipamentos', 'checklistitens'),
         'description' => __('Situação atual e registro de uso completo de cada rádio, celular ou tablet.', 'checklistitens'),
@@ -131,6 +203,15 @@ if (Profile::isAdmin()) {
         'icon'        => ProblemType::getIcon(),
         'color'       => 'secondary',
     ];
+    if (DeliveryReport::isFeatureAvailable()) {
+        $cards[] = [
+            'title'       => Vessel::getTypeName(2),
+            'description' => __('Embarcações que recebem rádios. É a lista que o gestor vê na entrega.', 'checklistitens'),
+            'url'         => Vessel::getSearchURL(),
+            'icon'        => Vessel::getIcon(),
+            'color'       => 'secondary',
+        ];
+    }
     $cards[] = [
         'title'       => Config::getTypeName(),
         'description' => __('Tipos, estados, limites, turnos, categorias e retenção de selfies.', 'checklistitens'),
