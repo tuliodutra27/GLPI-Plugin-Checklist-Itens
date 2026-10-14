@@ -4,7 +4,9 @@ Plugin para o [GLPI](https://glpi-project.org/) 10.0.x que controla a **retirada
 equipamentos compartilhados do setor** (rádios comunicadores, celulares e tablets), com checklist
 sem digitação, fotos do defeito, selfie com localização, conferência do gestor por turno e bloqueio
 automático de equipamento com problema. Com o plugin Laudo (opcional), o problema que já está num
-laudo técnico em aberto é avisado e não bloqueia o equipamento de novo.
+laudo técnico em aberto é avisado e não bloqueia o equipamento de novo. O gestor também faz a
+**entrega de vários rádios a uma embarcação** e o recebimento de volta, numa tela que guarda o
+trabalho no aparelho quando a conexão falha.
 
 📖 **Passo a passo completo (instalação, configuração e uso por perfil):
 [docs/GUIA-DE-USO.md](docs/GUIA-DE-USO.md)**
@@ -69,8 +71,9 @@ O ativo (rádio, celular ou tablet) **não muda de usuário**: tudo fica nos reg
 
 ### Selfie e localização
 
-- Em cada selfie (retirada, devolução e conferência), o navegador registra **uma vez** a
-  localização do aparelho, com a precisão em metros. Não há rastreamento contínuo.
+- Em cada selfie (retirada, devolução, conferência, entrega para embarcação e recebimento), o
+  navegador registra **uma vez** a localização do aparelho, com a precisão em metros. Não há
+  rastreamento contínuo.
 - Nos registros, o botão **Mapa** abre a coordenada no **Apple Maps** ou no **Google Maps**.
 - A localização é obrigatória, mas não impede o salvamento. Sem ela, o registro guarda o motivo
   (permissão negada, sem sinal, endereço sem HTTPS…), e o gestor vê o alerta.
@@ -104,17 +107,54 @@ Opcional. Com o plugin Laudo (laudos técnicos) ativo e a integração ligada na
   fotos, sem bloqueio e sem chamado. Se disser que é outro problema, vale a regra normal, e o
   chamado lista os laudos em aberto do item.
 
+### Entrega de rádios para embarcação
+
+Na retirada comum, cada colaborador pega um rádio para si. Na entrega para embarcação, o **gestor
+do setor** separa **vários rádios de uma vez** e entrega a uma embarcação. Só aparece com o tipo
+Rádio habilitado.
+
+- **Entrega:** embarcação → rádios → "Reservar rádios" → baterias reserva → "Itens ok?" →
+  observações → fotos → selfie → "Concluir entrega" (logoff).
+  - Só entram rádios do setor do gestor que estão disponíveis. Depois de reservados, ninguém mais
+    consegue retirá-los, e eles ficam "Com a embarcação" até voltarem.
+  - Os limites são configuráveis. Padrão: até 8 rádios por entrega e pelo menos 10 fotos.
+  - "Não" em "Itens ok?": o gestor indica o rádio, marca os problemas e tira as fotos do defeito.
+    Com problema novo, o rádio **sai da entrega e fica bloqueado**. Com laudo em aberto, ele pode
+    escolher "Vai assim, é o problema do laudo", sem bloqueio.
+- **Receber da embarcação:** a mesma tela em passos. O gestor escolhe a entrega, marca os rádios
+  que voltaram, informa as baterias devolvidas, responde "Itens ok?", fotografa, tira a selfie e
+  toca em "Concluir recebimento".
+  - O recebimento pode ser **parcial**: os rádios que não voltaram continuam com a embarcação.
+  - Rádio que volta com problema novo fica bloqueado até o chamado ser solucionado.
+- **Guardar no aparelho:** o que o gestor faz fica guardado no navegador do aparelho e é enviado
+  ao servidor em partes, uma foto por vez. Se a conexão cair, ele continua trabalhando e o envio
+  volta sozinho. **Começar (reservar os rádios) e concluir precisam de conexão**, e a tela não
+  abre sem conexão.
+- A separação parada além do prazo configurado (padrão: 12 horas) é cancelada sozinha, e os rádios
+  são liberados.
+- As entregas não passam pela conferência do turno, não contam no limite por pessoa e não entram
+  no alerta de não devolvido.
+- **Acompanhamento:** a lista "Entregas para embarcação" mostra o que foi entregue a cada
+  embarcação e o que já voltou, com fotos, observações, selfie com mapa e CSV. O painel do gestor
+  ganha o bloco "Com embarcações", e a entrega aparece no registro de uso de cada rádio.
+- **TI:** cadastra as embarcações, vê as entregas de todos os setores e ajusta os limites. Não há
+  direito novo: faz a entrega e o recebimento quem tem "Conferir e abrir chamado".
+- As selfies da entrega e do recebimento entram na limpeza, como as outras. As fotos da entrega e
+  do recebimento concluídos não entram na limpeza, como as fotos do defeito.
+
 ## Requisitos
 
 - GLPI 10.0.x
 - PHP 8.0+, aceitando envios de alguns MB: a selfie com até 5 fotos do defeito chega a cerca de
   4 MB. Ajuste `post_max_size` e `upload_max_filesize` com folga.
 - Plugin [Radios](https://github.com/tuliodutra27/GLPI-Plugin-Radios): opcional. Ele habilita o
-  tipo Rádio; o tipo Celular ou tablet usa o ativo nativo Telefone do GLPI.
+  tipo Rádio; o tipo Celular ou tablet usa o ativo nativo Telefone do GLPI. A entrega de rádios
+  para embarcação só aparece com o tipo Rádio habilitado na configuração.
 - Plugin Laudo (laudos técnicos): opcional. Ele habilita o aviso de problema já conhecido.
-- Ações automáticas do GLPI rodando por cron, para o alerta de não devolvido e a liberação dos
-  bloqueios.
-- HTTPS, recomendado para a câmera frontal e a localização.
+- Ações automáticas do GLPI rodando por cron, para o alerta de não devolvido, a liberação dos
+  bloqueios e o cancelamento das separações de entrega paradas.
+- HTTPS, recomendado para a câmera frontal na página e a localização, também na entrega para
+  embarcação.
 
 ## Instalação
 
@@ -141,13 +181,19 @@ Opcional. Com o plugin Laudo (laudos técnicos) ativo e a integração ligada na
    - as categorias de chamado;
    - os perfis que abrem o plugin depois do login;
    - as retenções;
-   - a integração com o plugin Laudo e as situações do laudo consideradas concluídas.
+   - a integração com o plugin Laudo e as situações do laudo consideradas concluídas;
+   - os limites da entrega de rádios para embarcação.
 7. Coloque colaboradores e gestores nos **grupos** dos seus setores e confira se os equipamentos
    têm o grupo preenchido.
+8. Para usar a entrega para embarcação, mantenha o tipo **Rádio** habilitado e cadastre as
+   embarcações em **Ativos > Checklist uso de equipamentos > Embarcações**.
 
 **Atualização:** substitua os arquivos da pasta. Se a versão nova mudar o banco, clique em
-**Atualizar** em **Configurar > Plugins** (a 0.10.0 muda o banco). Os registros, os direitos e a
-configuração existentes são mantidos.
+**Atualizar** em **Configurar > Plugins**. Os registros, os direitos e a configuração existentes
+são mantidos.
+- A 0.10.0 muda o banco.
+- A 0.11.0 **exige o Atualizar**: ela cria as tabelas novas da entrega para embarcação
+  (embarcações, entregas, recebimentos e fotos).
 
 Detalhes de cada passo, uso por perfil e solução de problemas estão no
 [guia de uso](docs/GUIA-DE-USO.md).
@@ -156,12 +202,30 @@ Detalhes de cada passo, uso por perfil e solução de problemas estão no
 
 ```
 front/        telas (colaborador, gestor, equipamentos, TI) e controladores
+ajax/         envio em partes da entrega para embarcação
 src/          classes (GlpiPlugin\Checklistitens\...)
 templates/    telas em Twig
 css/, js/     estilo e comportamento das telas (sem dependências)
 docs/         guia de uso
 setup.php     registro do plugin e hooks
 hook.php      instalação, desinstalação e hooks
+```
+
+Arquivos da entrega de rádios para embarcação:
+
+```
+ajax/delivery.php          recebe a entrega e o recebimento em partes
+js/offline.js              dados guardados no aparelho e fila de envio
+js/delivery.js             tela da entrega e do recebimento
+front/delivery.php         lista, detalhe e CSV das entregas
+front/delivery.form.php    entrega e recebimento
+front/deliveryphoto.php    fotos da entrega e do recebimento
+front/vessel.php           lista de embarcações
+front/vessel.form.php      cadastro de embarcação
+src/                       classes Delivery (entrega), DeliveryReceipt (recebimento),
+                           DeliveryPhoto (fotos), DeliveryReport (lista, detalhe e CSV)
+                           e Vessel (embarcações)
+templates/                 delivery_*.html.twig (telas da entrega e do recebimento)
 ```
 
 ## Licença
