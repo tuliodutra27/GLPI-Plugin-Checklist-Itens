@@ -266,8 +266,8 @@ só sai versão nova.
 - [x] No `release.yml`, acrescentar `--prerelease` ao `gh release create` quando a tag tiver hífen
       (`-rc.N`). O trecho que confere tag × `setup.php` já aceita o hífen.
 - [ ] Opcional: fazer o workflow exigir que o `CHANGELOG.md` tenha a seção da versão.
-- [ ] Decidir a 0.11.0, que já está no código e ainda não tem tag: sai como `0.11.0-rc.1` para
-      teste ou direto como `0.11.0`.
+- [x] Decidir a 0.11.0, que já está no código e ainda não tem tag: sai como `0.11.0-rc.1` para
+      teste ou direto como `0.11.0`. (Decidido: `0.11.0-rc.1`, porque muda o banco.)
 
 ### A verificar antes do primeiro rc
 
