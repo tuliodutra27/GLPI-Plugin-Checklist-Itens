@@ -519,8 +519,9 @@ do envio (ex.: "Conectado · tudo enviado"). Os passos aparecem numerados, na or
      consegue retirar esses rádios.
    - Depois de reservar, dá para **acrescentar outros rádios** (até o limite) e tirar um rádio da
      entrega com o botão **Tirar**. O rádio tirado volta a ficar disponível.
-3. **Baterias reserva.** Informe a quantidade, de 0 a 99, digitando ou com os botões **−** e
-   **+**. As baterias não são controladas uma a uma.
+3. **Baterias e capas.** Informe quantas **baterias reserva** e quantas **capas** vão com os rádios,
+   de 0 a 99, digitando ou com os botões **−** e **+**. Baterias e capas não são controladas uma a
+   uma, só a quantidade.
 4. **Itens ok?**
    - **SIM:** segue.
    - **NÃO:** veja a [seção 7.2](#72-rádio-com-problema-na-entrega).
@@ -605,9 +606,15 @@ vários recebimentos, até o último rádio voltar.
 3. **Rádios que voltaram.** Todos os rádios que estão com a embarcação já vêm marcados. **Desmarque
    os que não voltaram**: eles aparecem como "Continua com a embarcação." O contador mostra quantos
    estão marcados (ex.: "6 de 8").
-4. **Baterias devolvidas.** Informe a quantidade. O máximo é o número de baterias reserva que foram
-   com a embarcação e ainda não voltaram (a tela mostra "Entregues com a embarcação: N. Ainda não
-   voltaram: M."). Num recebimento em partes, o que já voltou antes é descontado.
+4. **Baterias e capas devolvidas.**
+   - **Baterias devolvidas:** o máximo é o número de baterias reserva que foram com a embarcação e
+     ainda não voltaram (a tela mostra "Entregues com a embarcação: N. Ainda não voltaram: M.").
+     Num recebimento em partes, o que já voltou antes é descontado.
+   - **Destas, quantas estão com defeito?** Marque quantas das baterias devolvidas agora voltaram
+     com defeito (no máximo as devolvidas). O detalhe da entrega e o CSV mostram esse número.
+   - **Capas devolvidas:** mesma regra das baterias.
+   - Quando volta alguma capa, responda **As capas devolvidas estão todas em bom estado?** (SIM ou
+     NÃO). Se alguma estiver danificada, descreva nas observações.
 5. **Itens ok?**
    - **SIM:** segue.
    - **NÃO:** toque em **Tem problema** no rádio, marque os problemas e tire de 1 a 5 fotos do
@@ -678,12 +685,13 @@ entregas com rádios do seu setor e as que ele mesmo fez. O TI vê todas.
 Toque numa entrega para abrir o **detalhe**:
 - a selfie do gestor, a data, o turno e o botão **Mapa** da localização;
 - os totais: rádios entregues, com a embarcação, devolvidos, que saíram por problema, baterias
-  reserva e a resposta de "Itens ok?";
+  reserva, capas e a resposta de "Itens ok?";
 - as **observações**;
 - os **rádios**, cada um com a situação, os problemas, as fotos do defeito, a data em que foi
   recebido, o bloqueio e o chamado, se houver. O nome do rádio abre o registro de uso dele;
 - as **fotos da entrega**. Toque numa foto para abrir no tamanho original;
-- um quadro para cada **recebimento**: quem recebeu, as baterias devolvidas, "Itens ok?", o mapa,
+- um quadro para cada **recebimento**: quem recebeu, as baterias e as capas devolvidas, as baterias
+  com defeito e o estado das capas (em destaque quando há problema), "Itens ok?", o mapa,
   as observações e as fotos;
 - o botão **CSV**, que exporta a entrega com uma linha por rádio;
 - o botão **Receber da embarcação**, enquanto houver rádio com a embarcação;
