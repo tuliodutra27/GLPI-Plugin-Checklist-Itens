@@ -89,7 +89,6 @@ class Confirmation extends CommonDBTM
             'checkouts'     => [],
             'checkins'      => [],
             'released'      => [],
-            'vessels'       => [],
             'alerts'        => [],
             'pending_count' => 0,
             'tickets_to_open' => 0,
@@ -144,11 +143,6 @@ class Confirmation extends CommonDBTM
         // Liberados, aguardando devolução
         foreach ($DB->request(['FROM' => Usage::getTable(), 'WHERE' => ['groups_id' => $scope, 'status' => Usage::STATUS_RELEASED], 'ORDER' => 'date_checkout']) as $row) {
             $data['released'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKOUT);
-        }
-
-        // Entregas para embarcação ainda abertas (só informativo)
-        if (DeliveryReport::isFeatureAvailable()) {
-            $data['vessels'] = DeliveryReport::getOpenDeliveries($scope);
         }
 
         $data['alerts'] = self::getAlerts($groups_id, $scope, $current_shift, $data);
