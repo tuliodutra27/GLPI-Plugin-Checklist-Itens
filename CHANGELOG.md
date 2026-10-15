@@ -6,6 +6,8 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.11.0-rc.2] - 2026-10-15
+
 Requer Atualizar em Configurar > Plugins.
 
 ### Adicionado
@@ -62,6 +64,7 @@ As versões até a 0.9.0 (retirada e devolução com checklist, selfie com local
 gestor por turno, bloqueio do item com problema e registro de uso) não foram publicadas como
 release.
 
-[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0-rc.1...HEAD
+[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0-rc.2...HEAD
+[0.11.0-rc.2]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0-rc.1...v0.11.0-rc.2
 [0.11.0-rc.1]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.10.0...v0.11.0-rc.1
 [0.10.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/releases/tag/v0.10.0
