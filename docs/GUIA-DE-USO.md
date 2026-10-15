@@ -866,6 +866,10 @@ O que cabe ao TI na entrega de rádios para embarcação:
 - acompanhar as entregas de **todos os setores** em **Entregas para embarcação**, com o detalhe e o
   CSV de cada uma ([seção 7.5](#75-acompanhar-as-entregas));
 - cancelar, no detalhe da entrega, uma separação abandonada que esteja prendendo rádios;
+- atender os **chamados das baterias e capas com defeito**, abertos sozinhos na conclusão do
+  recebimento (embarcação, cada peça, os problemas e as fotos anexadas). Se um não abrir, o
+  detalhe da entrega tem o botão **Abrir chamado**;
+- manter o catálogo dos tipos **Bateria** e **Capa** em **Problemas do checklist**;
 - conferir se a ação automática `expiredeliveries` está rodando
   ([seção 8.4](#84-ações-automáticas-e-notificação)).
 
@@ -1039,6 +1043,8 @@ Só na entrega para embarcação e no recebimento
 | A separação sumiu, ou apareceu "Esta separação não existe mais no servidor" | A separação ficou parada além do prazo configurado (padrão: 12 horas) e foi cancelada sozinha, ou foi cancelada | Os rádios foram liberados. As fotos continuam no aparelho: reservar os rádios de novo para continuar, ou cancelar para descartar. |
 | "Este navegador não está guardando os dados (aba anônima?)" | Aba anônima, ou navegador que bloqueia os dados de sites | Usar uma janela normal. Nessa situação, se a página fechar, o que ainda não foi enviado se perde. |
 | A separação parada não é cancelada depois do prazo | A ação automática `expiredeliveries` não está rodando (cron do GLPI parado) | Conferir o cron, ou executar a ação manualmente ([seção 8.4](#84-ações-automáticas-e-notificação)). O gestor que começou a separação também pode cancelar. |
+| No recebimento, a resposta "Rádios ok?" não deixa marcar SIM | Algum rádio já está marcado com problema | Tocar em **Desfazer** no rádio, na lista abaixo da pergunta, se a marcação foi engano |
+| Bateria ou capa com defeito, mas o chamado não apareceu | A abertura automática falhou (categoria, entidade ou direito do GLPI) | No detalhe da entrega, tocar em **Abrir chamado** no recebimento. Se continuar, ver o log do GLPI |
 
 Para diagnóstico técnico, os erros do GLPI ficam em `files/_log/php-errors.log` e
 `files/_log/sql-errors.log`.

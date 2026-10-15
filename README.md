@@ -206,7 +206,7 @@ ajax/         envio em partes da entrega para embarcação
 src/          classes (GlpiPlugin\Checklistitens\...)
 templates/    telas em Twig
 css/, js/     estilo e comportamento das telas (sem dependências)
-docs/         guia de uso
+docs/         guia de uso e padrão de versões (VERSIONAMENTO.md)
 setup.php     registro do plugin e hooks
 hook.php      instalação, desinstalação e hooks
 ```
@@ -223,8 +223,9 @@ front/deliveryphoto.php    fotos da entrega e do recebimento
 front/vessel.php           lista de embarcações
 front/vessel.form.php      cadastro de embarcação
 src/                       classes Delivery (entrega), DeliveryReceipt (recebimento),
-                           DeliveryPhoto (fotos), DeliveryReport (lista, detalhe e CSV)
-                           e Vessel (embarcações)
+                           DeliveryPhoto (fotos), AccessoryDefect (baterias e capas com
+                           defeito), DeliveryReport (lista, detalhe e CSV) e Vessel
+                           (embarcações)
 templates/                 delivery_*.html.twig (telas da entrega e do recebimento)
 ```
 
