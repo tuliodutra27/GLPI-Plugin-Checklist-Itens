@@ -567,8 +567,9 @@ Depois de concluída, a entrega fica **"Entregue"** e os rádios ficam **"Com a 
 ### 7.2 Rádio com problema na entrega
 
 1. Em **Rádios ok?**, toque em **NÃO**. A tela pede para indicar o rádio com problema.
-2. Na lista dos rádios reservados (passo 2 da tela), toque em **Tem problema** no rádio.
-3. No quadro **Problema no rádio**, marque os problemas encontrados e tire de **1 a 5 fotos do
+2. Logo abaixo da pergunta aparecem os rádios da entrega, um a um. Toque em **Tem problema** no
+   rádio com problema.
+3. O quadro **Problema no rádio** abre logo abaixo desse rádio. Nele, marque os problemas encontrados e tire de **1 a 5 fotos do
    defeito**, como na retirada do colaborador ([seção 5.4](#54-fotos-do-defeito)). Essas fotos não
    contam para o mínimo de fotos da entrega.
 4. Escolha o que fazer. Os botões só liberam com pelo menos 1 problema marcado e 1 foto.
@@ -632,8 +633,9 @@ vários recebimentos, até o último rádio voltar.
    continuam controladas só pela quantidade, não uma a uma.
 6. **Rádios ok?** (a pergunta é só sobre os rádios; baterias e capas têm as perguntas acima)
    - **SIM:** segue.
-   - **NÃO:** toque em **Tem problema** no rádio, marque os problemas e tire de 1 a 5 fotos do
-     defeito. Depois escolha:
+   - **NÃO:** logo abaixo da pergunta aparecem os rádios que voltaram, um a um. Toque em **Tem
+     problema** no rádio; o quadro abre logo abaixo dele. Marque os problemas e tire de 1 a 5 fotos
+     do defeito. Depois escolha:
 
      | Rádio | Opção | O que acontece |
      |---|---|---|
