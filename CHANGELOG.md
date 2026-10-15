@@ -6,6 +6,17 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+Requer Atualizar em Configurar > Plugins.
+
+### Adicionado
+- Recebimento da embarcação: baterias e capas ganham pergunta própria ("estão todas boas?"). Com
+  "Não", cada peça com defeito tem um bloco em destaque com os problemas do catálogo e de 1 a 5
+  fotos, e ao concluir o plugin abre um chamado para o TI com tudo isso.
+- Catálogo de problemas de bateria e de capa, editável pelo TI.
+
+### Alterado
+- "Itens ok?" passa a se chamar "Rádios ok?": a pergunta é só sobre os rádios.
+
 ## [0.11.0-rc.1] - 2026-10-14
 
 Requer Atualizar em Configurar > Plugins.

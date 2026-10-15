@@ -12,7 +12,7 @@ use Toolbox;
 
 /**
  * Entrega de rádios para embarcação, feita pelo gestor: ele separa vários rádios de uma vez,
- * fotografa, responde "Itens ok?", tira a selfie e conclui. Cada rádio da entrega é um uso
+ * fotografa, responde "Rádios ok?", tira a selfie e conclui. Cada rádio da entrega é um uso
  * (usages.plugin_checklistitens_deliveries_id), para a disponibilidade e o registro do equipamento
  * continuarem valendo sem regra nova.
  *
@@ -188,7 +188,7 @@ class Delivery extends CommonDBTM
                 'id'            => '9',
                 'table'         => $table,
                 'field'         => 'is_ok',
-                'name'          => __('Itens ok', 'checklistitens'),
+                'name'          => __('Rádios ok', 'checklistitens'),
                 'datatype'      => 'bool',
                 'massiveaction' => false,
             ],
@@ -1365,7 +1365,7 @@ class Delivery extends CommonDBTM
 
         $is_ok = self::readYesNo('is_ok');
         if ($is_ok === null) {
-            return self::fail(__('Responda se os itens estão ok.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+            return self::fail(__('Responda se os rádios estão ok.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
         $has_problem = count(self::getUsages($id, Usage::STATUS_REFUSED)) > 0;
         foreach ($usages as $usage) {

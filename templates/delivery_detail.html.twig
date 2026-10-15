@@ -95,7 +95,7 @@
                 <div class="col-6 col-md"><div class="fs-3 fw-bold">{{ spare_covers }}</div><div class="ci-small text-muted">{{ __('Capas', 'checklistitens') }}</div></div>
                 <div class="col-6 col-md">
                     <div class="fs-3 fw-bold">{{ is_ok is null ? '—' : (is_ok ? __('Sim', 'checklistitens') : __('Não', 'checklistitens')) }}</div>
-                    <div class="ci-small text-muted">{{ __('Itens ok?', 'checklistitens') }}</div>
+                    <div class="ci-small text-muted">{{ __('Rádios ok?', 'checklistitens') }}</div>
                 </div>
             </div>
         </div>
@@ -177,21 +177,45 @@
                         <div class="ci-small">
                             {{ __('Baterias devolvidas', 'checklistitens') }}: {{ r.returned_batteries }}
                             · {{ __('Capas devolvidas', 'checklistitens') }}: {{ r.returned_covers }}
-                            · {{ __('Itens ok?', 'checklistitens') }} {{ r.is_ok is null ? '—' : (r.is_ok ? __('Sim', 'checklistitens') : __('Não', 'checklistitens')) }}
+                            · {{ __('Rádios ok?', 'checklistitens') }} {{ r.is_ok is null ? '—' : (r.is_ok ? __('Sim', 'checklistitens') : __('Não', 'checklistitens')) }}
                         </div>
-                        {% if r.defective_batteries > 0 or r.covers_ok is same as(false) %}
-                            <div class="mt-1 d-flex flex-wrap gap-1">
-                                {% if r.defective_batteries > 0 %}
-                                    <span class="badge bg-orange-lt"><i class="ti ti-battery-off"></i> {{ __('%d bateria(s) com defeito', 'checklistitens')|format(r.defective_batteries) }}</span>
-                                {% endif %}
-                                {% if r.covers_ok is same as(false) %}
-                                    <span class="badge bg-orange-lt"><i class="ti ti-alert-triangle"></i> {{ __('Capas com dano', 'checklistitens') }}</span>
-                                {% endif %}
-                            </div>
-                        {% endif %}
                         <div class="mt-1">{{ geo.map(r.location) }}</div>
                     </div>
                 </div>
+                {% if r.defects|length %}
+                    {# Baterias e capas que voltaram com defeito: uma a uma, com os problemas e as fotos #}
+                    <div class="ci-acc-summary mt-3">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <div class="fw-bold">
+                                <i class="ti ti-battery-off"></i>
+                                {% if r.defective_batteries > 0 %}{{ __('%d bateria(s) com defeito', 'checklistitens')|format(r.defective_batteries) }}{% endif %}
+                                {% if r.defective_batteries > 0 and r.damaged_covers > 0 %} · {% endif %}
+                                {% if r.damaged_covers > 0 %}{{ __('%d capa(s) com dano', 'checklistitens')|format(r.damaged_covers) }}{% endif %}
+                            </div>
+                            {% if r.tickets_id %}
+                                <a href="{{ r.ticket_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+                                    <i class="ti ti-ticket"></i> {{ __('Chamado', 'checklistitens') }} #{{ r.tickets_id }}
+                                </a>
+                            {% elseif r.can_open_ticket %}
+                                <form method="post" action="{{ list_url }}">
+                                    <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" name="open_receipt_ticket" value="{{ r.id }}" class="btn btn-sm btn-warning">
+                                        <i class="ti ti-ticket"></i> {{ __('Abrir chamado', 'checklistitens') }}
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                        {% for d in r.defects %}
+                            <div class="ci-acc-summary-item">
+                                <strong>{{ d.label }}</strong>
+                                <ul class="ci-problem-tags mb-1">{% for p in d.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+                                {{ ci.photos(d.photos, d.label) }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% elseif r.covers_ok is same as(false) %}
+                    <div class="mt-2"><span class="badge bg-orange-lt"><i class="ti ti-alert-triangle"></i> {{ __('Capas com dano', 'checklistitens') }}</span></div>
+                {% endif %}
                 {% if r.comment %}<div class="ci-prewrap mt-2">{{ r.comment }}</div>{% endif %}
                 {% if r.photos|length %}
                     <div class="ci-photo-grid mt-2">

@@ -164,46 +164,64 @@
 
         {# Os passos seguintes só aparecem com rádios reservados (ou no recebimento) #}
         <div data-ci-rest hidden>
-            {# ------------------------------------------------------------ 3 BATERIAS E CAPAS #}
             {# Cada contador: menos, número, mais; o limite e a dica (quanto foi e quanto falta voltar) vêm do JS #}
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h3 class="ci-step-title">
-                        <span class="ci-step-number">3</span>
-                        {{ is_delivery ? __('Baterias e capas', 'checklistitens') : __('Baterias e capas devolvidas', 'checklistitens') }}
-                    </h3>
-                    {{ ci.counter('batteries', is_delivery ? __('Baterias reserva', 'checklistitens') : __('Baterias devolvidas', 'checklistitens')) }}
-                    {% if not is_delivery %}
-                        {{ ci.counter('defective', __('Destas, quantas estão com defeito?', 'checklistitens')) }}
-                    {% endif %}
-                    {{ ci.counter('covers', is_delivery ? __('Capas', 'checklistitens') : __('Capas devolvidas', 'checklistitens')) }}
-                    {% if not is_delivery %}
-                        <div data-ci-covers-ok-box hidden>
-                            <p class="fw-bold mb-2">{{ __('As capas devolvidas estão todas em bom estado?', 'checklistitens') }}</p>
-                            <div class="row g-2">
-                                <div class="col-6">
-                                    <label class="ci-choice ci-choice-ok">
-                                        <input type="radio" name="covers_ok" value="1" class="ci-choice-input" data-ci-covers-ok>
-                                        <span class="ci-choice-box"><i class="ti ti-circle-check"></i> {{ __('SIM', 'checklistitens') }}</span>
-                                    </label>
-                                </div>
-                                <div class="col-6">
-                                    <label class="ci-choice ci-choice-nok">
-                                        <input type="radio" name="covers_ok" value="0" class="ci-choice-input" data-ci-covers-ok>
-                                        <span class="ci-choice-box"><i class="ti ti-alert-triangle"></i> {{ __('NÃO', 'checklistitens') }}</span>
-                                    </label>
+            {% if is_delivery %}
+                {# ------------------------------------------------------------ 3 BATERIAS E CAPAS #}
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h3 class="ci-step-title"><span class="ci-step-number">3</span> {{ __('Baterias e capas', 'checklistitens') }}</h3>
+                        {{ ci.counter('batteries', __('Baterias reserva', 'checklistitens')) }}
+                        {{ ci.counter('covers', __('Capas', 'checklistitens')) }}
+                    </div>
+                </div>
+            {% else %}
+                {# ------------------------------------------------------------ 3 BATERIAS / 4 CAPAS #}
+                {# Com "NÃO", um bloco destacado por peça com defeito: problemas do catálogo e fotos (JS) #}
+                {% for acc in [
+                    {kind: 'battery', step: 3, icon: 'ti-battery', title: __('Baterias devolvidas', 'checklistitens'), count: 'batteries', bad: 'defective',
+                     count_label: __('Quantas baterias voltaram?', 'checklistitens'),
+                     question: __('As baterias devolvidas estão todas boas?', 'checklistitens'),
+                     bad_label: __('Quantas estão com defeito?', 'checklistitens')},
+                    {kind: 'cover', step: 4, icon: 'ti-shield', title: __('Capas devolvidas', 'checklistitens'), count: 'covers', bad: 'damaged',
+                     count_label: __('Quantas capas voltaram?', 'checklistitens'),
+                     question: __('As capas devolvidas estão todas em bom estado?', 'checklistitens'),
+                     bad_label: __('Quantas estão com dano?', 'checklistitens')}
+                ] %}
+                    <div class="card mb-3 ci-acc-card" data-ci-acc-card="{{ acc.kind }}">
+                        <div class="card-body">
+                            <h3 class="ci-step-title"><span class="ci-step-number">{{ acc.step }}</span> <i class="ti {{ acc.icon }}"></i> {{ acc.title }}</h3>
+                            {{ ci.counter(acc.count, acc.count_label) }}
+                            <div data-ci-acc-question="{{ acc.kind }}" hidden>
+                                <p class="fw-bold mb-2">{{ acc.question }}</p>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="ci-choice ci-choice-ok">
+                                            <input type="radio" name="{{ acc.kind }}_ok" value="1" class="ci-choice-input" data-ci-acc-ok="{{ acc.kind }}">
+                                            <span class="ci-choice-box"><i class="ti ti-circle-check"></i> {{ __('SIM', 'checklistitens') }}</span>
+                                        </label>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="ci-choice ci-choice-nok">
+                                            <input type="radio" name="{{ acc.kind }}_ok" value="0" class="ci-choice-input" data-ci-acc-ok="{{ acc.kind }}">
+                                            <span class="ci-choice-box"><i class="ti ti-alert-triangle"></i> {{ __('NÃO', 'checklistitens') }}</span>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="ci-small text-muted mt-1">{{ __('Se alguma estiver danificada, descreva nas observações.', 'checklistitens') }}</div>
+                            <div class="ci-acc-bad mt-3" data-ci-acc-bad="{{ acc.kind }}" hidden>
+                                {{ ci.counter(acc.bad, acc.bad_label) }}
+                                <div class="ci-acc-list" data-ci-acc-list="{{ acc.kind }}"></div>
+                            </div>
                         </div>
-                    {% endif %}
-                </div>
-            </div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+            {% set s = is_delivery ? 0 : 1 %}
 
-            {# ------------------------------------------------------------ 4 ITENS OK? #}
+            {# ------------------------------------------------------------ RÁDIOS OK? #}
             <div class="card mb-3">
                 <div class="card-body">
-                    <h3 class="ci-step-title"><span class="ci-step-number">4</span> {{ __('Itens ok?', 'checklistitens') }}</h3>
+                    <h3 class="ci-step-title"><span class="ci-step-number">{{ 4 + s }}</span> {{ __('Rádios ok?', 'checklistitens') }}</h3>
                     <div class="row g-2">
                         <div class="col-6">
                             <label class="ci-choice ci-choice-ok">
@@ -228,7 +246,7 @@
             {# ------------------------------------------------------------ 5 OBSERVAÇÕES #}
             <div class="card mb-3">
                 <div class="card-body">
-                    <h3 class="ci-step-title"><span class="ci-step-number">5</span> {{ __('Observações', 'checklistitens') }}</h3>
+                    <h3 class="ci-step-title"><span class="ci-step-number">{{ 5 + s }}</span> {{ __('Observações', 'checklistitens') }}</h3>
                     <textarea class="form-control" name="comment" rows="3" maxlength="1000" data-ci-comment
                               placeholder="{{ __('Opcional. Escreva o que for importante registrar.', 'checklistitens') }}"></textarea>
                 </div>
@@ -238,7 +256,7 @@
             <div class="card mb-3">
                 <div class="card-body">
                     <h3 class="ci-step-title">
-                        <span class="ci-step-number">6</span> {{ __('Fotos', 'checklistitens') }}
+                        <span class="ci-step-number">{{ 6 + s }}</span> {{ __('Fotos', 'checklistitens') }}
                         <span class="badge ms-1" data-ci-photos-count></span>
                     </h3>
                     <p class="text-muted ci-small mb-2">
@@ -273,7 +291,7 @@
             {# ------------------------------------------------------------ 7 SELFIE #}
             <div class="card mb-3">
                 <div class="card-body">
-                    <h3 class="ci-step-title"><span class="ci-step-number">7</span> {{ __('Selfie', 'checklistitens') }}</h3>
+                    <h3 class="ci-step-title"><span class="ci-step-number">{{ 7 + s }}</span> {{ __('Selfie', 'checklistitens') }}</h3>
                     {% include '@checklistitens/parts/selfie_input.html.twig' with {'label': __('Tirar minha selfie', 'checklistitens')} %}
                 </div>
             </div>

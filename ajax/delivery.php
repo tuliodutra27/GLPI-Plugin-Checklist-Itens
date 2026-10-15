@@ -171,7 +171,9 @@ try {
                     break;
                 }
                 if ($action === 'photo') {
-                    $result = DeliveryPhoto::storeUploaded($target['deliveries_id'], $target['receipts_id'], $text('uuid'));
+                    // "ref": foto de bateria ou capa com defeito, só no recebimento
+                    $ref    = $target['receipts_id'] > 0 ? $text('ref') : '';
+                    $result = DeliveryPhoto::storeUploaded($target['deliveries_id'], $target['receipts_id'], $text('uuid'), $ref);
                     break;
                 }
                 // Foto que já não existe conta como apagada (pedido reenviado)
@@ -244,7 +246,7 @@ try {
                 break;
 
             case 'receipt_finish':
-                $result = DeliveryReceipt::finish($int('receipt_id'), $list('usages'), $list('problems'), $list('known'));
+                $result = DeliveryReceipt::finish($int('receipt_id'), $list('usages'), $list('problems'), $list('known'), $list('acc'));
                 break;
 
             case 'receipt_cancel':

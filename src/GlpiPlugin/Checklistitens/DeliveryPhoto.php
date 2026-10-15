@@ -75,6 +75,64 @@ class DeliveryPhoto extends CommonDBTM
         return preg_match(self::UUID_PATTERN, $uuid) === 1;
     }
 
+    /** Peça da foto: vazio (foto geral) ou "battery:N" / "cover:N" (N de 1 a 99). */
+    public static function isValidRef(string $ref): bool
+    {
+        return $ref === '' || preg_match('/^(battery|cover):[1-9][0-9]?$/', $ref) === 1;
+    }
+
+    /**
+     * Fotos das peças com defeito de um recebimento, por peça.
+     *
+     * @return array<string, array<int, array{id: int, uuid: string, url: string}>> "battery:1" => fotos
+     */
+    public static function getDefectPhotos(int $deliveries_id, int $receipts_id): array
+    {
+        global $DB;
+
+        $list = [];
+        $iterator = $DB->request([
+            'SELECT' => ['id', 'client_uuid', 'defect_ref'],
+            'FROM'   => self::getTable(),
+            'WHERE'  => [
+                'plugin_checklistitens_deliveries_id'       => $deliveries_id,
+                'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
+                'NOT'                                       => ['defect_ref' => ''],
+            ],
+            'ORDER'  => 'id',
+        ]);
+        foreach ($iterator as $row) {
+            $list[(string) $row['defect_ref']][] = [
+                'id'   => (int) $row['id'],
+                'uuid' => (string) $row['client_uuid'],
+                'url'  => self::getUrl((int) $row['id']),
+            ];
+        }
+
+        return $list;
+    }
+
+    /**
+     * Apaga as fotos de peças que não ficaram com defeito no recebimento concluído (o gestor pode
+     * ter diminuído a quantidade depois de enviar as fotos).
+     *
+     * @param string[] $keep peças que ficaram com defeito ("battery:1", ...)
+     */
+    public static function deleteDefectsExcept(int $deliveries_id, int $receipts_id, array $keep): int
+    {
+        $deleted = 0;
+        foreach (self::getDefectPhotos($deliveries_id, $receipts_id) as $ref => $photos) {
+            if (in_array($ref, $keep, true)) {
+                continue;
+            }
+            foreach ($photos as $photo) {
+                $deleted += self::removeRow((int) $photo['id']) ? 1 : 0;
+            }
+        }
+
+        return $deleted;
+    }
+
     /**
      * Imagem enviada num campo de arquivo, já validada (JPEG ou PNG, até MAX_BYTES). Também serve
      * às fotos do defeito enviadas uma a uma.
@@ -133,7 +191,7 @@ class DeliveryPhoto extends CommonDBTM
      *
      * @return array{ok: bool, message: string, count: int, retry?: bool, photo?: array{uuid: string, url: string}}
      */
-    public static function storeUploaded(int $deliveries_id, int $receipts_id, string $uuid): array
+    public static function storeUploaded(int $deliveries_id, int $receipts_id, string $uuid, string $ref = ''): array
     {
         global $DB;
 
@@ -141,10 +199,10 @@ class DeliveryPhoto extends CommonDBTM
             'ok'      => false,
             'message' => $message,
             'retry'   => $retry,
-            'count'   => self::countFor($deliveries_id, $receipts_id),
+            'count'   => self::countFor($deliveries_id, $receipts_id, $ref),
         ];
 
-        if ($deliveries_id <= 0 || $receipts_id < 0 || !self::isValidUuid($uuid)) {
+        if ($deliveries_id <= 0 || $receipts_id < 0 || !self::isValidUuid($uuid) || !self::isValidRef($ref)) {
             return $fail(__('Foto sem identificação. Tire a foto de novo.', 'checklistitens'));
         }
 
@@ -154,8 +212,9 @@ class DeliveryPhoto extends CommonDBTM
             return self::existingResult($existing, $receipts_id, $uuid, $fail);
         }
 
-        $max = Config::getDeliveryMaxPhotos();
-        if (self::countFor($deliveries_id, $receipts_id) >= $max) {
+        // Foto de peça com defeito: até 5 por peça, como as fotos do defeito do rádio
+        $max = $ref === '' ? Config::getDeliveryMaxPhotos() : DefectPhoto::MAX_PHOTOS;
+        if (self::countFor($deliveries_id, $receipts_id, $ref) >= $max) {
             return $fail(sprintf(__('O limite é de %d fotos.', 'checklistitens'), $max));
         }
 
@@ -189,6 +248,7 @@ class DeliveryPhoto extends CommonDBTM
                 'plugin_checklistitens_deliveries_id'       => $deliveries_id,
                 'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
                 'client_uuid'                               => $uuid,
+                'defect_ref'                                => $ref,
                 'filepath'                                  => $relative,
                 'size_bytes'                                => strlen($image['data']),
                 'date_creation'                             => Shift::now(),
@@ -224,7 +284,7 @@ class DeliveryPhoto extends CommonDBTM
             'ok'      => true,
             'message' => '',
             'photo'   => ['uuid' => $uuid, 'url' => self::getUrl($id)],
-            'count'   => self::countFor($deliveries_id, $receipts_id),
+            'count'   => self::countFor($deliveries_id, $receipts_id, $ref),
         ];
     }
 
@@ -262,11 +322,13 @@ class DeliveryPhoto extends CommonDBTM
         return true;
     }
 
-    public static function countFor(int $deliveries_id, int $receipts_id): int
+    /** Fotos gerais ($ref vazio) ou de uma peça com defeito ("battery:N", "cover:N"). */
+    public static function countFor(int $deliveries_id, int $receipts_id, string $ref = ''): int
     {
         return countElementsInTable(self::getTable(), [
             'plugin_checklistitens_deliveries_id'       => $deliveries_id,
             'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
+            'defect_ref'                                => $ref,
         ]);
     }
 
@@ -275,7 +337,7 @@ class DeliveryPhoto extends CommonDBTM
      *
      * @return array<int, array{id: int, uuid: string, url: string}>
      */
-    public static function getFor(int $deliveries_id, int $receipts_id): array
+    public static function getFor(int $deliveries_id, int $receipts_id, string $ref = ''): array
     {
         global $DB;
 
@@ -286,6 +348,7 @@ class DeliveryPhoto extends CommonDBTM
             'WHERE'  => [
                 'plugin_checklistitens_deliveries_id'       => $deliveries_id,
                 'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
+                'defect_ref'                                => $ref,
             ],
             'ORDER'  => 'id',
         ]);
@@ -332,6 +395,50 @@ class DeliveryPhoto extends CommonDBTM
         }
 
         return $deleted;
+    }
+
+    /**
+     * Arquivos das fotos das peças com defeito, para anexar ao chamado.
+     *
+     * @return array<string, string[]> "battery:1" => caminhos completos dos arquivos
+     */
+    public static function getDefectFiles(int $deliveries_id, int $receipts_id): array
+    {
+        global $DB;
+
+        $files = [];
+        $iterator = $DB->request([
+            'SELECT' => ['filepath', 'defect_ref'],
+            'FROM'   => self::getTable(),
+            'WHERE'  => [
+                'plugin_checklistitens_deliveries_id'       => $deliveries_id,
+                'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
+                'NOT'                                       => ['defect_ref' => ''],
+            ],
+            'ORDER'  => 'id',
+        ]);
+        foreach ($iterator as $row) {
+            $path = self::getFullPath((string) $row['filepath']);
+            if ($path !== null) {
+                $files[(string) $row['defect_ref']][] = $path;
+            }
+        }
+
+        return $files;
+    }
+
+    /** Apaga uma foto (linha e arquivo) pelo id. */
+    private static function removeRow(int $id): bool
+    {
+        global $DB;
+
+        $row = $DB->request(['SELECT' => ['filepath'], 'FROM' => self::getTable(), 'WHERE' => ['id' => $id]])->current();
+        if (!$row || !$DB->delete(self::getTable(), ['id' => $id])) {
+            return false;
+        }
+        self::deleteFile((string) $row['filepath']);
+
+        return true;
     }
 
     public static function getUrl(int $id): string
