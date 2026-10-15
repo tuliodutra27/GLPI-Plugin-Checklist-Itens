@@ -1016,7 +1016,7 @@
         return node;
     }
 
-    /** Entrega: rádio reservado, com "Tem problema" (quando a resposta é Não) e "Tirar". */
+    /** Entrega: rádio reservado, com "Tirar" (o problema é indicado em "Rádios ok?"). */
     function deliveryRow(item) {
         var row = el('div', 'ci-item ci-delivery-item');
         var main = el('span', 'ci-delivery-main');
@@ -1039,9 +1039,6 @@
 
         if (!problemPending && !removePending) {
             var actions = el('div', 'ci-item-actions');
-            if (draft.isOk === 0 && !item.known_issue) {
-                actions.appendChild(itemButton('btn btn-sm btn-warning', 'ti-alert-triangle', 'Tem problema', 'data-ci-item-problem', item.usage_id));
-            }
             actions.appendChild(itemButton('btn btn-sm btn-outline-secondary', 'ti-x', 'Tirar', 'data-ci-item-remove', item.usage_id));
             row.appendChild(actions);
         }
@@ -1072,17 +1069,75 @@
         }
         main.appendChild(text);
         row.appendChild(main);
-
-        if (returned && draft.isOk === 0) {
-            var actions = el('div', 'ci-item-actions');
-            if (problem) {
-                actions.appendChild(itemButton('btn btn-sm btn-outline-secondary', 'ti-arrow-back', 'Desfazer', 'data-ci-item-undo', item.usage_id));
-            } else {
-                actions.appendChild(itemButton('btn btn-sm btn-warning', 'ti-alert-triangle', 'Tem problema', 'data-ci-item-problem', item.usage_id));
-            }
-            row.appendChild(actions);
-        }
         return row;
+    }
+
+    /**
+     * "Rádios ok?" com Não: os rádios um a um, logo abaixo da pergunta, cada um com "Tem problema"
+     * (ou o problema já indicado e "Desfazer", no recebimento). Na entrega, o rádio que saiu por
+     * problema aparece no fim, já bloqueado.
+     */
+    function okRow(item) {
+        var row = el('div', 'ci-item ci-delivery-item');
+        var main = el('span', 'ci-delivery-main');
+        var text = itemText(item);
+        var actions = el('div', 'ci-item-actions');
+        var problem = isDelivery ? null : draft.problems[item.usage_id];
+        var pending = isDelivery && countTasks('item_problem', 'items_id', item.items_id) > 0;
+
+        row.setAttribute('data-ci-ok-row', String(item.usage_id));
+        if (isDelivery && item.known_issue) {
+            text.appendChild(tags(Array.isArray(item.problems) ? item.problems : []));
+            text.appendChild(el('div', 'ci-delivery-state', 'Segue na entrega com o problema já conhecido (laudo em aberto).'));
+        } else if (pending) {
+            text.appendChild(el('div', 'ci-delivery-state', 'Registrando o problema...'));
+        } else if (problem) {
+            text.appendChild(tags(Array.isArray(problem.names) ? problem.names : []));
+            text.appendChild(el('div', 'ci-delivery-state', problem.known
+                ? 'Problema já conhecido (laudo em aberto): não bloqueia.'
+                : 'Problema novo: o rádio fica bloqueado ao concluir.'));
+        }
+        main.appendChild(text);
+        row.appendChild(main);
+
+        if (problem) {
+            actions.appendChild(itemButton('btn btn-sm btn-outline-secondary', 'ti-arrow-back', 'Desfazer', 'data-ci-item-undo', item.usage_id));
+        } else if (!pending && !(isDelivery && item.known_issue)) {
+            actions.appendChild(itemButton('btn btn-sm btn-warning', 'ti-alert-triangle', 'Tem problema', 'data-ci-item-problem', item.usage_id));
+        }
+        row.appendChild(actions);
+        return row;
+    }
+
+    function renderOkItems() {
+        var items = isDelivery ? serverItems() : returnedItems();
+
+        // o painel do problema mora nesta lista: sai antes de ela ser refeita
+        if (ui.problemPanel.parentNode === ui.okItems) {
+            ui.okItems.removeChild(ui.problemPanel);
+        }
+        ui.okItems.innerHTML = '';
+        ui.okItems.hidden = draft.isOk !== 0;
+        if (draft.isOk !== 0) {
+            ui.okItems.appendChild(ui.problemPanel);
+            return;
+        }
+
+        items.forEach(function (item) {
+            ui.okItems.appendChild(okRow(item));
+            // o painel abre logo abaixo do rádio escolhido
+            if (panelItem && panelItem.usage_id === item.usage_id) {
+                ui.okItems.appendChild(ui.problemPanel);
+            }
+        });
+        if (isDelivery) {
+            removedItems().forEach(function (item) {
+                ui.okItems.appendChild(removedRow(item));
+            });
+        }
+        if (ui.problemPanel.parentNode !== ui.okItems) {
+            ui.okItems.appendChild(ui.problemPanel);
+        }
     }
 
     function removedRow(item) {
@@ -2182,6 +2237,7 @@
         }
         renderItems();
         renderAvailable();
+        renderOkItems();
         renderProblem();
         renderRest();
     }
@@ -2528,7 +2584,8 @@
             ui.reserve.addEventListener('click', reserve);
         }
 
-        ui.reserved.addEventListener('click', function (event) {
+        // "Tirar" fica na lista dos rádios; "Tem problema" e "Desfazer", na lista de "Rádios ok?"
+        function onItemClick(event) {
             if (!ready) {
                 return;
             }
@@ -2544,7 +2601,9 @@
                 saveDraft();
                 render();
             }
-        });
+        }
+        ui.reserved.addEventListener('click', onItemClick);
+        ui.okItems.addEventListener('click', onItemClick);
         ui.reserved.addEventListener('change', function (event) {
             var check = closest(event.target, '[data-ci-item-returned]');
             if (!ready || !check) {
@@ -2754,6 +2813,7 @@
         ui.receiptInfo = get('receipt-info');
         ui.itemsCount = get('items-count');
         ui.reserved = get('reserved');
+        ui.okItems = get('ok-items');
         ui.removedBox = get('removed-box');
         ui.removed = get('removed');
         ui.add = get('add');

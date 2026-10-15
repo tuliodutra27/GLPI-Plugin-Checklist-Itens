@@ -6,6 +6,11 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Alterado
+- Entrega e recebimento: com "Rádios ok? Não", os rádios aparecem um a um logo abaixo da pergunta,
+  cada um com "Tem problema", e o quadro do problema abre logo abaixo do rádio escolhido (antes era
+  preciso voltar à lista do passo 2).
+
 ## [0.11.0-rc.2] - 2026-10-15
 
 Requer Atualizar em Configurar > Plugins.

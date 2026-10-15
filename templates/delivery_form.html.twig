@@ -238,8 +238,11 @@
                     </div>
                     <div class="alert alert-warning mt-2 mb-0" data-ci-ok-hint hidden>
                         <i class="ti ti-hand-finger"></i>
-                        {{ __('Toque em "Tem problema" no rádio com problema, na lista acima.', 'checklistitens') }}
+                        {{ __('Toque em "Tem problema" no rádio com problema, aqui embaixo.', 'checklistitens') }}
                     </div>
+                    {# Com "NÃO": os rádios um a um, cada um com "Tem problema"; o painel do problema
+                       abre logo abaixo do rádio escolhido (o JS leva o painel para cá) #}
+                    <div class="ci-delivery-items mt-3" data-ci-ok-items hidden></div>
                 </div>
             </div>
 
