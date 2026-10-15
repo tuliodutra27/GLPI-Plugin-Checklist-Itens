@@ -113,17 +113,19 @@ Na retirada comum, cada colaborador pega um rádio para si. Na entrega para emba
 do setor** separa **vários rádios de uma vez** e entrega a uma embarcação. Só aparece com o tipo
 Rádio habilitado.
 
-- **Entrega:** embarcação → rádios → "Reservar rádios" → baterias reserva → "Itens ok?" →
+- **Entrega:** embarcação → rádios → "Reservar rádios" → baterias reserva e capas → "Rádios ok?" →
   observações → fotos → selfie → "Concluir entrega" (logoff).
   - Só entram rádios do setor do gestor que estão disponíveis. Depois de reservados, ninguém mais
     consegue retirá-los, e eles ficam "Com a embarcação" até voltarem.
   - Os limites são configuráveis. Padrão: até 8 rádios por entrega e pelo menos 10 fotos.
-  - "Não" em "Itens ok?": o gestor indica o rádio, marca os problemas e tira as fotos do defeito.
+  - "Não" em "Rádios ok?": o gestor indica o rádio, marca os problemas e tira as fotos do defeito.
     Com problema novo, o rádio **sai da entrega e fica bloqueado**. Com laudo em aberto, ele pode
     escolher "Vai assim, é o problema do laudo", sem bloqueio.
 - **Receber da embarcação:** a mesma tela em passos. O gestor escolhe a entrega, marca os rádios
-  que voltaram, informa as baterias devolvidas, responde "Itens ok?", fotografa, tira a selfie e
-  toca em "Concluir recebimento".
+  que voltaram, informa as baterias e as capas devolvidas, responde "Rádios ok?", fotografa, tira a
+  selfie e toca em "Concluir recebimento".
+  - Bateria ou capa com defeito: o gestor marca, peça por peça, os problemas do catálogo e tira as
+    fotos. Ao concluir, o plugin **abre um chamado para o TI** com tudo isso.
   - O recebimento pode ser **parcial**: os rádios que não voltaram continuam com a embarcação.
   - Rádio que volta com problema novo fica bloqueado até o chamado ser solucionado.
 - **Guardar no aparelho:** o que o gestor faz fica guardado no navegador do aparelho e é enviado
