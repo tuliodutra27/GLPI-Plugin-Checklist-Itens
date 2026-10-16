@@ -152,8 +152,9 @@ usuários (seção 2).
 2. Se a versão nova mudar o banco, o GLPI mostra o botão **Atualizar** em **Configurar > Plugins**.
    Clique nele e ative de novo, se for pedido.
 
-A atualização só acrescenta o que falta e **não altera os registros existentes**, nem os direitos
-e a configuração que você já ajustou.
+A atualização só acrescenta o que falta e **não altera os registros existentes** (a única exceção
+é a correção das devoluções na 0.11.0, abaixo), nem os direitos e a configuração que você já
+ajustou.
 
 **Para a 0.10.0:** a versão muda o banco (fotos do defeito e problema conhecido), então o GLPI
 pede **Atualizar**. Na atualização, os perfis Operador e Gestor Operacional também são criados, se
@@ -161,9 +162,14 @@ ainda não existirem, e a integração com o plugin Laudo já vem ligada.
 
 **Para a 0.11.0:** a versão cria tabelas novas (entrega de rádios para embarcação), então o GLPI
 pede **Atualizar**. A atualização:
-- cria as tabelas das embarcações, das entregas, dos recebimentos e das fotos da entrega;
+- cria as tabelas das embarcações, das entregas, dos recebimentos, das fotos da entrega e das
+  baterias e capas com defeito;
 - acrescenta colunas novas nas tabelas dos usos e das fotos do defeito. Nenhuma outra tabela antiga
-  é alterada, e os registros existentes continuam como estão;
+  muda de estrutura;
+- grava "Não" nas devoluções antigas que ficaram sem a resposta de **Equipamento ok?** (até a
+  0.10.0, o "Não" da devolução não chegava ao banco). Os outros registros continuam como estão;
+- coloca no catálogo os problemas padrão de **bateria** e de **capa**, só se o tipo ainda não
+  tiver nenhum ([seção 4.3](#43-catálogo-de-problemas));
 - cria a ação automática `expiredeliveries`
   ([seção 8.4](#84-ações-automáticas-e-notificação));
 - não cria direito novo: a entrega usa os direitos que já existem
