@@ -269,12 +269,19 @@ só sai versão nova.
 - [x] Decidir a 0.11.0, que já está no código e ainda não tem tag: sai como `0.11.0-rc.1` para
       teste ou direto como `0.11.0`. (Decidido: `0.11.0-rc.1`, porque muda o banco.)
 
-### A verificar antes do primeiro rc
+### Como o GLPI trata o número com sufixo (verificado na 0.11.0)
 
-Não se confirmou como o GLPI trata, em *Configurar > Plugins*, um número com sufixo (`0.12.0-rc.1`)
-e a troca de rc para a versão final (`0.12.0`): se oferece o *Atualizar* e se roda a migração de
-novo. Teste isso no GLPI de teste com um rc descartável antes de usar o padrão numa versão que muda
-o banco.
+O GLPI 10 compara o número do `setup.php` com o gravado no banco **como texto**
+(`Plugin::checkPluginState`): qualquer diferença, inclusive de `0.12.0-rc.1` para `0.12.0-rc.2` ou
+para `0.12.0`, desativa o plugin e mostra **Atualizar** em *Configurar > Plugins*, que roda a
+instalação de novo. Por isso:
+
+- cada rc e a versão final pedem **Atualizar**, mesmo quando a versão final não muda nada no banco
+  em relação ao último rc;
+- a instalação precisa poder rodar várias vezes seguidas sem erro (criar só o que falta).
+
+A 0.11.0 foi testada assim no GLPI de teste: `0.10.0` → `0.11.0-rc.1` → `0.11.0-rc.2`, com
+**Atualizar** a cada troca.
 
 ## Fontes
 
