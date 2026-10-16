@@ -2,6 +2,8 @@
 
 namespace GlpiPlugin\Checklistitens;
 
+use Document;
+use Document_Item;
 use Glpi\Toolbox\Sanitizer;
 use Item_Ticket;
 use Session;
@@ -130,6 +132,179 @@ class TicketFactory
         DefectPhoto::attachToTicket((int) $usage->getID(), $phase, (int) $tickets_id, $entities_id);
 
         return (int) $tickets_id;
+    }
+
+    /**
+     * Chamado do TI para as baterias e capas que voltaram com defeito num recebimento da
+     * embarcação, aberto na conclusão do recebimento (o gestor não digita nada).
+     *
+     * @return int id do chamado, ou 0 se não foi possível abrir
+     */
+    public static function openForAccessories(int $receipts_id): int
+    {
+        global $DB;
+
+        $receipt = $DB->request(['FROM' => Install::TABLE_DELIVERYRECEIPTS, 'WHERE' => ['id' => $receipts_id]])->current();
+        if (!$receipt) {
+            return 0;
+        }
+        if ((int) $receipt['tickets_id'] > 0) {
+            return (int) $receipt['tickets_id'];
+        }
+        $pieces = AccessoryDefect::getForReceipts([$receipts_id])[$receipts_id] ?? [];
+        if (!count($pieces)) {
+            return 0;
+        }
+
+        $deliveries_id = (int) $receipt['plugin_checklistitens_deliveries_id'];
+        $delivery      = $DB->request(['FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['id' => $deliveries_id]])->current();
+        $vessel        = $delivery ? Ui::text($delivery['vessel_name']) : '';
+        $batteries     = array_values(array_filter($pieces, static fn ($p) => $p['kind'] === AccessoryDefect::KIND_BATTERY));
+        $covers        = array_values(array_filter($pieces, static fn ($p) => $p['kind'] === AccessoryDefect::KIND_COVER));
+
+        $what = [];
+        if (count($batteries)) {
+            $what[] = sprintf(_n('%d bateria com defeito', '%d baterias com defeito', count($batteries), 'checklistitens'), count($batteries));
+        }
+        if (count($covers)) {
+            $what[] = sprintf(_n('%d capa com dano', '%d capas com dano', count($covers), 'checklistitens'), count($covers));
+        }
+        $name = sprintf('[Checklist] %s — %s', implode(' e ', $what), $vessel);
+        if (mb_strlen($name) > 250) {
+            $name = mb_substr($name, 0, 247) . '...';
+        }
+
+        $line = static fn (string $label, string $value): string => '<p><strong>' . htmlspecialchars($label) . ':</strong> ' . htmlspecialchars($value) . '</p>';
+        $html  = $line(__('Embarcação', 'checklistitens'), $vessel);
+        $html .= '<p><strong>' . htmlspecialchars(__('Entrega', 'checklistitens')) . ':</strong> <a href="' . htmlspecialchars(DeliveryReport::getUrl($deliveries_id)) . '">#' . $deliveries_id . '</a></p>';
+        $html .= $line(__('Recebido por', 'checklistitens'), Ui::text(getUserName((int) $receipt['users_id'])));
+        $html .= $line(__('Quando', 'checklistitens'), sprintf(__('Recebimento da embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($receipt['date_receipt']), Shift::label($receipt['shift_start'])));
+        $html .= $line(__('Setor', 'checklistitens'), Sector::getName((int) $receipt['groups_id']));
+        foreach ([[__('Baterias devolvidas', 'checklistitens'), (int) $receipt['returned_batteries'], $batteries], [__('Capas devolvidas', 'checklistitens'), (int) $receipt['returned_covers'], $covers]] as [$title, $returned, $list]) {
+            if (!count($list)) {
+                continue;
+            }
+            $html .= $line($title, (string) $returned) . '<ul>';
+            foreach ($list as $piece) {
+                $html .= '<li><strong>' . htmlspecialchars($piece['label']) . ':</strong> ' . htmlspecialchars(implode(', ', $piece['problems'])) . '</li>';
+            }
+            $html .= '</ul>';
+        }
+        $comment = Ui::text($receipt['comment'] ?? '');
+        if ($comment !== '') {
+            $html .= $line(__('Observações do gestor', 'checklistitens'), $comment);
+        }
+        $html .= '<p><em>' . htmlspecialchars(__('Chamado aberto automaticamente no recebimento da embarcação (Checklist uso de equipamentos). As fotos das peças com defeito estão anexadas.', 'checklistitens')) . '</em></p>';
+
+        // Categoria: a dos problemas marcados, se for uma só; senão, a padrão do rádio
+        $problems = [];
+        foreach ($pieces as $piece) {
+            foreach ($piece['problemtypes_ids'] as $problemtypes_id) {
+                $problems[] = ['problemtypes_id' => $problemtypes_id];
+            }
+        }
+
+        $ticket = new Ticket();
+        try {
+            $tickets_id = $ticket->add([
+                'name'                => Sanitizer::sanitize($name),
+                'content'             => Sanitizer::sanitize($html),
+                'type'                => Ticket::INCIDENT_TYPE,
+                'itilcategories_id'   => self::getCategory(ItemProvider::RADIO, $problems),
+                'entities_id'         => (int) $receipt['entities_id'],
+                '_users_id_requester' => (int) $receipt['users_id'],
+            ]);
+        } catch (Throwable $e) {
+            Toolbox::logError('checklistitens: erro ao abrir chamado das peças com defeito: ' . $e->getMessage());
+            $tickets_id = false;
+        }
+        if (!$tickets_id) {
+            return 0;
+        }
+
+        // Primeiro liga o chamado ao recebimento: se o anexo das fotos falhar, não abre outro
+        $DB->update(Install::TABLE_DELIVERYRECEIPTS, ['tickets_id' => (int) $tickets_id], ['id' => $receipts_id]);
+
+        $files = [];
+        foreach (DeliveryPhoto::getDefectFiles($deliveries_id, $receipts_id) as $ref => $paths) {
+            foreach ($paths as $index => $path) {
+                $files[] = [$path, sprintf('foto-%s-%d.%s', str_replace(':', '-', $ref), $index + 1, pathinfo($path, PATHINFO_EXTENSION))];
+            }
+        }
+        self::attachFiles((int) $tickets_id, (int) ($ticket->fields['entities_id'] ?? $receipt['entities_id']), $files);
+
+        return (int) $tickets_id;
+    }
+
+    /**
+     * Anexa arquivos ao chamado como documentos do GLPI (cópia na pasta temporária, como um envio
+     * pela tela). Falhas vão para o log e não desfazem o chamado.
+     *
+     * @param array<int, array{0: string, 1: string}> $files caminho completo e nome exibido
+     */
+    private static function attachFiles(int $tickets_id, int $entities_id, array $files): int
+    {
+        global $CFG_GLPI;
+
+        if (!is_dir(GLPI_TMP_DIR)) {
+            Toolbox::logError('checklistitens: diretório temporário do GLPI não existe; fotos não anexadas ao chamado ' . $tickets_id);
+            return 0;
+        }
+
+        // O GLPI avisa "cópia do documento bem sucedida" a cada arquivo: quem registrou não precisa ver
+        $had_messages = isset($_SESSION['MESSAGE_AFTER_REDIRECT']);
+        $messages     = $_SESSION['MESSAGE_AFTER_REDIRECT'] ?? [];
+
+        $attached = 0;
+        foreach ($files as $index => [$source, $display]) {
+            $prefix   = bin2hex(random_bytes(8)) . '_';
+            $tmp_path = GLPI_TMP_DIR . '/' . $prefix . $display;
+            try {
+                if (!copy($source, $tmp_path)) {
+                    Toolbox::logError('checklistitens: não foi possível copiar a foto para ' . $tmp_path);
+                    continue;
+                }
+                $documents_id = (int) (new Document())->add([
+                    'name'                    => Sanitizer::sanitize(sprintf(__('Foto %1$d - %2$s - Checklist', 'checklistitens'), $index + 1, $display)),
+                    'entities_id'             => $entities_id,
+                    'is_recursive'            => 0,
+                    'tickets_id'              => $tickets_id,
+                    'documentcategories_id'   => (int) ($CFG_GLPI['documentcategories_id_forticket'] ?? 0),
+                    '_only_if_upload_succeed' => 1,
+                    '_filename'               => [$prefix . $display],
+                    '_prefix_filename'        => [$prefix],
+                ]);
+                if ($documents_id <= 0) {
+                    Toolbox::logError('checklistitens: não foi possível criar o documento da foto ' . $display . ' (tipo de arquivo permitido?)');
+                    continue;
+                }
+                if (!countElementsInTable(Document_Item::getTable(), ['documents_id' => $documents_id, 'itemtype' => 'Ticket', 'items_id' => $tickets_id])) {
+                    (new Document_Item())->add([
+                        'documents_id'  => $documents_id,
+                        'itemtype'      => 'Ticket',
+                        'items_id'      => $tickets_id,
+                        'date'          => Shift::now(),
+                        '_do_notif'     => false,
+                        '_disablenotif' => true,
+                    ]);
+                }
+                $attached++;
+            } catch (Throwable $e) {
+                Toolbox::logError(sprintf('checklistitens: erro ao anexar a foto %s ao chamado %d: %s', $display, $tickets_id, $e->getMessage()));
+            } finally {
+                if (is_file($tmp_path)) {
+                    @unlink($tmp_path);
+                }
+            }
+        }
+
+        if ($had_messages) {
+            $_SESSION['MESSAGE_AFTER_REDIRECT'] = $messages;
+        } else {
+            unset($_SESSION['MESSAGE_AFTER_REDIRECT']);
+        }
+
+        return $attached;
     }
 
     /**

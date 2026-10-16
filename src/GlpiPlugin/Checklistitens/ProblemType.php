@@ -18,6 +18,11 @@ class ProblemType extends CommonDropdown
     public const CATEGORY_STRUCTURE = 3;
     public const CATEGORY_OTHER     = 4;
 
+    // Peças que vão com os rádios para a embarcação: não são ativos do GLPI, só têm o catálogo
+    // de problemas (o valor fica na coluna itemtype, como os tipos de equipamento)
+    public const ACCESSORY_BATTERY = 'PluginChecklistitensBattery';
+    public const ACCESSORY_COVER   = 'PluginChecklistitensCover';
+
     public static $rightname = Profile::RIGHT_CONFIG;
 
     public $dohistory = true;
@@ -57,6 +62,28 @@ class ProblemType extends CommonDropdown
     public static function canPurge()
     {
         return Profile::canAdministrate();
+    }
+
+    /**
+     * Tipos do catálogo: os equipamentos disponíveis e as peças da entrega para embarcação.
+     *
+     * @return array<string, string> tipo => rótulo
+     */
+    public static function getTypeOptions(): array
+    {
+        $types = [];
+        foreach (ItemProvider::getSupportedTypes() as $itemtype) {
+            $types[$itemtype] = ItemProvider::getTypeLabel($itemtype);
+        }
+        $types[self::ACCESSORY_BATTERY] = __('Bateria (entrega para embarcação)', 'checklistitens');
+        $types[self::ACCESSORY_COVER]   = __('Capa (entrega para embarcação)', 'checklistitens');
+
+        return $types;
+    }
+
+    public static function getTypeLabel(string $itemtype): string
+    {
+        return self::getTypeOptions()[$itemtype] ?? ItemProvider::getTypeLabel($itemtype);
     }
 
     /** @return array<int, string> */
@@ -110,11 +137,7 @@ class ProblemType extends CommonDropdown
     {
         switch ($field['type'] ?? '') {
             case 'specific_itemtype':
-                $types = [];
-                foreach (ItemProvider::getSupportedTypes() as $itemtype) {
-                    $types[$itemtype] = ItemProvider::getTypeLabel($itemtype);
-                }
-                Dropdown::showFromArray('itemtype', $types, ['value' => $this->fields['itemtype'] ?? ItemProvider::RADIO]);
+                Dropdown::showFromArray('itemtype', self::getTypeOptions(), ['value' => $this->fields['itemtype'] ?? ItemProvider::RADIO]);
                 break;
 
             case 'specific_category':
@@ -175,7 +198,7 @@ class ProblemType extends CommonDropdown
         }
         switch ($field) {
             case 'itemtype':
-                return htmlspecialchars(ItemProvider::getTypeLabel((string) $values[$field]));
+                return htmlspecialchars(self::getTypeLabel((string) $values[$field]));
             case 'category':
                 return htmlspecialchars(self::getCategories()[(int) $values[$field]] ?? '');
         }
@@ -191,11 +214,7 @@ class ProblemType extends CommonDropdown
         $options['display'] = false;
         switch ($field) {
             case 'itemtype':
-                $types = [];
-                foreach (ItemProvider::getSupportedTypes() as $itemtype) {
-                    $types[$itemtype] = ItemProvider::getTypeLabel($itemtype);
-                }
-                return Dropdown::showFromArray($name, $types, $options + ['value' => $values[$field]]);
+                return Dropdown::showFromArray($name, self::getTypeOptions(), $options + ['value' => $values[$field]]);
             case 'category':
                 return Dropdown::showFromArray($name, self::getCategories(), $options + ['value' => $values[$field]]);
         }
@@ -257,21 +276,22 @@ class ProblemType extends CommonDropdown
     }
 
     /**
-     * Pré-carga do catálogo na primeira instalação (tabela vazia). Os problemas de bateria do
-     * rádio abrem chamado na categoria "Rádio > Troca de Bateria", se ela existir.
+     * Pré-carga do catálogo: por tipo, só quando o tipo não tem nenhum problema cadastrado. Assim a
+     * atualização traz os tipos novos (bateria e capa) sem mexer nos que o TI já ajustou. Os
+     * problemas de bateria abrem chamado na categoria "Rádio > Troca de Bateria", se ela existir.
      */
     public static function installDefaults(): void
     {
-        if (countElementsInTable(self::getTable()) > 0) {
-            return;
-        }
-
         $battery_ids      = Config::findIdsByName(ITILCategory::getTable(), 'completename', [Config::BATTERY_CATEGORY]);
         $radio_battery_id = $battery_ids[0] ?? 0;
 
         $item = new self();
         foreach (self::getDefaultValues() as $itemtype => $categories) {
-            $ranking = 0;
+            if (countElementsInTable(self::getTable(), ['itemtype' => $itemtype]) > 0) {
+                continue;
+            }
+            $is_battery = $itemtype === self::ACCESSORY_BATTERY;
+            $ranking    = 0;
             foreach ($categories as $category => $names) {
                 foreach ($names as $name) {
                     $ranking += 10;
@@ -283,7 +303,7 @@ class ProblemType extends CommonDropdown
                         'is_active'         => 1,
                         'is_recursive'      => 1,
                         'entities_id'       => 0,
-                        'itilcategories_id' => ($itemtype === ItemProvider::RADIO && $category === self::CATEGORY_BATTERY) ? $radio_battery_id : 0,
+                        'itilcategories_id' => ($is_battery || ($itemtype === ItemProvider::RADIO && $category === self::CATEGORY_BATTERY)) ? $radio_battery_id : 0,
                     ]);
                 }
             }
@@ -353,6 +373,34 @@ class ProblemType extends CommonDropdown
                 ],
                 self::CATEGORY_OTHER => [
                     'Outro problema (avisar o gestor)',
+                ],
+            ],
+            // Peças que vão com os rádios para a embarcação (não são ativos do GLPI)
+            self::ACCESSORY_BATTERY => [
+                self::CATEGORY_FUNCTION => [
+                    'Não carrega',
+                    'Não liga o rádio ou não segura carga',
+                ],
+                self::CATEGORY_STRUCTURE => [
+                    'Trava quebrada',
+                    'Polo ou contato queimado ou oxidado',
+                    'Estufada',
+                    'Carcaça trincada ou quebrada',
+                ],
+                self::CATEGORY_OTHER => [
+                    'Outro problema (descrever nas observações)',
+                ],
+            ],
+            self::ACCESSORY_COVER => [
+                self::CATEGORY_STRUCTURE => [
+                    'Rasgada ou furada',
+                    'Presilha ou clipe quebrado',
+                    'Costura solta',
+                    'Fecho ou velcro com defeito',
+                    'Alça arrebentada',
+                ],
+                self::CATEGORY_OTHER => [
+                    'Outro problema (descrever nas observações)',
                 ],
             ],
         ];

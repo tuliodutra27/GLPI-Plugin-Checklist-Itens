@@ -71,6 +71,11 @@ $data = [
     'homeUrl'   => Ui::url('front/home.php'),
     'vessels'   => $vessels,
     'available' => $mode === 'delivery' ? Delivery::getAvailableRadios() : [],
+    // recebimento: problemas do catálogo para cada bateria e capa com defeito
+    'accessoryProblems' => $mode === 'receipt' ? [
+        'battery' => ProblemType::getGroupedForType(ProblemType::ACCESSORY_BATTERY),
+        'cover'   => ProblemType::getGroupedForType(ProblemType::ACCESSORY_COVER),
+    ] : [],
     'state'     => $state,
     'limits'    => [
         'max_items'  => Config::getDeliveryMaxItems(),

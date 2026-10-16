@@ -6,6 +6,24 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Alterado
+- Entrega e recebimento: com "Rádios ok? Não", os rádios aparecem um a um logo abaixo da pergunta,
+  cada um com "Tem problema", e o quadro do problema abre logo abaixo do rádio escolhido (antes era
+  preciso voltar à lista do passo 2).
+
+## [0.11.0-rc.2] - 2026-10-15
+
+Requer Atualizar em Configurar > Plugins.
+
+### Adicionado
+- Recebimento da embarcação: baterias e capas ganham pergunta própria ("estão todas boas?"). Com
+  "Não", cada peça com defeito tem um bloco em destaque com os problemas do catálogo e de 1 a 5
+  fotos, e ao concluir o plugin abre um chamado para o TI com tudo isso.
+- Catálogo de problemas de bateria e de capa, editável pelo TI.
+
+### Alterado
+- "Itens ok?" passa a se chamar "Rádios ok?": a pergunta é só sobre os rádios.
+
 ## [0.11.0-rc.1] - 2026-10-14
 
 Requer Atualizar em Configurar > Plugins.
@@ -51,6 +69,7 @@ As versões até a 0.9.0 (retirada e devolução com checklist, selfie com local
 gestor por turno, bloqueio do item com problema e registro de uso) não foram publicadas como
 release.
 
-[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0-rc.1...HEAD
+[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0-rc.2...HEAD
+[0.11.0-rc.2]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0-rc.1...v0.11.0-rc.2
 [0.11.0-rc.1]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.10.0...v0.11.0-rc.1
 [0.10.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/releases/tag/v0.10.0

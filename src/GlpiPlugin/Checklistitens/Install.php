@@ -35,6 +35,7 @@ class Install
     public const TABLE_DELIVERIES       = 'glpi_plugin_checklistitens_deliveries';
     public const TABLE_DELIVERYRECEIPTS = 'glpi_plugin_checklistitens_deliveryreceipts';
     public const TABLE_DELIVERYPHOTOS   = 'glpi_plugin_checklistitens_deliveryphotos';
+    public const TABLE_ACCESSORYDEFECTS = 'glpi_plugin_checklistitens_accessorydefects';
 
     public static function install(Migration $migration): void
     {
@@ -126,6 +127,13 @@ class Install
                 'covers_ok'           => ['tinyint NULL DEFAULT NULL', 'returned_batteries'],
                 'returned_covers'     => ['int unsigned NOT NULL DEFAULT 0', 'returned_batteries'],
                 'defective_batteries' => ['int unsigned NOT NULL DEFAULT 0', 'returned_batteries'],
+                // capas com dano e o chamado aberto para as peças com defeito
+                'tickets_id'          => ['int unsigned NOT NULL DEFAULT 0', 'covers_ok'],
+                'damaged_covers'      => ['int unsigned NOT NULL DEFAULT 0', 'covers_ok'],
+            ],
+            // foto de bateria ou capa com defeito ("battery:N", "cover:N"); vazio = foto geral
+            self::TABLE_DELIVERYPHOTOS => [
+                'defect_ref' => ["varchar(20) NOT NULL DEFAULT ''", 'plugin_checklistitens_deliveryreceipts_id'],
             ],
             // 0.11.0: identificador gerado no aparelho, para reenviar a mesma foto sem duplicar
             self::TABLE_DEFECTPHOTOS => [
@@ -157,6 +165,7 @@ class Install
         $keys = [
             self::TABLE_USAGES       => ['plugin_checklistitens_deliveries_id', 'plugin_checklistitens_deliveryreceipts_id'],
             self::TABLE_DEFECTPHOTOS => ['client_uuid'],
+            self::TABLE_DELIVERYPHOTOS => ['defect_ref'],
         ];
         foreach ($keys as $table => $fields) {
             if (!$DB->tableExists($table)) {
@@ -344,6 +353,7 @@ class Install
             self::TABLE_DELIVERIES,
             self::TABLE_DELIVERYRECEIPTS,
             self::TABLE_DELIVERYPHOTOS,
+            self::TABLE_ACCESSORYDEFECTS,
         ];
     }
 
@@ -612,6 +622,8 @@ class Install
                 `defective_batteries` int unsigned NOT NULL DEFAULT 0,
                 `returned_covers` int unsigned NOT NULL DEFAULT 0,
                 `covers_ok` tinyint NULL DEFAULT NULL,
+                `damaged_covers` int unsigned NOT NULL DEFAULT 0,
+                `tickets_id` int unsigned NOT NULL DEFAULT 0,
                 `comment` text,
                 `selfie` varchar(255) NOT NULL DEFAULT '',
                 `latitude` decimal(10,7) NULL DEFAULT NULL,
@@ -635,13 +647,32 @@ class Install
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
                 `plugin_checklistitens_deliveryreceipts_id` int unsigned NOT NULL DEFAULT 0,
+                `defect_ref` varchar(20) NOT NULL DEFAULT '',
                 `client_uuid` varchar(36) NOT NULL DEFAULT '',
                 `filepath` varchar(255) NOT NULL DEFAULT '',
                 `size_bytes` int unsigned NOT NULL DEFAULT 0,
                 `date_creation` timestamp NULL DEFAULT NULL,
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `delivery_uuid` (`plugin_checklistitens_deliveries_id`, `client_uuid`),
-                KEY `plugin_checklistitens_deliveryreceipts_id` (`plugin_checklistitens_deliveryreceipts_id`)
+                KEY `plugin_checklistitens_deliveryreceipts_id` (`plugin_checklistitens_deliveryreceipts_id`),
+                KEY `defect_ref` (`defect_ref`)
+            ",
+
+            // Bateria ou capa que voltou com defeito num recebimento: uma linha por peça, com a cópia
+            // dos nomes dos problemas marcados (o catálogo pode mudar depois). As fotos ficam nas fotos
+            // da entrega, com defect_ref = "battery:N" ou "cover:N".
+            self::TABLE_ACCESSORYDEFECTS => "
+                `id` int unsigned NOT NULL AUTO_INCREMENT,
+                `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
+                `plugin_checklistitens_deliveryreceipts_id` int unsigned NOT NULL DEFAULT 0,
+                `kind` tinyint unsigned NOT NULL DEFAULT 1,
+                `number` int unsigned NOT NULL DEFAULT 1,
+                `problemtypes_ids` varchar(255) NOT NULL DEFAULT '',
+                `problems` text,
+                `date_creation` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `receipt_piece` (`plugin_checklistitens_deliveryreceipts_id`, `kind`, `number`),
+                KEY `plugin_checklistitens_deliveries_id` (`plugin_checklistitens_deliveries_id`)
             ",
         ];
 

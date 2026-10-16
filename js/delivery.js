@@ -82,9 +82,25 @@
         return parseInt(value, 10) || 0;
     }
 
-    // Contadores do passo 3 (data-ci-counter); a ordem importa: as baterias com defeito dependem
-    // das devolvidas
-    var COUNTERS = ['batteries', 'defective', 'covers'];
+    // Contadores de baterias e capas (data-ci-counter); a ordem importa: as peças com defeito
+    // dependem das devolvidas
+    var COUNTERS = ['batteries', 'defective', 'covers', 'damaged'];
+
+    // Peças que voltam da embarcação (recebimento): contador das devolvidas, das com defeito e os
+    // textos de cada uma
+    var ACC = {
+        battery: {
+            count: 'batteries', bad: 'defective', name: 'bateria', title: 'Bateria',
+            question: 'responder se as baterias devolvidas estão boas',
+            howMany: 'informar quantas baterias estão com defeito'
+        },
+        cover: {
+            count: 'covers', bad: 'damaged', name: 'capa', title: 'Capa',
+            question: 'responder se as capas devolvidas estão em bom estado',
+            howMany: 'informar quantas capas estão com dano'
+        }
+    };
+    var ACC_MAX_PHOTOS = 5;            // fotos por peça com defeito (como no rádio)
 
     function clamp99(value) {
         return Math.min(99, Math.max(0, toInt(value)));
@@ -100,6 +116,9 @@
 
         if (name === 'defective') {
             return draft ? draft.batteries : 0;
+        }
+        if (name === 'damaged') {
+            return draft ? draft.covers : 0;
         }
         if (delivery) {
             left = name === 'covers' ? delivery.covers_left : delivery.batteries_left;
@@ -194,7 +213,9 @@
             batteries: 0,           // baterias reserva (entrega) ou devolvidas (recebimento)
             defective: 0,           // recebimento: das devolvidas, quantas com defeito
             covers: 0,              // capas entregues ou devolvidas
-            coversOk: null,         // recebimento: as capas devolvidas estão em bom estado?
+            damaged: 0,             // recebimento: das capas devolvidas, quantas com dano
+            accOk: {battery: null, cover: null},  // recebimento: as peças devolvidas estão boas?
+            acc: {battery: [], cover: []},        // recebimento: cada peça com defeito {problems, photos}
             isOk: null,
             comment: '',
             photos: [],             // {uuid, sent, url}
@@ -227,7 +248,23 @@
         base.batteries = clamp99(saved.batteries);
         base.defective = clamp99(saved.defective);
         base.covers = clamp99(saved.covers);
-        base.coversOk = saved.coversOk === 0 || saved.coversOk === 1 ? saved.coversOk : null;
+        base.damaged = clamp99(saved.damaged);
+        Object.keys(ACC).forEach(function (kind) {
+            var ok = saved.accOk && typeof saved.accOk === 'object' ? saved.accOk[kind] : null;
+            var pieces = saved.acc && Array.isArray(saved.acc[kind]) ? saved.acc[kind] : [];
+            base.accOk[kind] = ok === 0 || ok === 1 ? ok : null;
+            base.acc[kind] = pieces.map(function (piece) {
+                piece = piece && typeof piece === 'object' ? piece : {};
+                return {
+                    problems: Array.isArray(piece.problems) ? piece.problems.map(toInt).filter(function (id) {
+                        return id > 0;
+                    }) : [],
+                    photos: Array.isArray(piece.photos) ? piece.photos.filter(function (uuid) {
+                        return typeof uuid === 'string' && uuid !== '';
+                    }) : []
+                };
+            });
+        });
         base.isOk = saved.isOk === 0 || saved.isOk === 1 ? saved.isOk : null;
         base.comment = typeof saved.comment === 'string' ? saved.comment : '';
         if (Array.isArray(saved.photos)) {
@@ -676,6 +713,7 @@
                 return;
 
             case 'photo_delete':
+            case 'acc_photo':
                 renderSync();
                 return;
 
@@ -978,7 +1016,7 @@
         return node;
     }
 
-    /** Entrega: rádio reservado, com "Tem problema" (quando a resposta é Não) e "Tirar". */
+    /** Entrega: rádio reservado, com "Tirar" (o problema é indicado em "Rádios ok?"). */
     function deliveryRow(item) {
         var row = el('div', 'ci-item ci-delivery-item');
         var main = el('span', 'ci-delivery-main');
@@ -1001,9 +1039,6 @@
 
         if (!problemPending && !removePending) {
             var actions = el('div', 'ci-item-actions');
-            if (draft.isOk === 0 && !item.known_issue) {
-                actions.appendChild(itemButton('btn btn-sm btn-warning', 'ti-alert-triangle', 'Tem problema', 'data-ci-item-problem', item.usage_id));
-            }
             actions.appendChild(itemButton('btn btn-sm btn-outline-secondary', 'ti-x', 'Tirar', 'data-ci-item-remove', item.usage_id));
             row.appendChild(actions);
         }
@@ -1034,17 +1069,75 @@
         }
         main.appendChild(text);
         row.appendChild(main);
-
-        if (returned && draft.isOk === 0) {
-            var actions = el('div', 'ci-item-actions');
-            if (problem) {
-                actions.appendChild(itemButton('btn btn-sm btn-outline-secondary', 'ti-arrow-back', 'Desfazer', 'data-ci-item-undo', item.usage_id));
-            } else {
-                actions.appendChild(itemButton('btn btn-sm btn-warning', 'ti-alert-triangle', 'Tem problema', 'data-ci-item-problem', item.usage_id));
-            }
-            row.appendChild(actions);
-        }
         return row;
+    }
+
+    /**
+     * "Rádios ok?" com Não: os rádios um a um, logo abaixo da pergunta, cada um com "Tem problema"
+     * (ou o problema já indicado e "Desfazer", no recebimento). Na entrega, o rádio que saiu por
+     * problema aparece no fim, já bloqueado.
+     */
+    function okRow(item) {
+        var row = el('div', 'ci-item ci-delivery-item');
+        var main = el('span', 'ci-delivery-main');
+        var text = itemText(item);
+        var actions = el('div', 'ci-item-actions');
+        var problem = isDelivery ? null : draft.problems[item.usage_id];
+        var pending = isDelivery && countTasks('item_problem', 'items_id', item.items_id) > 0;
+
+        row.setAttribute('data-ci-ok-row', String(item.usage_id));
+        if (isDelivery && item.known_issue) {
+            text.appendChild(tags(Array.isArray(item.problems) ? item.problems : []));
+            text.appendChild(el('div', 'ci-delivery-state', 'Segue na entrega com o problema já conhecido (laudo em aberto).'));
+        } else if (pending) {
+            text.appendChild(el('div', 'ci-delivery-state', 'Registrando o problema...'));
+        } else if (problem) {
+            text.appendChild(tags(Array.isArray(problem.names) ? problem.names : []));
+            text.appendChild(el('div', 'ci-delivery-state', problem.known
+                ? 'Problema já conhecido (laudo em aberto): não bloqueia.'
+                : 'Problema novo: o rádio fica bloqueado ao concluir.'));
+        }
+        main.appendChild(text);
+        row.appendChild(main);
+
+        if (problem) {
+            actions.appendChild(itemButton('btn btn-sm btn-outline-secondary', 'ti-arrow-back', 'Desfazer', 'data-ci-item-undo', item.usage_id));
+        } else if (!pending && !(isDelivery && item.known_issue)) {
+            actions.appendChild(itemButton('btn btn-sm btn-warning', 'ti-alert-triangle', 'Tem problema', 'data-ci-item-problem', item.usage_id));
+        }
+        row.appendChild(actions);
+        return row;
+    }
+
+    function renderOkItems() {
+        var items = isDelivery ? serverItems() : returnedItems();
+
+        // o painel do problema mora nesta lista: sai antes de ela ser refeita
+        if (ui.problemPanel.parentNode === ui.okItems) {
+            ui.okItems.removeChild(ui.problemPanel);
+        }
+        ui.okItems.innerHTML = '';
+        ui.okItems.hidden = draft.isOk !== 0;
+        if (draft.isOk !== 0) {
+            ui.okItems.appendChild(ui.problemPanel);
+            return;
+        }
+
+        items.forEach(function (item) {
+            ui.okItems.appendChild(okRow(item));
+            // o painel abre logo abaixo do rádio escolhido
+            if (panelItem && panelItem.usage_id === item.usage_id) {
+                ui.okItems.appendChild(ui.problemPanel);
+            }
+        });
+        if (isDelivery) {
+            removedItems().forEach(function (item) {
+                ui.okItems.appendChild(removedRow(item));
+            });
+        }
+        if (ui.problemPanel.parentNode !== ui.okItems) {
+            ui.okItems.appendChild(ui.problemPanel);
+        }
     }
 
     function removedRow(item) {
@@ -1698,6 +1791,23 @@
                 }, function () {});
             });
         });
+
+        // Fotos das baterias e capas com defeito: a que não está mais no aparelho sai da peça
+        Object.keys(draft.acc).forEach(function (kind) {
+            draft.acc[kind].forEach(function (piece) {
+                piece.photos.slice().forEach(function (uuid) {
+                    chain = chain.then(function () {
+                        return store.getBlob(key('acc:' + uuid)).then(function (blob) {
+                            if (blob) {
+                                photoUrls[uuid] = URL.createObjectURL(blob);
+                            } else {
+                                piece.photos.splice(piece.photos.indexOf(uuid), 1);
+                            }
+                        }, function () {});
+                    });
+                });
+            });
+        });
         return chain;
     }
 
@@ -1862,12 +1972,34 @@
         } else if (!returnedItems().length) {
             list.push('marcar pelo menos um rádio que voltou');
         }
-        if (!isDelivery && draft.covers > 0 && draft.coversOk === null) {
-            list.push('responder se as capas estão em bom estado');
+        if (!isDelivery) {
+            Object.keys(ACC).forEach(function (kind) {
+                var spec = ACC[kind];
+                if (draft[spec.count] > 0 && draft.accOk[kind] === null) {
+                    list.push(spec.question);
+                }
+                if (draft.accOk[kind] !== 0) {
+                    return;
+                }
+                if (draft[spec.bad] < 1) {
+                    list.push(spec.howMany);
+                }
+                draft.acc[kind].forEach(function (piece, index) {
+                    if (!piece.problems.length) {
+                        list.push('marcar o problema da ' + spec.name + ' ' + (index + 1));
+                    }
+                    if (!piece.photos.length) {
+                        list.push('tirar a foto da ' + spec.name + ' ' + (index + 1));
+                    }
+                });
+            });
+            if (accQueue.length || accCurrent) {
+                list.push('esperar o processamento das fotos das peças');
+            }
         }
 
         if (draft.isOk === null) {
-            list.push('responder "Itens ok?"');
+            list.push('responder "Rádios ok?"');
         } else if (draft.isOk === 0 && !hasProblem()) {
             list.push('indicar o rádio com problema (ou responder Sim)');
         }
@@ -1957,9 +2089,26 @@
                     fields.push(['returned_batteries', draft.batteries]);
                     fields.push(['defective_batteries', draft.defective]);
                     fields.push(['returned_covers', draft.covers]);
+                    fields.push(['damaged_covers', draft.damaged]);
                     if (draft.covers > 0) {
-                        fields.push(['covers_ok', draft.coversOk]);
+                        fields.push(['covers_ok', draft.accOk.cover]);
                     }
+                    // Cada peça com defeito: os problemas vão com a conclusão; as fotos, antes dela,
+                    // marcadas com a peça ("battery:1"). O mesmo identificador não duplica no reenvio
+                    Object.keys(ACC).forEach(function (kind) {
+                        draft.acc[kind].forEach(function (piece, index) {
+                            var ref = kind + ':' + (index + 1);
+                            piece.problems.forEach(function (id) {
+                                fields.push(['acc[' + kind + '][' + (index + 1) + '][]', id]);
+                            });
+                            piece.photos.forEach(function (uuid) {
+                                chain = chain.then(function () {
+                                    return push('photo', [['kind', 'receipt'], ['id', draft.serverId], ['uuid', uuid], ['ref', ref]],
+                                        [['image', key('acc:' + uuid), 'peca.jpg']], {kind: 'acc_photo', uuid: uuid});
+                                });
+                            });
+                        });
+                    });
                     returnedItems().forEach(function (item) {
                         var problem = draft.problems[item.usage_id];
                         fields.push(['usages[]', item.usage_id]);
@@ -2088,6 +2237,7 @@
         }
         renderItems();
         renderAvailable();
+        renderOkItems();
         renderProblem();
         renderRest();
     }
@@ -2118,6 +2268,12 @@
     }
 
     function renderCounters() {
+        // primeiro os valores (cada limite depende do anterior), depois a tela
+        COUNTERS.forEach(function (name) {
+            draft[name] = clampCounter(name, draft[name]);
+        });
+        normalizeAccessories();
+
         COUNTERS.forEach(function (name) {
             var box = ui.counters[name];
             var max;
@@ -2125,7 +2281,6 @@
                 return;
             }
             max = counterMax(name);
-            draft[name] = clampCounter(name, draft[name]);
             box.input.max = String(max);
             box.minus.disabled = draft[name] <= 0;
             box.plus.disabled = draft[name] >= max;
@@ -2136,17 +2291,228 @@
                 box.hint.textContent = counterHint(name);
             }
         });
+        renderAccessories();
+    }
 
-        // "As capas estão em bom estado?" só quando alguma capa voltou
-        if (ui.coversOkBox) {
-            ui.coversOkBox.hidden = draft.covers <= 0;
-            if (draft.covers <= 0) {
-                draft.coversOk = null;
+    // ------------------------------------------------------------------ baterias e capas com defeito
+
+    /**
+     * Mantém coerentes a resposta "estão todas boas?", a quantidade com defeito e os blocos de
+     * cada peça: sem peça devolvida não há pergunta; com "Sim" não há peça com defeito.
+     */
+    function normalizeAccessories() {
+        if (isDelivery) {
+            return;
+        }
+        Object.keys(ACC).forEach(function (kind) {
+            var spec = ACC[kind];
+            if (draft[spec.count] <= 0) {
+                draft.accOk[kind] = null;
             }
-            ui.coversOk.forEach(function (input) {
-                input.checked = draft.coversOk !== null && input.value === String(draft.coversOk);
+            if (draft.accOk[kind] !== 0) {
+                draft[spec.bad] = 0;
+            }
+            resizePieces(kind, draft[spec.bad]);
+        });
+    }
+
+    /** Deixa um bloco por peça com defeito; os que sobram saem com as fotos guardadas. */
+    function resizePieces(kind, count) {
+        var list = draft.acc[kind];
+        while (list.length < count) {
+            list.push({problems: [], photos: []});
+        }
+        while (list.length > count) {
+            list.pop().photos.forEach(forgetAccPhoto);
+        }
+    }
+
+    function forgetAccPhoto(uuid) {
+        if (photoUrls[uuid]) {
+            URL.revokeObjectURL(photoUrls[uuid]);
+            delete photoUrls[uuid];
+        }
+        store.removeBlob(key('acc:' + uuid)).then(null, function () {});
+    }
+
+    function renderAccessories() {
+        if (isDelivery) {
+            return;
+        }
+        Object.keys(ACC).forEach(function (kind) {
+            var spec = ACC[kind];
+            if (!ui.accCard[kind]) {
+                return;
+            }
+            ui.accQuestion[kind].hidden = draft[spec.count] <= 0;
+            ui.accOk[kind].forEach(function (input) {
+                input.checked = draft.accOk[kind] !== null && input.value === String(draft.accOk[kind]);
+            });
+            ui.accBad[kind].hidden = draft.accOk[kind] !== 0;
+            // com peça com defeito o cartão fica em destaque
+            ui.accCard[kind].classList.toggle('ci-acc-alert', draft.accOk[kind] === 0);
+            renderPieces(kind);
+        });
+    }
+
+    function renderPieces(kind) {
+        var spec = ACC[kind];
+        var list = ui.accList[kind];
+        var groups = data.accessoryProblems && Array.isArray(data.accessoryProblems[kind]) ? data.accessoryProblems[kind] : [];
+
+        list.innerHTML = '';
+        draft.acc[kind].forEach(function (piece, index) {
+            var number = index + 1;
+            var box = el('div', 'ci-acc-piece');
+            var title = el('div', 'ci-acc-piece-title');
+            var pickers = el('div', 'row g-2 mt-1');
+            var grid = el('div', 'ci-defect-grid mt-2');
+            var full = piece.photos.length >= ACC_MAX_PHOTOS;
+            var missing = [];
+
+            box.setAttribute('data-ci-acc-piece', kind);
+            box.setAttribute('data-ci-acc-number', String(number));
+            title.appendChild(icon('ti-alert-triangle'));
+            title.appendChild(document.createTextNode(' ' + spec.title + ' ' + number + (kind === 'cover' ? ' com dano' : ' com defeito')));
+            box.appendChild(title);
+            box.appendChild(el('div', 'ci-small text-muted mb-1', 'Marque o que está errado nesta ' + spec.name + ':'));
+
+            if (!groups.length) {
+                box.appendChild(el('div', 'alert alert-warning mb-2', 'Não há problemas cadastrados para ' + spec.name + '. Avise o TI.'));
+            }
+            groups.forEach(function (group) {
+                var block = el('div', 'ci-problem-group');
+                block.appendChild(el('div', 'ci-problem-group-title', group.label));
+                group.problems.forEach(function (problem) {
+                    var label = el('label', 'ci-problem');
+                    var check = el('input', 'form-check-input');
+                    check.type = 'checkbox';
+                    check.value = String(problem.id);
+                    check.checked = piece.problems.indexOf(toInt(problem.id)) !== -1;
+                    check.setAttribute('data-ci-acc-check', '');
+                    label.appendChild(check);
+                    label.appendChild(el('span', '', problem.name));
+                    block.appendChild(label);
+                });
+                box.appendChild(block);
+            });
+
+            box.appendChild(el('div', 'fw-bold mt-2', 'Fotos desta ' + spec.name + ' (1 a ' + ACC_MAX_PHOTOS + ')'));
+            [['Tirar foto', 'ti-camera', 'btn-primary', true], ['Escolher da galeria', 'ti-photo', 'btn-outline-primary', false]].forEach(function (option) {
+                var column = el('div', 'col-12 col-sm-6');
+                var picker = el('label', 'btn ' + option[2] + ' w-100 ci-defect-button' + (full ? ' disabled' : ''));
+                var input = el('input', 'd-none');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.disabled = full;
+                if (option[3]) {
+                    input.setAttribute('capture', 'environment');
+                } else {
+                    input.multiple = true;
+                }
+                input.setAttribute('data-ci-acc-photo-input', '');
+                picker.appendChild(icon(option[1]));
+                picker.appendChild(el('span', '', option[0]));
+                picker.appendChild(input);
+                column.appendChild(picker);
+                pickers.appendChild(column);
+            });
+            box.appendChild(pickers);
+
+            piece.photos.forEach(function (uuid) {
+                var item = el('div', 'ci-defect-item');
+                var thumb = el('img', 'ci-defect-thumb');
+                var remove = el('button', 'ci-defect-remove', '×');
+                thumb.alt = spec.title + ' ' + number;
+                thumb.src = photoUrls[uuid] || '';
+                remove.type = 'button';
+                remove.title = 'Remover foto';
+                remove.setAttribute('aria-label', 'Remover foto');
+                remove.setAttribute('data-ci-acc-photo-remove', uuid);
+                item.appendChild(thumb);
+                item.appendChild(remove);
+                grid.appendChild(item);
+            });
+            box.appendChild(grid);
+
+            if (!piece.problems.length) {
+                missing.push('marque o problema');
+            }
+            if (!piece.photos.length) {
+                missing.push('tire a foto');
+            }
+            box.appendChild(el('div', 'ci-small mt-1 ' + (missing.length ? 'ci-defect-warning' : 'ci-defect-counter-ok'),
+                missing.length ? 'Falta: ' + missing.join(' e ') + '.' : piece.photos.length + ' de ' + ACC_MAX_PHOTOS + ' fotos.'));
+            list.appendChild(box);
+        });
+    }
+
+    function accPiece(target) {
+        var box = closest(target, '[data-ci-acc-piece]');
+        var kind = box ? box.getAttribute('data-ci-acc-piece') : '';
+        var index = box ? toInt(box.getAttribute('data-ci-acc-number')) - 1 : -1;
+        if (!ACC[kind] || !draft.acc[kind][index]) {
+            return null;
+        }
+        return {kind: kind, piece: draft.acc[kind][index]};
+    }
+
+    // Fotos das peças: uma por vez, como as fotos da entrega, guardadas no aparelho até a conclusão
+    var accQueue = [];
+    var accCurrent = null;
+
+    function nextAccPhoto() {
+        accCurrent = accQueue.shift() || null;
+        if (!accCurrent) {
+            renderFinish();
+            return;
+        }
+        var job = accCurrent;
+        function keep(blob) {
+            var uuid = offline.uuid();
+            store.putBlob(key('acc:' + uuid), blob).then(function () {
+                // a peça pode ter saído enquanto a foto era processada
+                if (draft.acc[job.kind].indexOf(job.piece) !== -1 && job.piece.photos.length < ACC_MAX_PHOTOS) {
+                    photoUrls[uuid] = URL.createObjectURL(blob);
+                    job.piece.photos.push(uuid);
+                    saveDraft();
+                    renderPieces(job.kind);
+                } else {
+                    store.removeBlob(key('acc:' + uuid)).then(null, function () {});
+                }
+                nextAccPhoto();
+            }, function () {
+                message('Não foi possível guardar a foto neste aparelho (pode estar sem espaço).', 'danger', true);
+                nextAccPhoto();
             });
         }
+        shrink(job.file, keep, function () {
+            if ((job.file.type === 'image/jpeg' || job.file.type === 'image/png') && job.file.size <= MAX_BYTES) {
+                keep(job.file);
+            } else {
+                message('Não foi possível ler uma das fotos. Tire outra ou escolha outra imagem (JPEG ou PNG, até 5 MB).', 'warning', true);
+                nextAccPhoto();
+            }
+        });
+    }
+
+    function pickAccPhotos(input) {
+        var found = accPiece(input);
+        var files = Array.prototype.slice.call(input.files || []);
+        input.value = '';
+        if (!ready || !found || !files.length) {
+            return;
+        }
+        var waiting = accQueue.filter(function (job) {
+            return job.piece === found.piece;
+        }).length + (accCurrent && accCurrent.piece === found.piece ? 1 : 0);
+        files.slice(0, Math.max(0, ACC_MAX_PHOTOS - found.piece.photos.length - waiting)).forEach(function (file) {
+            accQueue.push({kind: found.kind, piece: found.piece, file: file});
+        });
+        if (!accCurrent) {
+            nextAccPhoto();
+        }
+        renderFinish();
     }
 
     function setCounter(name, value) {
@@ -2218,7 +2584,8 @@
             ui.reserve.addEventListener('click', reserve);
         }
 
-        ui.reserved.addEventListener('click', function (event) {
+        // "Tirar" fica na lista dos rádios; "Tem problema" e "Desfazer", na lista de "Rádios ok?"
+        function onItemClick(event) {
             if (!ready) {
                 return;
             }
@@ -2234,7 +2601,9 @@
                 saveDraft();
                 render();
             }
-        });
+        }
+        ui.reserved.addEventListener('click', onItemClick);
+        ui.okItems.addEventListener('click', onItemClick);
         ui.reserved.addEventListener('change', function (event) {
             var check = closest(event.target, '[data-ci-item-returned]');
             if (!ready || !check) {
@@ -2294,13 +2663,55 @@
                 }
             });
         });
-        ui.coversOk.forEach(function (input) {
-            input.addEventListener('change', function () {
-                if (!ready || !input.checked) {
+        Object.keys(ACC).forEach(function (kind) {
+            var spec = ACC[kind];
+            if (!ui.accCard[kind]) {
+                return;
+            }
+            ui.accOk[kind].forEach(function (input) {
+                input.addEventListener('change', function () {
+                    if (!ready || !input.checked) {
+                        return;
+                    }
+                    draft.accOk[kind] = input.value === '1' ? 1 : 0;
+                    // "Não": já abre o bloco da primeira peça com defeito
+                    if (draft.accOk[kind] === 0 && draft[spec.bad] < 1) {
+                        draft[spec.bad] = 1;
+                    }
+                    renderCounters();
+                    saveDraft();
+                    renderFinish();
+                });
+            });
+            ui.accList[kind].addEventListener('change', function (event) {
+                var found = accPiece(event.target);
+                if (!ready || !found) {
                     return;
                 }
-                draft.coversOk = input.value === '1' ? 1 : 0;
+                if (event.target.hasAttribute('data-ci-acc-photo-input')) {
+                    pickAccPhotos(event.target);
+                    return;
+                }
+                if (event.target.hasAttribute('data-ci-acc-check')) {
+                    found.piece.problems = qsa('[data-ci-acc-check]:checked', closest(event.target, '[data-ci-acc-piece]')).map(function (check) {
+                        return toInt(check.value);
+                    });
+                    saveDraft();
+                    renderPieces(found.kind);
+                    renderFinish();
+                }
+            });
+            ui.accList[kind].addEventListener('click', function (event) {
+                var remove = closest(event.target, '[data-ci-acc-photo-remove]');
+                var found = remove ? accPiece(remove) : null;
+                var uuid = remove ? remove.getAttribute('data-ci-acc-photo-remove') : '';
+                if (!ready || !found || found.piece.photos.indexOf(uuid) === -1) {
+                    return;
+                }
+                found.piece.photos.splice(found.piece.photos.indexOf(uuid), 1);
+                forgetAccPhoto(uuid);
                 saveDraft();
+                renderPieces(found.kind);
                 renderFinish();
             });
         });
@@ -2402,6 +2813,7 @@
         ui.receiptInfo = get('receipt-info');
         ui.itemsCount = get('items-count');
         ui.reserved = get('reserved');
+        ui.okItems = get('ok-items');
         ui.removedBox = get('removed-box');
         ui.removed = get('removed');
         ui.add = get('add');
@@ -2429,8 +2841,18 @@
                 hint: box.querySelector('[data-ci-counter-hint]')
             };
         });
-        ui.coversOkBox = get('covers-ok-box');
-        ui.coversOk = qsa('[data-ci-covers-ok]', root);
+        ui.accCard = {};
+        ui.accQuestion = {};
+        ui.accOk = {};
+        ui.accBad = {};
+        ui.accList = {};
+        Object.keys(ACC).forEach(function (kind) {
+            ui.accCard[kind] = root.querySelector('[data-ci-acc-card="' + kind + '"]');
+            ui.accQuestion[kind] = root.querySelector('[data-ci-acc-question="' + kind + '"]');
+            ui.accOk[kind] = qsa('[data-ci-acc-ok="' + kind + '"]', root);
+            ui.accBad[kind] = root.querySelector('[data-ci-acc-bad="' + kind + '"]');
+            ui.accList[kind] = root.querySelector('[data-ci-acc-list="' + kind + '"]');
+        });
         ui.ok = qsa('[data-ci-ok]', root);
         ui.okHint = get('ok-hint');
         ui.comment = get('comment');

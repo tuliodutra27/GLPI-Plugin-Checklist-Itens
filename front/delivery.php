@@ -1,8 +1,10 @@
 <?php
 
 use GlpiPlugin\Checklistitens\Delivery;
+use GlpiPlugin\Checklistitens\DeliveryReceipt;
 use GlpiPlugin\Checklistitens\DeliveryReport;
 use GlpiPlugin\Checklistitens\Profile;
+use GlpiPlugin\Checklistitens\TicketFactory;
 use GlpiPlugin\Checklistitens\Ui;
 
 include('../../../inc/includes.php');
@@ -27,6 +29,27 @@ if (isset($_POST['cancel_delivery'])) {
     $message   = $result['message'] !== '' ? $result['message'] : __('Separação cancelada.', 'checklistitens');
     Session::addMessageAfterRedirect(htmlspecialchars($message), false, $result['ok'] ? INFO : ERROR);
     Html::redirect($list_url . '?id=' . $cancel_id);
+}
+
+// Chamado das baterias e capas com defeito que não abriu sozinho na conclusão do recebimento
+if (isset($_POST['open_receipt_ticket'])) {
+    if (!Delivery::canDeliver() && !Profile::canAdministrate()) {
+        Html::displayRightError();
+    }
+    $receipt_id = (int) $_POST['open_receipt_ticket'];
+    $receipt    = DeliveryReceipt::getRow($receipt_id);
+    $back_id    = $receipt !== null ? (int) $receipt['plugin_checklistitens_deliveries_id'] : 0;
+    // só para entrega que o usuário pode ver
+    if ($back_id <= 0 || DeliveryReport::getDetail($back_id) === null) {
+        Html::displayRightError();
+    }
+    $tickets_id = TicketFactory::openForAccessories($receipt_id);
+    if ($tickets_id > 0) {
+        Session::addMessageAfterRedirect(sprintf(__('Chamado %d aberto.', 'checklistitens'), $tickets_id));
+    } else {
+        Session::addMessageAfterRedirect(__('Não foi possível abrir o chamado.', 'checklistitens'), false, ERROR);
+    }
+    Html::redirect($list_url . '?id=' . $back_id);
 }
 
 if ($id > 0) {

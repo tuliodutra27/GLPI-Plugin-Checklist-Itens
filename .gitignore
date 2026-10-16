@@ -13,3 +13,6 @@
 
 # Logs do GLPI copiados para análise (nunca publicar)
 /logs/
+
+# Material de apresentação do projeto (interno)
+/Apresentacao/

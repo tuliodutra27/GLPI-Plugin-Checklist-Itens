@@ -8,7 +8,7 @@ use Session;
 
 /**
  * Recebimento dos rádios de volta da embarcação, no mesmo modelo da entrega: o gestor marca quais
- * rádios voltaram, responde "Itens ok?", fotografa, tira a selfie e conclui. A volta pode ser
+ * rádios voltaram, responde "Rádios ok?", fotografa, tira a selfie e conclui. A volta pode ser
  * parcial, por isso uma entrega pode ter vários recebimentos.
  *
  * Os rádios já estão presos pela entrega, então o recebimento em andamento não reserva nada:
@@ -149,7 +149,7 @@ class DeliveryReceipt extends CommonDBTM
                 'id'            => '7',
                 'table'         => $table,
                 'field'         => 'is_ok',
-                'name'          => __('Itens ok', 'checklistitens'),
+                'name'          => __('Rádios ok', 'checklistitens'),
                 'datatype'      => 'bool',
                 'massiveaction' => false,
             ],
@@ -382,9 +382,10 @@ class DeliveryReceipt extends CommonDBTM
      * @param int[]             $usage_ids usos (rádios) que voltaram
      * @param array<int, int[]> $problems  usages_id => problemas do catálogo marcados
      * @param array<int, mixed> $known     usages_id => 1 quando "é o problema do laudo"
+     * @param array             $accessory "battery"|"cover" => número da peça => problemas do catálogo
      * @return array{ok: bool, message: string, redirect?: string, blocked?: int, laudo_closed?: bool, receipt?: array, code?: string, retry?: bool}
      */
-    public static function finish(int $id, array $usage_ids, array $problems, array $known): array
+    public static function finish(int $id, array $usage_ids, array $problems, array $known, array $accessory = []): array
     {
         if (!Delivery::canDeliver()) {
             return Delivery::fail(Delivery::noRightMessage());
@@ -398,7 +399,7 @@ class DeliveryReceipt extends CommonDBTM
         // A trava é da entrega: dois recebimentos da mesma entrega não mexem nos mesmos rádios juntos
         return Delivery::locked(
             (int) $row['plugin_checklistitens_deliveries_id'],
-            static fn (): array => self::finishLocked($id, $usage_ids, $problems, $known)
+            static fn (): array => self::finishLocked($id, $usage_ids, $problems, $known, $accessory)
         );
     }
 
@@ -520,7 +521,7 @@ class DeliveryReceipt extends CommonDBTM
     /**
      * Conclusão do recebimento, já com a entrega travada.
      */
-    private static function finishLocked(int $id, array $usage_ids, array $problems, array $known): array
+    private static function finishLocked(int $id, array $usage_ids, array $problems, array $known, array $accessory = []): array
     {
         $users_id = (int) Session::getLoginUserID();
         $row      = self::getRow($id);
@@ -557,7 +558,7 @@ class DeliveryReceipt extends CommonDBTM
 
         $is_ok = Delivery::readYesNo('is_ok');
         if ($is_ok === null) {
-            return Delivery::fail(__('Responda se os itens estão ok.', 'checklistitens'), $state());
+            return Delivery::fail(__('Responda se os rádios estão ok.', 'checklistitens'), $state());
         }
 
         // Com "Sim" os problemas enviados são ignorados; com "Não", cada rádio com problema precisa
@@ -624,6 +625,24 @@ class DeliveryReceipt extends CommonDBTM
         if ($covers > 0 && $covers_ok === null) {
             return Delivery::fail(__('Responda se as capas devolvidas estão em bom estado.', 'checklistitens'), $state());
         }
+        // Capas com dano: quantas (de 1 até as devolvidas), só quando a resposta foi "Não"
+        $damaged = 0;
+        if ($covers_ok === 0) {
+            $damaged = Delivery::readQuantity('damaged_covers');
+            if ($damaged === null || $damaged < 1 || $damaged > $covers) {
+                return Delivery::fail(sprintf(__('Informe quantas capas estão com dano (de 1 a %d).', 'checklistitens'), $covers), $state());
+            }
+        }
+
+        // Cada bateria com defeito e cada capa com dano: problemas do catálogo e pelo menos uma foto
+        $pieces = [];
+        foreach ([AccessoryDefect::KIND_BATTERY => [$defective, 'battery'], AccessoryDefect::KIND_COVER => [$damaged, 'cover']] as $kind => [$count, $key]) {
+            $read = AccessoryDefect::readPieces($deliveries_id, $id, $kind, $count, is_array($accessory[$key] ?? null) ? $accessory[$key] : []);
+            if ($read['error'] !== '') {
+                return Delivery::fail($read['error'], $state());
+            }
+            $pieces = array_merge($pieces, $read['pieces']);
+        }
         $comment = Delivery::readComment();
 
         $selfie = Selfie::storeFromRequest(Selfie::KIND_RECEIPT, $users_id);
@@ -649,6 +668,7 @@ class DeliveryReceipt extends CommonDBTM
             'returned_batteries'  => $batteries,
             'defective_batteries' => $defective,
             'returned_covers'     => $covers,
+            'damaged_covers'      => $damaged,
             // como texto, pelo mesmo motivo do is_ok; sem capa devolvida fica vazio
             'covers_ok'           => $covers_ok === null ? 'NULL' : (string) $covers_ok,
             'comment'             => $comment,
@@ -661,6 +681,7 @@ class DeliveryReceipt extends CommonDBTM
         $done = Delivery::atomically(static function () use (
             $id,
             $deliveries_id,
+            $pieces,
             $users_id,
             $fields,
             $usage_ids,
@@ -674,6 +695,9 @@ class DeliveryReceipt extends CommonDBTM
             &$laudo_closed
         ): bool {
             if (!(new self())->update($fields)) {
+                return false;
+            }
+            if (!AccessoryDefect::saveAll($deliveries_id, $id, $pieces)) {
                 return false;
             }
 
@@ -748,6 +772,12 @@ class DeliveryReceipt extends CommonDBTM
                 DefectPhoto::deleteFor($usage_id, Usage::PHASE_CHECKIN);
             }
         }
+        // Fotos de peça que não ficou com defeito (a quantidade diminuiu depois do envio)
+        DeliveryPhoto::deleteDefectsExcept($deliveries_id, $id, array_column($pieces, 'ref'));
+
+        // Bateria ou capa com defeito: chamado para o TI na hora, com os problemas e as fotos. Uma
+        // falha aqui não desfaz o recebimento (o TI abre pelo detalhe da entrega)
+        $tickets_id = count($pieces) ? TicketFactory::openForAccessories($id) : 0;
 
         return [
             'ok'           => true,
@@ -755,6 +785,7 @@ class DeliveryReceipt extends CommonDBTM
             'redirect'     => self::doneUrl($deliveries_id),
             'blocked'      => $blocked,
             'laudo_closed' => $laudo_closed,
+            'ticket'       => $tickets_id,
         ];
     }
 

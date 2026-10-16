@@ -152,8 +152,9 @@ usuários (seção 2).
 2. Se a versão nova mudar o banco, o GLPI mostra o botão **Atualizar** em **Configurar > Plugins**.
    Clique nele e ative de novo, se for pedido.
 
-A atualização só acrescenta o que falta e **não altera os registros existentes**, nem os direitos
-e a configuração que você já ajustou.
+A atualização só acrescenta o que falta e **não altera os registros existentes** (a única exceção
+é a correção das devoluções na 0.11.0, abaixo), nem os direitos e a configuração que você já
+ajustou.
 
 **Para a 0.10.0:** a versão muda o banco (fotos do defeito e problema conhecido), então o GLPI
 pede **Atualizar**. Na atualização, os perfis Operador e Gestor Operacional também são criados, se
@@ -161,9 +162,14 @@ ainda não existirem, e a integração com o plugin Laudo já vem ligada.
 
 **Para a 0.11.0:** a versão cria tabelas novas (entrega de rádios para embarcação), então o GLPI
 pede **Atualizar**. A atualização:
-- cria as tabelas das embarcações, das entregas, dos recebimentos e das fotos da entrega;
+- cria as tabelas das embarcações, das entregas, dos recebimentos, das fotos da entrega e das
+  baterias e capas com defeito;
 - acrescenta colunas novas nas tabelas dos usos e das fotos do defeito. Nenhuma outra tabela antiga
-  é alterada, e os registros existentes continuam como estão;
+  muda de estrutura;
+- grava "Não" nas devoluções antigas que ficaram sem a resposta de **Equipamento ok?** (até a
+  0.10.0, o "Não" da devolução não chegava ao banco). Os outros registros continuam como estão;
+- coloca no catálogo os problemas padrão de **bateria** e de **capa**, só se o tipo ainda não
+  tiver nenhum ([seção 4.3](#43-catálogo-de-problemas));
 - cria a ação automática `expiredeliveries`
   ([seção 8.4](#84-ações-automáticas-e-notificação));
 - não cria direito novo: a entrega usa os direitos que já existem
@@ -249,6 +255,10 @@ agrupada em Funcionamento, Bateria, Estrutura e acessórios e Outros.
   chamado numa categoria de "troca de bateria".
 - Os problemas de rádio são os mesmos que o gestor marca na entrega para embarcação e no
   recebimento.
+- Os tipos **Bateria (entrega para embarcação)** e **Capa (entrega para embarcação)** têm a lista
+  que o gestor marca para cada bateria ou capa que volta com defeito (ex.: trava quebrada, polo ou
+  contato queimado, não carrega, estufada; rasgada, presilha quebrada). O chamado aberto para elas
+  usa a categoria desses problemas, ou a do rádio.
 
 > **Qualquer problema marcado bloqueia o equipamento** até o chamado ser solucionado. Mantenha no
 > catálogo só o que deve tirar o equipamento de circulação. A única exceção é o problema já
@@ -522,7 +532,7 @@ do envio (ex.: "Conectado · tudo enviado"). Os passos aparecem numerados, na or
 3. **Baterias e capas.** Informe quantas **baterias reserva** e quantas **capas** vão com os rádios,
    de 0 a 99, digitando ou com os botões **−** e **+**. Baterias e capas não são controladas uma a
    uma, só a quantidade.
-4. **Itens ok?**
+4. **Rádios ok?**
    - **SIM:** segue.
    - **NÃO:** veja a [seção 7.2](#72-rádio-com-problema-na-entrega).
 5. **Observações.** Campo livre, opcional, com até 1.000 caracteres. Escreva o que for importante
@@ -562,9 +572,10 @@ Depois de concluída, a entrega fica **"Entregue"** e os rádios ficam **"Com a 
 
 ### 7.2 Rádio com problema na entrega
 
-1. Em **Itens ok?**, toque em **NÃO**. A tela pede para indicar o rádio com problema.
-2. Na lista dos rádios reservados (passo 2 da tela), toque em **Tem problema** no rádio.
-3. No quadro **Problema no rádio**, marque os problemas encontrados e tire de **1 a 5 fotos do
+1. Em **Rádios ok?**, toque em **NÃO**. A tela pede para indicar o rádio com problema.
+2. Logo abaixo da pergunta aparecem os rádios da entrega, um a um. Toque em **Tem problema** no
+   rádio com problema.
+3. O quadro **Problema no rádio** abre logo abaixo desse rádio. Nele, marque os problemas encontrados e tire de **1 a 5 fotos do
    defeito**, como na retirada do colaborador ([seção 5.4](#54-fotos-do-defeito)). Essas fotos não
    contam para o mínimo de fotos da entrega.
 4. Escolha o que fazer. Os botões só liberam com pelo menos 1 problema marcado e 1 foto.
@@ -583,7 +594,7 @@ Depois de concluída, a entrega fica **"Entregue"** e os rádios ficam **"Com a 
 - O rádio bloqueado aparece em **Itens bloqueados** na conferência do setor. O chamado é aberto por
   lá, com as fotos anexadas ([seção 6.2](#62-abrir-chamado-de-um-item-bloqueado-opcional)), ou na
   confirmação da conferência.
-- Com algum rádio com problema, a resposta de "Itens ok?" fica em **NÃO**.
+- Com algum rádio com problema, a resposta de "Rádios ok?" fica em **NÃO**.
 - Se **todos** os rádios saírem por problema, a entrega não pode ser concluída: acrescente outros
   rádios ou cancele a separação.
 
@@ -606,19 +617,31 @@ vários recebimentos, até o último rádio voltar.
 3. **Rádios que voltaram.** Todos os rádios que estão com a embarcação já vêm marcados. **Desmarque
    os que não voltaram**: eles aparecem como "Continua com a embarcação." O contador mostra quantos
    estão marcados (ex.: "6 de 8").
-4. **Baterias e capas devolvidas.**
-   - **Baterias devolvidas:** o máximo é o número de baterias reserva que foram com a embarcação e
-     ainda não voltaram (a tela mostra "Entregues com a embarcação: N. Ainda não voltaram: M.").
-     Num recebimento em partes, o que já voltou antes é descontado.
-   - **Destas, quantas estão com defeito?** Marque quantas das baterias devolvidas agora voltaram
-     com defeito (no máximo as devolvidas). O detalhe da entrega e o CSV mostram esse número.
-   - **Capas devolvidas:** mesma regra das baterias.
-   - Quando volta alguma capa, responda **As capas devolvidas estão todas em bom estado?** (SIM ou
-     NÃO). Se alguma estiver danificada, descreva nas observações.
-5. **Itens ok?**
+4. **Baterias devolvidas.**
+   - **Quantas baterias voltaram?** O máximo é o número de baterias reserva que foram com a
+     embarcação e ainda não voltaram (a tela mostra "Entregues com a embarcação: N. Ainda não
+     voltaram: M."). Num recebimento em partes, o que já voltou antes é descontado.
+   - Quando volta alguma bateria, responda **As baterias devolvidas estão todas boas?** (SIM ou
+     NÃO).
+   - Com **NÃO**, o cartão fica em destaque e aparece **Quantas estão com defeito?** (no máximo as
+     devolvidas agora). Para cada bateria com defeito abre um bloco próprio ("Bateria 1 com
+     defeito", "Bateria 2 com defeito"...), em que você:
+     - marca o que está errado naquela bateria (ex.: trava quebrada, polo ou contato queimado, não
+       carrega, estufada);
+     - tira de 1 a 5 fotos dela, pela câmera ou pela galeria.
+5. **Capas devolvidas.** Mesma regra das baterias: **Quantas capas voltaram?**, **As capas
+   devolvidas estão todas em bom estado?** e, com **NÃO**, **Quantas estão com dano?** e um bloco
+   por capa com os problemas (ex.: rasgada, presilha quebrada, costura solta) e as fotos.
+
+   Quando alguma bateria ou capa volta com defeito, o plugin **abre um chamado para o TI**
+   automaticamente ao concluir o recebimento, com a embarcação, cada peça e os problemas marcados,
+   e com as fotos anexadas. O número do chamado aparece no detalhe da entrega. As baterias e capas
+   continuam controladas só pela quantidade, não uma a uma.
+6. **Rádios ok?** (a pergunta é só sobre os rádios; baterias e capas têm as perguntas acima)
    - **SIM:** segue.
-   - **NÃO:** toque em **Tem problema** no rádio, marque os problemas e tire de 1 a 5 fotos do
-     defeito. Depois escolha:
+   - **NÃO:** logo abaixo da pergunta aparecem os rádios que voltaram, um a um. Toque em **Tem
+     problema** no rádio; o quadro abre logo abaixo dele. Marque os problemas e tire de 1 a 5 fotos
+     do defeito. Depois escolha:
 
      | Rádio | Opção | O que acontece |
      |---|---|---|
@@ -628,11 +651,11 @@ vários recebimentos, até o último rádio voltar.
 
      O botão **Desfazer** tira a marcação de problema do rádio. O bloqueio só acontece quando o
      recebimento é concluído.
-6. **Observações.** Campo livre, opcional.
-7. **Fotos.** Fotografe a frente e as costas de cada rádio que voltou, e as baterias. O mínimo
+7. **Observações.** Campo livre, opcional.
+8. **Fotos.** Fotografe a frente e as costas de cada rádio que voltou, e as baterias. O mínimo
    padrão é de 10 fotos.
-8. **Selfie.** Toque em **Tirar minha selfie**.
-9. Toque em **Concluir recebimento**. Aparece **"Recebimento registrado"**, com o resumo (ex.: "6
+9. **Selfie.** Toque em **Tirar minha selfie**.
+10. Toque em **Concluir recebimento**. Aparece **"Recebimento registrado"**, com o resumo (ex.: "6
    rádio(s) devolvido(s); 2 ainda com a embarcação."), e o sistema faz **logoff**.
 
 Depois do recebimento:
@@ -685,13 +708,13 @@ entregas com rádios do seu setor e as que ele mesmo fez. O TI vê todas.
 Toque numa entrega para abrir o **detalhe**:
 - a selfie do gestor, a data, o turno e o botão **Mapa** da localização;
 - os totais: rádios entregues, com a embarcação, devolvidos, que saíram por problema, baterias
-  reserva, capas e a resposta de "Itens ok?";
+  reserva, capas e a resposta de "Rádios ok?";
 - as **observações**;
 - os **rádios**, cada um com a situação, os problemas, as fotos do defeito, a data em que foi
   recebido, o bloqueio e o chamado, se houver. O nome do rádio abre o registro de uso dele;
 - as **fotos da entrega**. Toque numa foto para abrir no tamanho original;
 - um quadro para cada **recebimento**: quem recebeu, as baterias e as capas devolvidas, as baterias
-  com defeito e o estado das capas (em destaque quando há problema), "Itens ok?", o mapa,
+  com defeito e o estado das capas (em destaque quando há problema), "Rádios ok?", o mapa,
   as observações e as fotos;
 - o botão **CSV**, que exporta a entrega com uma linha por rádio;
 - o botão **Receber da embarcação**, enquanto houver rádio com a embarcação;
@@ -849,6 +872,10 @@ O que cabe ao TI na entrega de rádios para embarcação:
 - acompanhar as entregas de **todos os setores** em **Entregas para embarcação**, com o detalhe e o
   CSV de cada uma ([seção 7.5](#75-acompanhar-as-entregas));
 - cancelar, no detalhe da entrega, uma separação abandonada que esteja prendendo rádios;
+- atender os **chamados das baterias e capas com defeito**, abertos sozinhos na conclusão do
+  recebimento (embarcação, cada peça, os problemas e as fotos anexadas). Se um não abrir, o
+  detalhe da entrega tem o botão **Abrir chamado**;
+- manter o catálogo dos tipos **Bateria** e **Capa** em **Problemas do checklist**;
 - conferir se a ação automática `expiredeliveries` está rodando
   ([seção 8.4](#84-ações-automáticas-e-notificação)).
 
@@ -1015,13 +1042,15 @@ Só na entrega para embarcação e no recebimento
 | "Nenhuma embarcação cadastrada" na entrega | Não há embarcação ativa, ou ela não está visível na entidade do gestor | O TI cadastra ou ativa a embarcação em **Embarcações** ([seção 4.4](#44-embarcações)). |
 | O botão **Reservar rádios** não habilita | Falta escolher a embarcação ou marcar um rádio, ou o limite de rádios da entrega já foi atingido | Escolher a embarcação, marcar os rádios e conferir o aviso abaixo do botão. O limite fica na configuração. |
 | "Não foi possível reservar" um rádio | Outra pessoa retirou ou reservou o rádio antes, ou o limite da entrega foi atingido | Escolher outro rádio. |
-| O botão **Concluir entrega** (ou **Concluir recebimento**) não habilita | Falta algum passo. Abaixo do botão, a tela mostra "Falta: …" | Conferir: embarcação escolhida e pelo menos um rádio reservado (na entrega), ou pelo menos um rádio marcado como devolvido (no recebimento); "Itens ok?" respondido; com "NÃO", o rádio com problema indicado; quadro "Problema no rádio" concluído ou fechado; mínimo de fotos atingido e fotos já processadas; selfie tirada. |
+| O botão **Concluir entrega** (ou **Concluir recebimento**) não habilita | Falta algum passo. Abaixo do botão, a tela mostra "Falta: …" | Conferir: embarcação escolhida e pelo menos um rádio reservado (na entrega), ou pelo menos um rádio marcado como devolvido (no recebimento); "Rádios ok?" respondido; com "NÃO", o rádio com problema indicado; quadro "Problema no rádio" concluído ou fechado; mínimo de fotos atingido e fotos já processadas; selfie tirada. |
 | Apareceu "Sem conexão" no topo da tela da entrega | O aparelho perdeu o sinal | Continuar normalmente: tudo fica guardado no aparelho e é enviado quando o sinal voltar. Não fechar o navegador nem limpar os dados. Só reservar rádios e concluir dependem do sinal ([seção 7.6](#76-sem-conexão-o-que-fica-guardado-no-aparelho)). |
 | "Falha no envio, tentando de novo" não some | O servidor não está respondendo, ou o sinal está fraco demais | Esperar ou tocar em **Tentar agora**. Se continuar, avisar o TI: o que foi feito continua guardado no aparelho. |
 | A tela pediu para entrar de novo ("Sua sessão expirou") | A sessão do GLPI venceu, em geral depois de muito tempo sem sinal | Tocar em **Entrar de novo** e fazer o login no mesmo aparelho e navegador. Nada se perde, e o envio continua. |
 | A separação sumiu, ou apareceu "Esta separação não existe mais no servidor" | A separação ficou parada além do prazo configurado (padrão: 12 horas) e foi cancelada sozinha, ou foi cancelada | Os rádios foram liberados. As fotos continuam no aparelho: reservar os rádios de novo para continuar, ou cancelar para descartar. |
 | "Este navegador não está guardando os dados (aba anônima?)" | Aba anônima, ou navegador que bloqueia os dados de sites | Usar uma janela normal. Nessa situação, se a página fechar, o que ainda não foi enviado se perde. |
 | A separação parada não é cancelada depois do prazo | A ação automática `expiredeliveries` não está rodando (cron do GLPI parado) | Conferir o cron, ou executar a ação manualmente ([seção 8.4](#84-ações-automáticas-e-notificação)). O gestor que começou a separação também pode cancelar. |
+| No recebimento, a resposta "Rádios ok?" não deixa marcar SIM | Algum rádio já está marcado com problema | Tocar em **Desfazer** no rádio, na lista abaixo da pergunta, se a marcação foi engano |
+| Bateria ou capa com defeito, mas o chamado não apareceu | A abertura automática falhou (categoria, entidade ou direito do GLPI) | No detalhe da entrega, tocar em **Abrir chamado** no recebimento. Se continuar, ver o log do GLPI |
 
 Para diagnóstico técnico, os erros do GLPI ficam em `files/_log/php-errors.log` e
 `files/_log/sql-errors.log`.

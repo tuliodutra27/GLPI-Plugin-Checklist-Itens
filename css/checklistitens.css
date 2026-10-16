@@ -570,3 +570,40 @@ label.ci-delivery-main {
 .ci-prewrap {
     white-space: pre-wrap;
 }
+
+/* Recebimento: baterias e capas. Com peça com defeito o cartão fica em destaque, e cada peça tem
+   um bloco próprio com os problemas e as fotos */
+.ci-acc-card.ci-acc-alert {
+    border: 2px solid var(--tblr-warning, #f59f00);
+}
+
+.ci-acc-piece {
+    padding: .75rem;
+    margin-top: .75rem;
+    border: 1px solid var(--tblr-warning, #f59f00);
+    border-left-width: 6px;
+    border-radius: .5rem;
+    background: rgba(245, 159, 0, .06);
+}
+
+.ci-acc-piece-title {
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-bottom: .25rem;
+}
+
+.ci-acc-piece-title .ti {
+    color: var(--tblr-warning, #f59f00);
+}
+
+/* Detalhe da entrega: peças que voltaram com defeito */
+.ci-acc-summary {
+    padding: .75rem;
+    border-left: 4px solid var(--tblr-warning, #f59f00);
+    border-radius: .375rem;
+    background: rgba(245, 159, 0, .06);
+}
+
+.ci-acc-summary-item + .ci-acc-summary-item {
+    margin-top: .5rem;
+}

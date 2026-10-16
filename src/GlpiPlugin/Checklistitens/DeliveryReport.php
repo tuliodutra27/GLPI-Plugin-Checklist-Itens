@@ -319,7 +319,7 @@ class DeliveryReport
      */
     public static function getDetail(int $id): ?array
     {
-        global $DB;
+        global $CFG_GLPI, $DB;
 
         $row = $DB->request(['FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['id' => $id]])->current();
         if (!$row || !self::canViewDelivery($row)) {
@@ -411,6 +411,8 @@ class DeliveryReport
             'WHERE' => ['plugin_checklistitens_deliveries_id' => $id, 'status' => DeliveryReceipt::STATUS_DONE],
             'ORDER' => 'date_receipt',
         ]);
+        $defects  = AccessoryDefect::getForReceipts(array_map(static fn ($r) => (int) $r['id'], iterator_to_array($iterator, false)));
+        $iterator->rewind();
         foreach ($iterator as $r) {
             $rid        = (int) $r['id'];
             $receipts[] = [
@@ -422,6 +424,12 @@ class DeliveryReport
                 'defective_batteries' => (int) $r['defective_batteries'],
                 'returned_covers'     => (int) $r['returned_covers'],
                 'covers_ok'           => $r['covers_ok'] === null ? null : (int) $r['covers_ok'] === 1,
+                'damaged_covers'      => (int) $r['damaged_covers'],
+                // baterias e capas com defeito, e o chamado aberto para elas
+                'defects'             => $defects[$rid] ?? [],
+                'tickets_id'          => (int) $r['tickets_id'],
+                'ticket_url'          => (int) $r['tickets_id'] > 0 ? $CFG_GLPI['root_doc'] . '/front/ticket.form.php?id=' . (int) $r['tickets_id'] : '',
+                'can_open_ticket'     => isset($defects[$rid]) && (int) $r['tickets_id'] === 0 && (Delivery::canDeliver() || Profile::canAdministrate()),
                 'comment'             => Ui::text($r['comment'] ?? ''),
                 'selfie'              => self::selfieInfo((string) $r['selfie'], Selfie::KIND_RECEIPT, $rid, $r['date_receipt']),
                 'location'            => Location::present($r, '', __('Recebimento', 'checklistitens') . ' — ' . $vessel),
@@ -476,7 +484,7 @@ class DeliveryReport
             __('Entrega', 'checklistitens'), __('Embarcação', 'checklistitens'), __('Situação da entrega', 'checklistitens'),
             __('Gestor', 'checklistitens'), __('Entregue em', 'checklistitens'), __('Baterias reserva', 'checklistitens'),
             __('Capas', 'checklistitens'),
-            __('Itens ok', 'checklistitens'), __('Observações', 'checklistitens'), __('Fotos da entrega', 'checklistitens'),
+            __('Rádios ok', 'checklistitens'), __('Observações', 'checklistitens'), __('Fotos da entrega', 'checklistitens'),
             __('Localização da entrega', 'checklistitens'),
             __('Rádio', 'checklistitens'), __('Situação do rádio', 'checklistitens'),
             __('Problemas na entrega', 'checklistitens'), __('Problema conhecido na entrega', 'checklistitens'),
@@ -485,6 +493,7 @@ class DeliveryReport
             // do recebimento em que o rádio voltou
             __('Baterias devolvidas', 'checklistitens'), __('Baterias com defeito', 'checklistitens'),
             __('Capas devolvidas', 'checklistitens'), __('Capas em bom estado', 'checklistitens'),
+            __('Baterias e capas com defeito', 'checklistitens'), __('Chamado das baterias e capas', 'checklistitens'),
         ], ';');
 
         $yes      = __('Sim', 'checklistitens');
@@ -516,6 +525,8 @@ class DeliveryReport
                 $receipt['defective_batteries'] ?? '',
                 $receipt['returned_covers'] ?? '',
                 $receipt === null || $receipt['covers_ok'] === null ? '' : ($receipt['covers_ok'] ? $yes : $no),
+                $receipt === null ? '' : AccessoryDefect::summary($receipt['defects']),
+                $receipt === null || $receipt['tickets_id'] === 0 ? '' : $receipt['tickets_id'],
             ], ';');
         }
         fclose($out);
