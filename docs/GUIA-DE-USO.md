@@ -294,9 +294,21 @@ interface simplificada.
 - se o perfil dele está em "Perfis que abrem a tela do plugin depois do login", ele cai direto no
   plugin ao entrar no GLPI;
 - se não, entra pelo menu **Plugins > Checklist uso de equipamentos** (interface simplificada) ou
-  **Ativos > Checklist uso de equipamentos** (interface padrão).
+  **Ativos > Checklist uso de equipamentos** (interface padrão), ou pelos atalhos da página
+  inicial do GLPI (abaixo).
 
 Se não estiver com nenhum equipamento, abre direto a **retirada**.
+
+**Atalhos na página inicial do GLPI:** na interface simplificada, a página inicial do GLPI (a que
+mostra os chamados) tem no topo o bloco **Checklist uso de equipamentos**, só com os atalhos que o
+perfil pode usar:
+- **Iniciar uso** e **Finalizar uso**, para quem usa os equipamentos;
+- **Conferência do setor**, com o número de pendências, para o gestor;
+- **Entrega para embarcação** e **Receber da embarcação**, para o gestor, com o tipo Rádio
+  habilitado. Se houver uma separação ou um recebimento em andamento, o bloco mostra o aviso com
+  **Continuar** e **Cancelar**, como a tela inicial do plugin.
+
+**Todas as funções** abre a tela inicial do plugin. Na interface padrão o bloco não aparece.
 
 ### 5.1 Retirar um equipamento
 
@@ -413,8 +425,10 @@ em aberto) foi registrado, com as fotos, para o gestor conferir."
 
 ## 6. Passo a passo do gestor do setor
 
-O gestor entra em **Conferência do setor** pela tela inicial do plugin ou pelo menu. Funciona no
-celular/tablet, que é necessário para a selfie, e no computador.
+O gestor entra em **Conferência do setor** pela tela inicial do plugin, pelo menu ou pelo atalho
+na página inicial do GLPI, que já mostra quantas pendências há
+([seção 5](#5-passo-a-passo-do-colaborador)). Funciona no celular/tablet, que é necessário para a
+selfie, e no computador.
 
 ### 6.1 Ler o painel
 
@@ -502,8 +516,10 @@ tela no mesmo modelo.
 
 **Acesso:** a tela inicial do plugin mostra os cartões **Entrega para embarcação**, **Receber da
 embarcação** e **Entregas para embarcação**. Na interface padrão, a lista também fica em **Ativos >
-Checklist uso de equipamentos > Entregas para embarcação**. Os cartões só aparecem com o tipo
-**Rádio** habilitado na configuração.
+Checklist uso de equipamentos > Entregas para embarcação**. Na interface simplificada, **Entrega
+para embarcação** e **Receber da embarcação** também ficam nos atalhos da página inicial do GLPI
+([seção 5](#5-passo-a-passo-do-colaborador)). Os cartões só aparecem com o tipo **Rádio** habilitado
+na configuração.
 
 A tela foi feita para o **celular ou tablet**. Ela guarda tudo o que o gestor faz no próprio
 aparelho e envia aos poucos. Leia a

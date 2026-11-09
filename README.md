@@ -36,6 +36,9 @@ trabalho no aparelho quando a conexão falha.
   que seja o problema do laudo em aberto.
 - Logoff automático por inatividade.
 - Perfis configurados abrem direto a tela do plugin logo depois do login.
+- Na interface simplificada, a página inicial do GLPI mostra atalhos para as funções do plugin que
+  o perfil usa. Para o gestor, os atalhos trazem as pendências da conferência e a entrega para
+  embarcação.
 
 **Gestor do setor**
 - **Conferência por turno** (padrão: turnos de 12 h, às 07h e às 19h). O gestor vê as
