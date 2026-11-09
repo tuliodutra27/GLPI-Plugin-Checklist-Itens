@@ -6,6 +6,11 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- Atalhos do plugin na página inicial do GLPI (interface simplificada), só com o que o perfil pode
+  usar: Iniciar uso e Finalizar uso; Conferência do setor com o número de pendências; Entrega para
+  embarcação e Receber da embarcação, com o aviso da separação ou do recebimento em andamento.
+
 ## [0.11.0] - 2026-10-16
 
 Requer Atualizar em Configurar > Plugins.

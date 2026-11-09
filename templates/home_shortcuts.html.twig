@@ -1,0 +1,44 @@
+{# Atalhos do plugin na página inicial do GLPI (interface simplificada). Só classes do GLPI: o CSS
+   do plugin não é carregado nessa página. #}
+<div class="card mb-3">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+        <h3 class="card-title mb-0">
+            <i class="ti ti-clipboard-check me-1"></i>
+            {{ __('Checklist uso de equipamentos', 'checklistitens') }}
+        </h3>
+        {% if has_more %}
+            <a href="{{ home_url }}" class="btn btn-sm btn-outline-secondary">
+                {{ __('Todas as funções', 'checklistitens') }}
+            </a>
+        {% endif %}
+    </div>
+
+    {% for notice in notices %}
+        <div class="alert alert-{{ notice.type }} m-2 mb-0 d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <span>{{ notice.text }}</span>
+            <span class="d-flex flex-wrap gap-2">
+                <a href="{{ notice.url }}" class="btn btn-sm btn-{{ notice.type }}">{{ notice.action }}</a>
+                {% if notice.url2 is defined and notice.url2 %}
+                    <a href="{{ notice.url2 }}" class="btn btn-sm btn-outline-secondary">{{ notice.action2 }}</a>
+                {% endif %}
+            </span>
+        </div>
+    {% endfor %}
+
+    <div class="card-body p-2">
+        <div class="row g-2">
+            {% for card in cards %}
+                <div class="col-6 col-md-4 col-xl">
+                    <a href="{{ card.url }}"
+                       class="btn btn-outline-{{ card.color }} w-100 h-100 py-3 d-flex flex-column align-items-center justify-content-center gap-1 text-wrap">
+                        <i class="{{ card.icon }} fs-1"></i>
+                        <span>{{ card.title }}</span>
+                        {% if card.badge is defined and card.badge %}
+                            <span class="badge bg-{{ card.badge_color|default('orange') }}">{{ card.badge }}</span>
+                        {% endif %}
+                    </a>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
