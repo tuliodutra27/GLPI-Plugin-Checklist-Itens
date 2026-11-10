@@ -224,6 +224,8 @@ Em **Ativos > Checklist uso de equipamentos > Configuração**:
 | Início dos turnos | Horários separados por vírgula | 07:00,19:00 |
 | Categoria do chamado (por tipo) | Categoria usada nos chamados abertos pelo plugin | categorias padrão, se existirem |
 | Perfis que abrem a tela do plugin depois do login | Esses perfis entram direto no plugin | "Operador" |
+| Atalhos do plugin na página inicial do GLPI (interface simplificada) | Liga o bloco de atalhos no topo da página inicial ([seção 5](#5-passo-a-passo-do-colaborador)) | Não |
+| Perfis que veem os atalhos na página inicial | Só esses perfis veem o bloco, e só com a opção acima em Sim | "Gestor Operacional" |
 | Logoff por inatividade | Segundos sem uso nas telas do colaborador; 0 = desligado | 60 |
 | Retenção mínima das selfies | Dias antes de poder limpar; mínimo de 90 | 90 |
 | Retenção das localizações | Dias antes de poder limpar | 90 |
@@ -299,8 +301,10 @@ interface simplificada.
 
 Se não estiver com nenhum equipamento, abre direto a **retirada**.
 
-**Atalhos na página inicial do GLPI:** na interface simplificada, a página inicial do GLPI (a que
-mostra os chamados) tem no topo o bloco **Checklist uso de equipamentos**, só com os atalhos que o
+**Atalhos na página inicial do GLPI:** com a opção ligada na configuração
+([seção 4.2](#42-tela-de-configuração)), a página inicial do GLPI na interface simplificada (a que
+mostra os chamados) tem no topo o bloco **Checklist uso de equipamentos** para os perfis
+escolhidos ali (padrão: Gestor Operacional). O bloco vem desligado. Ele mostra só os atalhos que o
 perfil pode usar:
 - **Iniciar uso** e **Finalizar uso**, para quem usa os equipamentos;
 - **Conferência do setor**, com o número de pendências, para o gestor;
