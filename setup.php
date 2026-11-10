@@ -8,6 +8,7 @@
 require_once __DIR__ . '/autoload.php';
 
 use GlpiPlugin\Checklistitens\EquipmentRecord;
+use GlpiPlugin\Checklistitens\Home;
 use GlpiPlugin\Checklistitens\Landing;
 use GlpiPlugin\Checklistitens\Menu;
 use GlpiPlugin\Checklistitens\Profile as ChecklistProfile;
@@ -53,6 +54,10 @@ function plugin_init_checklistitens()
     // Interface simplificada (perfis operador, gestor operacional, Self-Service)
     $PLUGIN_HOOKS['helpdesk_menu_entry']['checklistitens']      = '/front/home.php';
     $PLUGIN_HOOKS['helpdesk_menu_entry_icon']['checklistitens'] = Menu::getIcon();
+
+    // Atalhos para as funções do plugin na página inicial da interface simplificada (liga e
+    // desliga na configuração, por perfil)
+    $PLUGIN_HOOKS['display_central']['checklistitens'] = [Home::class, 'displayShortcuts'];
 
     $PLUGIN_HOOKS['config_page']['checklistitens'] = 'front/config.form.php';
 
