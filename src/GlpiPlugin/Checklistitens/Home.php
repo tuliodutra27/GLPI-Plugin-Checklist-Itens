@@ -228,11 +228,16 @@ class Home
 
     /**
      * Bloco de atalhos na página inicial do GLPI (hook display_central). Só na interface
-     * simplificada: na padrão o mesmo hook aparece no painel do TI, que já tem o menu Ativos.
+     * simplificada (na padrão o mesmo hook aparece no painel do TI, que já tem o menu Ativos), com a
+     * opção ligada na configuração e para os perfis escolhidos nela.
      */
     public static function displayShortcuts(): void
     {
-        if (!Ui::isHelpdesk() || !self::canSee()) {
+        if (!Ui::isHelpdesk() || !Config::isHomeShortcutsEnabled()) {
+            return;
+        }
+        $profile = (int) ($_SESSION['glpiactiveprofile']['id'] ?? 0);
+        if (!in_array($profile, Config::getHomeShortcutProfiles(), true) || !self::canSee()) {
             return;
         }
 

@@ -59,6 +59,9 @@ class Config extends CommonGLPI
             'idle_logout'           => '60',
             'selfie_retention_days' => (string) self::MIN_RETENTION_DAYS,
             'landing_profiles'      => '',
+            // Atalhos do plugin na página inicial do GLPI (interface simplificada)
+            'home_shortcuts'          => '0',
+            'home_shortcuts_profiles' => '',
             'location_retention_days' => (string) self::DEFAULT_LOCATION_RETENTION_DAYS,
             'laudo_enabled'         => '1',
             'laudo_done_statuses'   => '',
@@ -85,6 +88,9 @@ class Config extends CommonGLPI
         }
         if (!isset($current['landing_profiles'])) {
             $defaults['landing_profiles'] = implode(',', self::findIdsByName(\Profile::getTable(), 'name', [self::DEFAULT_LANDING_PROFILE]));
+        }
+        if (!isset($current['home_shortcuts_profiles'])) {
+            $defaults['home_shortcuts_profiles'] = implode(',', self::findIdsByName(\Profile::getTable(), 'name', [Profile::MANAGER_PROFILE_NAME]));
         }
         if (!isset($current['laudo_done_statuses'])) {
             $defaults['laudo_done_statuses'] = implode(',', LaudoProvider::findDefaultDoneStatuses());
@@ -284,6 +290,28 @@ class Config extends CommonGLPI
         }
     }
 
+    /** Atalhos do plugin na página inicial do GLPI, interface simplificada (padrão: desligado). */
+    public static function isHomeShortcutsEnabled(): bool
+    {
+        return self::getValue('home_shortcuts') === '1';
+    }
+
+    /**
+     * Perfis que veem os atalhos na página inicial do GLPI. Enquanto a opção nunca foi gravada
+     * (plugin atualizado sem passar pela instalação), vale o perfil de nome "gestor operacional".
+     *
+     * @return int[]
+     */
+    public static function getHomeShortcutProfiles(): array
+    {
+        $stored = GlpiConfig::getConfigurationValues(self::CONTEXT, ['home_shortcuts_profiles']);
+        if (!array_key_exists('home_shortcuts_profiles', $stored)) {
+            return self::findIdsByName(\Profile::getTable(), 'name', [Profile::MANAGER_PROFILE_NAME]);
+        }
+
+        return array_values(array_filter(array_map('intval', explode(',', (string) $stored['home_shortcuts_profiles']))));
+    }
+
     /** Integração com o plugin Laudo ligada na configuração (padrão: ligada). */
     public static function isLaudoEnabled(): bool
     {
@@ -332,6 +360,8 @@ class Config extends CommonGLPI
             'idle_logout'           => (string) max(0, (int) ($input['idle_logout'] ?? 60)),
             'selfie_retention_days' => (string) max(self::MIN_RETENTION_DAYS, (int) ($input['selfie_retention_days'] ?? self::MIN_RETENTION_DAYS)),
             'landing_profiles'      => implode(',', array_filter(array_map('intval', (array) ($input['landing_profiles'] ?? [])))),
+            'home_shortcuts'          => !empty($input['home_shortcuts']) ? '1' : '0',
+            'home_shortcuts_profiles' => implode(',', array_filter(array_map('intval', (array) ($input['home_shortcuts_profiles'] ?? [])))),
             'location_retention_days' => (string) max(1, (int) ($input['location_retention_days'] ?? self::DEFAULT_LOCATION_RETENTION_DAYS)),
             'laudo_enabled'         => !empty($input['laudo_enabled']) ? '1' : '0',
             'laudo_done_statuses'   => implode(',', array_filter(array_map('intval', (array) ($input['laudo_done_statuses'] ?? [])))),
@@ -406,6 +436,20 @@ class Config extends CommonGLPI
             'multiple' => true,
         ]);
         echo "<div class='text-muted'>" . __('Só na primeira página depois do login; o Início do GLPI continua acessível.', 'checklistitens') . "</div>";
+        echo "</td></tr>";
+
+        echo "<tr class='tab_bg_1'><td>" . __('Atalhos do plugin na página inicial do GLPI (interface simplificada)', 'checklistitens') . "</td><td>";
+        Dropdown::showYesNo('home_shortcuts', self::isHomeShortcutsEnabled() ? 1 : 0);
+        echo "<div class='text-muted'>" . __('Bloco no topo da página inicial com Iniciar e Finalizar uso, Conferência do setor e a entrega para embarcação, conforme os direitos do perfil.', 'checklistitens') . "</div>";
+        echo "</td></tr>";
+
+        echo "<tr class='tab_bg_1'><td>" . __('Perfis que veem os atalhos na página inicial', 'checklistitens') . "</td><td>";
+        \Profile::dropdown([
+            'name'     => 'home_shortcuts_profiles',
+            'value'    => self::getHomeShortcutProfiles(),
+            'multiple' => true,
+        ]);
+        echo "<div class='text-muted'>" . __('Só esses perfis veem o bloco, e só com os atalhos ligados.', 'checklistitens') . "</div>";
         echo "</td></tr>";
 
         echo "<tr class='tab_bg_1'><td>" . __('Logoff por inatividade nas telas do colaborador (segundos, 0 = desligado)', 'checklistitens') . "</td><td>";
