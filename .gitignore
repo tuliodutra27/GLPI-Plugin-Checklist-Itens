@@ -1,10 +1,8 @@
 .claude/
-/rascunhos/
 
-# Documentação interna do projeto: fica só local (repositório público leva apenas o código)
-/PLANO-*.md
-/old/
-/Diagramas/
+# Material interno do projeto (planos, rascunhos, diagramas, apresentação, versões antigas):
+# fica só local, na pasta privado/. O repositório público leva apenas o código.
+/privado/
 *.pdf
 
 # backups automáticos do draw.io
@@ -14,5 +12,5 @@
 # Logs do GLPI copiados para análise (nunca publicar)
 /logs/
 
-# Material de apresentação do projeto (interno)
-/Apresentacao/
+# Arquivo de pasta do Windows/OneDrive
+desktop.ini
