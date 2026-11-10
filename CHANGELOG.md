@@ -6,6 +6,13 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [0.12.0] - 2026-11-10
+
+Requer Atualizar em Configurar > Plugins.
+
+O GLPI pede o Atualizar a cada versão nova. A estrutura do banco não muda: a atualização só grava
+as duas opções novas da configuração.
+
 ### Adicionado
 - Atalhos do plugin na página inicial do GLPI (interface simplificada), só com o que o perfil pode
   usar: Iniciar uso e Finalizar uso; Conferência do setor com o número de pendências; Entrega para
@@ -65,6 +72,7 @@ As versões até a 0.9.0 (retirada e devolução com checklist, selfie com local
 gestor por turno, bloqueio do item com problema e registro de uso) não foram publicadas como
 release.
 
-[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0...HEAD
+[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/releases/tag/v0.10.0
