@@ -112,15 +112,7 @@ class SelfiePurge extends CommonDBTM
             $count++;
         }
 
-        $purge = new self();
-        $purge->add([
-            'users_id'   => $users_id,
-            'purge_type' => self::TYPE_SELFIES,
-            'date_purge' => Shift::now(),
-            'date_limit' => $limit_date . ' 23:59:59',
-            'nb_files'   => $count,
-            'size_bytes' => $bytes,
-        ]);
+        self::record(self::TYPE_SELFIES, $limit_date, $users_id, $count, $bytes);
 
         return ['ok' => true, 'message' => sprintf(
             __('%1$d selfie(s) removida(s), %2$s liberados. Os registros de uso foram mantidos.', 'checklistitens'),
@@ -196,20 +188,25 @@ class SelfiePurge extends CommonDBTM
             $count++;
         }
 
-        $purge = new self();
-        $purge->add([
-            'users_id'   => $users_id,
-            'purge_type' => self::TYPE_LOCATIONS,
-            'date_purge' => Shift::now(),
-            'date_limit' => $limit_date . ' 23:59:59',
-            'nb_files'   => $count,
-            'size_bytes' => 0,
-        ]);
+        self::record(self::TYPE_LOCATIONS, $limit_date, $users_id, $count, 0);
 
         return ['ok' => true, 'message' => sprintf(
             __('%d localização(ões) removida(s). Os registros de uso foram mantidos.', 'checklistitens'),
             $count
         )];
+    }
+
+    /** Registro de uma limpeza (quem, quando, até que data e quanto saiu). */
+    private static function record(int $type, string $limit_date, int $users_id, int $count, int $bytes): void
+    {
+        (new self())->add([
+            'users_id'   => $users_id,
+            'purge_type' => $type,
+            'date_purge' => Shift::now(),
+            'date_limit' => $limit_date . ' 23:59:59',
+            'nb_files'   => $count,
+            'size_bytes' => $bytes,
+        ]);
     }
 
     /**

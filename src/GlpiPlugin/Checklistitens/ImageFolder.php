@@ -69,6 +69,40 @@ class ImageFolder
         return $relative;
     }
 
+    /**
+     * Foto com linha própria numa tabela (filepath e size_bytes entram aqui). Sem a linha, o arquivo
+     * sai: ninguém chegaria até ele.
+     *
+     * @return int id da linha, ou 0
+     */
+    public function storeRecord(string $table, string $owner, string $data, int $type, array $fields): int
+    {
+        $relative = $this->store($owner, $data, $type);
+        if ($relative === null) {
+            return 0;
+        }
+
+        $id = Db::insert($table, $fields + ['filepath' => $relative, 'size_bytes' => strlen($data)]);
+        if ($id <= 0) {
+            $this->delete($relative);
+        }
+
+        return $id;
+    }
+
+    /** Apaga a linha da foto e depois o arquivo: se o banco recusar, o arquivo continua no lugar. */
+    public function deleteRecord(string $table, array $row): bool
+    {
+        global $DB;
+
+        if (!$DB->delete($table, ['id' => (int) $row['id']])) {
+            return false;
+        }
+        $this->delete((string) $row['filepath']);
+
+        return true;
+    }
+
     /** Caminho completo de um arquivo existente; null para caminho fora do padrão ou arquivo sumido. */
     public function fullPath(string $relative): ?string
     {

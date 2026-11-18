@@ -132,24 +132,14 @@ class DeliveryPhoto extends CommonDBTM
             return $image['retry'] ? Reply::retry($image['message']) : Reply::fail($image['message']);
         }
 
-        $relative = self::folder()->store($deliveries_id . '_' . $receipts_id, $image['data'], $image['type']);
-        if ($relative === null) {
-            return Reply::retry(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'));
-        }
-
-        $id = Db::insert(self::getTable(), [
+        $id = self::folder()->storeRecord(self::getTable(), $deliveries_id . '_' . $receipts_id, $image['data'], $image['type'], [
             'plugin_checklistitens_deliveries_id'       => $deliveries_id,
             'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
             'client_uuid'                               => $uuid,
             'defect_ref'                                => $ref,
-            'filepath'                                  => $relative,
-            'size_bytes'                                => strlen($image['data']),
             'date_creation'                             => Shift::now(),
         ]);
         if ($id <= 0) {
-            // arquivo sem registro: ninguém chegaria até ele
-            self::folder()->delete($relative);
-
             // O índice único (entrega, identificador) recusou: a mesma foto chegou duas vezes ao mesmo tempo
             $existing = self::findByUuid($deliveries_id, $uuid);
             if ($existing !== null) {
@@ -171,8 +161,6 @@ class DeliveryPhoto extends CommonDBTM
      */
     public static function remove(int $deliveries_id, int $receipts_id, string $uuid): bool
     {
-        global $DB;
-
         if (!self::isValidUuid($uuid)) {
             return true;
         }
@@ -182,13 +170,7 @@ class DeliveryPhoto extends CommonDBTM
             return true;
         }
 
-        // Primeiro a linha: se o banco recusar, o arquivo continua no lugar
-        if (!$DB->delete(self::getTable(), ['id' => (int) $row['id']])) {
-            return false;
-        }
-        self::folder()->delete((string) $row['filepath']);
-
-        return true;
+        return self::folder()->deleteRecord(self::getTable(), $row);
     }
 
     /** Fotos gerais ($ref vazio) ou de uma peça com defeito ("battery:N", "cover:N"). */
@@ -270,8 +252,7 @@ class DeliveryPhoto extends CommonDBTM
 
         $deleted = 0;
         foreach ($rows as $row) {
-            if ($DB->delete(self::getTable(), ['id' => (int) $row['id']])) {
-                self::folder()->delete((string) $row['filepath']);
+            if (self::folder()->deleteRecord(self::getTable(), $row)) {
                 $deleted++;
             }
         }
@@ -312,15 +293,9 @@ class DeliveryPhoto extends CommonDBTM
     /** Apaga uma foto (linha e arquivo) pelo id. */
     private static function removeRow(int $id): bool
     {
-        global $DB;
+        $row = Db::row(self::getTable(), $id);
 
-        $row = $DB->request(['SELECT' => ['filepath'], 'FROM' => self::getTable(), 'WHERE' => ['id' => $id]])->current();
-        if (!$row || !$DB->delete(self::getTable(), ['id' => $id])) {
-            return false;
-        }
-        self::folder()->delete((string) $row['filepath']);
-
-        return true;
+        return $row !== null && self::folder()->deleteRecord(self::getTable(), $row);
     }
 
     public static function getUrl(int $id): string

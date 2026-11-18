@@ -94,23 +94,14 @@ class DefectPhoto extends CommonDBChild
      */
     private static function storeImage(int $usages_id, int $phase, string $data, int $type, string $uuid = ''): bool
     {
-        $relative = self::folder()->store($usages_id . '_' . $phase, $data, $type);
-        if ($relative === null) {
-            return false;
-        }
-
-        $id = Db::insert(self::getTable(), [
+        $id = self::folder()->storeRecord(self::getTable(), $usages_id . '_' . $phase, $data, $type, [
             'plugin_checklistitens_usages_id' => $usages_id,
             'phase'                           => $phase,
-            'filepath'                        => $relative,
-            'size_bytes'                      => strlen($data),
             'documents_id'                    => 0,
             'client_uuid'                     => $uuid,
             'date_creation'                   => Shift::now(),
         ]);
-        if (!$id) {
-            // arquivo sem registro: ninguém chegaria até ele
-            self::folder()->delete($relative);
+        if ($id <= 0) {
             Toolbox::logError(sprintf('checklistitens: não foi possível registrar a foto de defeito do uso %d', $usages_id));
             return false;
         }
@@ -201,12 +192,9 @@ class DefectPhoto extends CommonDBChild
 
         $deleted = 0;
         foreach ($rows as $row) {
-            // Primeiro a linha: se o banco recusar, o arquivo continua no lugar
-            if (!$DB->delete(self::getTable(), ['id' => (int) $row['id']])) {
-                continue;
+            if (self::folder()->deleteRecord(self::getTable(), $row)) {
+                $deleted++;
             }
-            self::folder()->delete((string) $row['filepath']);
-            $deleted++;
         }
 
         return $deleted;
