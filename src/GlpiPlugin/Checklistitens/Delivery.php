@@ -459,14 +459,14 @@ class Delivery extends CommonDBTM
         global $DB;
 
         if (!self::canDeliver()) {
-            return self::fail(self::noRightMessage());
+            return Reply::fail(self::noRightMessage());
         }
         if (!DeliveryPhoto::isValidUuid($client_uuid)) {
-            return self::fail(__('Não foi possível identificar a separação. Recarregue a página e tente de novo.', 'checklistitens'));
+            return Reply::fail(__('Não foi possível identificar a separação. Recarregue a página e tente de novo.', 'checklistitens'));
         }
 
         $users_id  = (int) Session::getLoginUserID();
-        $items_ids = self::cleanIds($items_ids);
+        $items_ids = Input::ids($items_ids);
 
         $draft = self::getDraftFor($users_id);
         if ($draft !== null) {
@@ -486,10 +486,10 @@ class Delivery extends CommonDBTM
 
         $vessel = Vessel::getActiveRow($vessels_id);
         if ($vessel === null) {
-            return self::fail(__('Escolha uma embarcação ativa.', 'checklistitens'));
+            return Reply::fail(__('Escolha uma embarcação ativa.', 'checklistitens'));
         }
         if (!count($items_ids)) {
-            return self::fail(__('Escolha pelo menos um rádio.', 'checklistitens'));
+            return Reply::fail(__('Escolha pelo menos um rádio.', 'checklistitens'));
         }
 
         // A entrega nasce com a entidade e o setor do primeiro rádio; sem nenhum rádio disponível,
@@ -505,14 +505,14 @@ class Delivery extends CommonDBTM
         if ($first === null) {
             $message = self::unavailableMessage();
 
-            return self::fail($message, [
+            return Reply::fail($message, [
                 'failed' => array_map(static fn ($items_id) => ['items_id' => $items_id, 'message' => $message], $items_ids),
             ]);
         }
 
         $now      = Shift::now();
         $delivery = new self();
-        $id       = self::safeAdd($delivery, [
+        $id       = Db::add($delivery, [
             'entities_id'                      => (int) $first['entities_id'],
             'groups_id'                        => (int) $first['groups_id'],
             'users_id'                         => $users_id,
@@ -532,7 +532,7 @@ class Delivery extends CommonDBTM
                 return self::reserveOnDraft($draft, $client_uuid, $items_ids);
             }
 
-            return self::retry(__('Não foi possível iniciar a separação. Tente de novo.', 'checklistitens'));
+            return Reply::retry(__('Não foi possível iniciar a separação. Tente de novo.', 'checklistitens'));
         }
 
         $created = $delivery->fields;
@@ -544,7 +544,7 @@ class Delivery extends CommonDBTM
                 // Nenhum rádio ficou reservado: a separação vazia não fica aberta
                 self::discardEmpty($id);
 
-                return self::fail(
+                return Reply::fail(
                     $result['failed'][0]['message'] ?? self::unavailableMessage(),
                     ['failed' => $result['failed']]
                 );
@@ -587,9 +587,9 @@ class Delivery extends CommonDBTM
                 return $error;
             }
 
-            $items_ids = self::cleanIds($items_ids);
+            $items_ids = Input::ids($items_ids);
             if (!count($items_ids)) {
-                return self::fail(__('Escolha pelo menos um rádio.', 'checklistitens'), ['delivery' => self::getState($draft)]);
+                return Reply::fail(__('Escolha pelo menos um rádio.', 'checklistitens'), ['delivery' => self::getState($draft)]);
             }
 
             $result = self::reserveItems($draft, $items_ids, (int) Session::getLoginUserID());
@@ -599,7 +599,7 @@ class Delivery extends CommonDBTM
             // Vale como feito se algum dos rádios pedidos está na separação, agora ou de um envio
             // anterior: o pedido reenviado recebe a mesma resposta
             if (!count($result['present']) && count($result['failed'])) {
-                return self::fail($result['failed'][0]['message'], ['delivery' => $state, 'failed' => $result['failed']]);
+                return Reply::fail($result['failed'][0]['message'], ['delivery' => $state, 'failed' => $result['failed']]);
             }
 
             return ['ok' => true, 'message' => '', 'delivery' => $state, 'failed' => $result['failed']];
@@ -632,7 +632,7 @@ class Delivery extends CommonDBTM
                     'lock_open' => 'NULL',
                 ]);
                 if (!$released) {
-                    return self::retry(__('Não foi possível tirar o rádio da separação. Tente de novo.', 'checklistitens'));
+                    return Reply::retry(__('Não foi possível tirar o rádio da separação. Tente de novo.', 'checklistitens'));
                 }
                 self::discardDefectDraft($row);
                 self::touch($id);
@@ -663,7 +663,7 @@ class Delivery extends CommonDBTM
 
             $vessel = Vessel::getActiveRow($vessels_id);
             if ($vessel === null) {
-                return self::fail(__('Escolha uma embarcação ativa.', 'checklistitens'), ['delivery' => self::getState($draft)]);
+                return Reply::fail(__('Escolha uma embarcação ativa.', 'checklistitens'), ['delivery' => self::getState($draft)]);
             }
 
             $updated = (new self())->update([
@@ -672,7 +672,7 @@ class Delivery extends CommonDBTM
                 'vessel_name'                      => Sanitizer::dbEscape((string) $vessel['name']),
             ]);
             if (!$updated) {
-                return self::retry(__('Não foi possível trocar a embarcação. Tente de novo.', 'checklistitens'));
+                return Reply::retry(__('Não foi possível trocar a embarcação. Tente de novo.', 'checklistitens'));
             }
             self::touch($id);
 
@@ -714,7 +714,7 @@ class Delivery extends CommonDBTM
                     ];
                 }
 
-                return self::fail(__('Este rádio não está mais na separação.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+                return Reply::fail(__('Este rádio não está mais na separação.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
             }
             if ((int) $row['checkout_known_issue'] === 1) {
                 // Pedido reenviado: o problema conhecido já está registrado
@@ -724,17 +724,17 @@ class Delivery extends CommonDBTM
             $usage_id = (int) $row['id'];
             $problems = ProblemType::getValidForType(ItemProvider::RADIO, $problem_ids);
             if (!count($problems)) {
-                return self::fail(__('Marque pelo menos um problema encontrado.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+                return Reply::fail(__('Marque pelo menos um problema encontrado.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
             }
             if (DefectPhoto::countFor($usage_id, Usage::PHASE_CHECKOUT) < DefectPhoto::MIN_PHOTOS) {
-                return self::fail(__('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+                return Reply::fail(__('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
             }
 
             // "É o problema do laudo" só vale se o laudo ainda estiver em aberto agora
             $laudos   = LaudoProvider::getOpenForItem(ItemProvider::RADIO, $items_id);
             $accepted = $known && count($laudos) > 0;
 
-            $done = self::atomically(static function () use ($row, $usage_id, $problems, $laudos, $accepted): bool {
+            $done = Db::atomically(static function () use ($row, $usage_id, $problems, $laudos, $accepted): bool {
                 // Cópia dos laudos em aberto: registra que o alerta foi exibido
                 if (count($laudos)) {
                     UsageLaudo::recordAll($usage_id, Usage::PHASE_CHECKOUT, $laudos);
@@ -753,7 +753,7 @@ class Delivery extends CommonDBTM
                 return self::refuseUsage($row);
             });
             if (!$done) {
-                return self::retry(__('Não foi possível registrar o problema. Tente de novo.', 'checklistitens'));
+                return Reply::retry(__('Não foi possível registrar o problema. Tente de novo.', 'checklistitens'));
             }
             self::touch($id);
 
@@ -778,7 +778,7 @@ class Delivery extends CommonDBTM
     public static function finish(int $id): array
     {
         if (!self::canDeliver()) {
-            return self::fail(self::noRightMessage());
+            return Reply::fail(self::noRightMessage());
         }
 
         return self::locked($id, static fn (): array => self::finishLocked($id));
@@ -803,14 +803,14 @@ class Delivery extends CommonDBTM
                 && (int) $row['users_id'] !== (int) Session::getLoginUserID()
                 && !Profile::canAdministrate()
             ) {
-                return self::fail(__('Só quem iniciou a separação ou o TI pode cancelá-la.', 'checklistitens'));
+                return Reply::fail(__('Só quem iniciou a separação ou o TI pode cancelá-la.', 'checklistitens'));
             }
             if ((int) $row['status'] !== self::STATUS_DRAFT) {
                 return self::gone($row);
             }
 
             $usages = self::getUsages($id, Usage::STATUS_DELIVERY_DRAFT);
-            $done   = self::atomically(static function () use ($id, $usages): bool {
+            $done   = Db::atomically(static function () use ($id, $usages): bool {
                 $usage = new Usage();
                 foreach ($usages as $row) {
                     $released = $usage->update([
@@ -830,7 +830,7 @@ class Delivery extends CommonDBTM
                 ]);
             });
             if (!$done) {
-                return self::retry(__('Não foi possível cancelar a separação. Tente de novo.', 'checklistitens'));
+                return Reply::retry(__('Não foi possível cancelar a separação. Tente de novo.', 'checklistitens'));
             }
 
             // Arquivos por último: apagar não tem como ser desfeito
@@ -897,22 +897,6 @@ class Delivery extends CommonDBTM
     // ------------------------------------------------------------------ apoio (também do recebimento)
 
     /**
-     * Resposta de erro de regra: o aparelho não deve reenviar o mesmo pedido.
-     */
-    public static function fail(string $message, array $extra = []): array
-    {
-        return ['ok' => false, 'message' => $message, 'retry' => false] + $extra;
-    }
-
-    /**
-     * Resposta de falha passageira (banco, concorrência): o aparelho tenta de novo sozinho.
-     */
-    public static function retry(string $message): array
-    {
-        return ['ok' => false, 'message' => $message, 'retry' => true];
-    }
-
-    /**
      * Resposta para a separação que não existe mais: o aparelho descarta a cópia que guardou.
      *
      * @param array|null $row linha da entrega, quando ela existe e é do usuário
@@ -953,23 +937,6 @@ class Delivery extends CommonDBTM
         if ($id > 0) {
             $DB->update(self::getTable(), ['date_mod' => Shift::now()], ['id' => $id]);
         }
-    }
-
-    /**
-     * Ids inteiros, positivos e sem repetição, na ordem em que vieram.
-     *
-     * @return int[]
-     */
-    public static function cleanIds(array $ids): array
-    {
-        $clean = [];
-        foreach ($ids as $id) {
-            if (is_scalar($id) && (int) $id > 0) {
-                $clean[(int) $id] = (int) $id;
-            }
-        }
-
-        return array_values($clean);
     }
 
     /**
@@ -1015,72 +982,6 @@ class Delivery extends CommonDBTM
     }
 
     /**
-     * Resposta "Sim/Não" de um campo do formulário: 1, 0, ou null quando não veio.
-     */
-    public static function readYesNo(string $field): ?int
-    {
-        $value = $_POST[$field] ?? null;
-        if ($value === '1' || $value === 1) {
-            return 1;
-        }
-        if ($value === '0' || $value === 0) {
-            return 0;
-        }
-
-        return null;
-    }
-
-    /**
-     * Quantidade de baterias, de 0 a 99 (campo vazio conta como 0); null quando o valor não serve.
-     */
-    public static function readQuantity(string $field): ?int
-    {
-        $value = $_POST[$field] ?? '';
-        $value = is_scalar($value) ? trim((string) $value) : 'x';
-        if ($value === '') {
-            return 0;
-        }
-
-        return preg_match('/^\d{1,2}$/', $value) === 1 ? (int) $value : null;
-    }
-
-    /**
-     * Observações do gestor prontas para gravar: texto puro, cortado no tamanho máximo. O corte é
-     * feito no texto original, para não partir no meio a codificação que o GLPI aplica.
-     */
-    public static function readComment(string $field = 'comment'): string
-    {
-        $raw = $_POST[$field] ?? '';
-        if (!is_string($raw)) {
-            return '';
-        }
-
-        $text = trim((string) Sanitizer::unsanitize($raw));
-        if (mb_strlen($text) > self::COMMENT_MAX) {
-            $text = mb_substr($text, 0, self::COMMENT_MAX);
-        }
-
-        return (string) Sanitizer::sanitize($text);
-    }
-
-    /**
-     * add() que não deixa um erro de banco (ex.: índice único) virar erro de tela.
-     *
-     * @return int id criado, ou 0
-     */
-    public static function safeAdd(CommonDBTM $item, array $input): int
-    {
-        try {
-            $id = $item->add($input);
-        } catch (Throwable $e) {
-            Toolbox::logError('checklistitens: ' . $e->getMessage());
-            $id = false;
-        }
-
-        return $id ? (int) $id : 0;
-    }
-
-    /**
      * Executa uma ação com a entrega travada no banco: a conclusão, o cancelamento e a ação
      * automática de expirar não se atropelam quando chegam juntos por sessões diferentes.
      *
@@ -1088,61 +989,11 @@ class Delivery extends CommonDBTM
      */
     public static function locked(int $deliveries_id, callable $work): array
     {
-        global $DB;
-
-        $name = 'ckl_delivery_' . $deliveries_id;
-        try {
-            $free = $DB->getLock($name);
-        } catch (Throwable $e) {
-            // Sem a trava, segue: os índices únicos e as conferências de situação continuam valendo
-            Toolbox::logError('checklistitens: ' . $e->getMessage());
-
-            return $work();
-        }
-        if (!$free) {
-            return self::retry(__('Esta entrega está sendo atualizada agora. Tente de novo em instantes.', 'checklistitens'));
-        }
-
-        try {
-            return $work();
-        } finally {
-            try {
-                $DB->releaseLock($name);
-            } catch (Throwable $e) {
-                // a trava termina com a conexão de qualquer forma
-            }
-        }
-    }
-
-    /**
-     * Grava várias coisas como uma só: ou todas ficam, ou nenhuma (o aparelho reenvia depois).
-     *
-     * @param callable(): bool $work devolve false para desfazer
-     */
-    public static function atomically(callable $work): bool
-    {
-        global $DB;
-
-        if ($DB->inTransaction()) {
-            return (bool) $work();
-        }
-
-        $DB->beginTransaction();
-        try {
-            $done = (bool) $work();
-        } catch (Throwable $e) {
-            $DB->rollBack();
-            Toolbox::logError('checklistitens: ' . $e->getMessage());
-
-            return false;
-        }
-        if (!$done) {
-            $DB->rollBack();
-
-            return false;
-        }
-
-        return (bool) $DB->commit();
+        return Db::locked(
+            'ckl_delivery_' . $deliveries_id,
+            $work,
+            static fn (): array => Reply::retry(__('Esta entrega está sendo atualizada agora. Tente de novo em instantes.', 'checklistitens'))
+        );
     }
 
     /**
@@ -1205,7 +1056,7 @@ class Delivery extends CommonDBTM
         $draft = null;
 
         if (!self::canDeliver()) {
-            return self::fail(self::noRightMessage());
+            return Reply::fail(self::noRightMessage());
         }
 
         $row = self::getRow($id);
@@ -1288,7 +1139,7 @@ class Delivery extends CommonDBTM
                 continue;
             }
 
-            $usage_id = self::safeAdd(new Usage(), [
+            $usage_id = Db::add(new Usage(), [
                 'entities_id'                         => (int) $item['entities_id'],
                 'itemtype'                            => ItemProvider::RADIO,
                 'items_id'                            => $items_id,
@@ -1340,16 +1191,16 @@ class Delivery extends CommonDBTM
         }
 
         if (Vessel::getActiveRow((int) $row['plugin_checklistitens_vessels_id']) === null) {
-            return self::fail(__('A embarcação escolhida não está mais ativa. Escolha outra.', 'checklistitens'), ['delivery' => self::getState($row)]);
+            return Reply::fail(__('A embarcação escolhida não está mais ativa. Escolha outra.', 'checklistitens'), ['delivery' => self::getState($row)]);
         }
         if (!count(self::getUsages($id, Usage::STATUS_DELIVERY_DRAFT))) {
-            return self::fail(__('Reserve pelo menos um rádio para concluir a entrega.', 'checklistitens'), ['delivery' => self::getState($row)]);
+            return Reply::fail(__('Reserve pelo menos um rádio para concluir a entrega.', 'checklistitens'), ['delivery' => self::getState($row)]);
         }
 
         // "É o problema do laudo" é conferido de novo: laudo concluído nesse meio-tempo bloqueia o rádio
         $closed = self::refuseClosedLaudos($id);
         if ($closed === null) {
-            return self::retry(__('Não foi possível concluir a entrega. Tente de novo.', 'checklistitens'));
+            return Reply::retry(__('Não foi possível concluir a entrega. Tente de novo.', 'checklistitens'));
         }
         $closed_message = $closed > 0
             ? __('O laudo de um rádio foi concluído: o problema bloqueia o item, e ele saiu da entrega.', 'checklistitens')
@@ -1357,22 +1208,22 @@ class Delivery extends CommonDBTM
 
         $usages = self::getUsages($id, Usage::STATUS_DELIVERY_DRAFT);
         if (!count($usages)) {
-            return self::fail(
+            return Reply::fail(
                 $closed_message . ' ' . __('Não sobrou rádio na entrega: acrescente outro ou cancele.', 'checklistitens'),
                 ['delivery' => self::stateOf($id)]
             );
         }
 
-        $is_ok = self::readYesNo('is_ok');
+        $is_ok = Input::yesNo('is_ok');
         if ($is_ok === null) {
-            return self::fail(__('Responda se os rádios estão ok.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+            return Reply::fail(__('Responda se os rádios estão ok.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
         $has_problem = count(self::getUsages($id, Usage::STATUS_REFUSED)) > 0;
         foreach ($usages as $usage) {
             $has_problem = $has_problem || (int) $usage['checkout_known_issue'] === 1;
         }
         if ($is_ok === 0 && !$has_problem) {
-            return self::fail(__('Indique o rádio com problema ou responda Sim.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+            return Reply::fail(__('Indique o rádio com problema ou responda Sim.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
         if ($has_problem) {
             $is_ok = 0;
@@ -1381,25 +1232,25 @@ class Delivery extends CommonDBTM
         $min    = Config::getDeliveryMinPhotos();
         $photos = DeliveryPhoto::countFor($id, 0);
         if ($photos < $min) {
-            return self::fail(
+            return Reply::fail(
                 sprintf(__('Faltam fotos: %1$d de %2$d.', 'checklistitens'), $photos, $min),
                 ['delivery' => self::stateOf($id)]
             );
         }
 
-        $batteries = self::readQuantity('spare_batteries');
+        $batteries = Input::quantity('spare_batteries');
         if ($batteries === null) {
-            return self::fail(__('Informe as baterias reserva com um número de 0 a 99.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+            return Reply::fail(__('Informe as baterias reserva com um número de 0 a 99.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
-        $covers = self::readQuantity('spare_covers');
+        $covers = Input::quantity('spare_covers');
         if ($covers === null) {
-            return self::fail(__('Informe as capas com um número de 0 a 99.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+            return Reply::fail(__('Informe as capas com um número de 0 a 99.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
-        $comment = self::readComment();
+        $comment = Input::comment('comment', self::COMMENT_MAX);
 
         $selfie = Selfie::storeFromRequest(Selfie::KIND_DELIVERY, $users_id);
         if ($selfie === null) {
-            return self::fail(__('Tire a selfie para concluir a entrega.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+            return Reply::fail(__('Tire a selfie para concluir a entrega.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
 
         $now    = Shift::now();
@@ -1409,15 +1260,14 @@ class Delivery extends CommonDBTM
             'status'          => self::STATUS_DELIVERED,
             'lock_draft'      => 'NULL',
             'date_delivery'   => $now,
-            // como texto: o update() do GLPI não enxerga a troca de vazio (NULL) para o número 0
-            'is_ok'           => (string) $is_ok,
+            'is_ok'           => Db::yesNo($is_ok),
             'spare_batteries' => $batteries,
             'spare_covers'    => $covers,
             'comment'         => $comment,
             'selfie'          => $selfie,
         ] + Location::toFields('', Location::fromRequest());
 
-        $done = self::atomically(static function () use ($fields, $usages, $now, $shift): bool {
+        $done = Db::atomically(static function () use ($fields, $usages, $now, $shift): bool {
             if (!(new self())->update($fields)) {
                 return false;
             }
@@ -1440,7 +1290,7 @@ class Delivery extends CommonDBTM
         if (!$done) {
             Selfie::deleteFile($selfie);
 
-            return self::retry(__('Não foi possível concluir a entrega. Tente de novo.', 'checklistitens'));
+            return Reply::retry(__('Não foi possível concluir a entrega. Tente de novo.', 'checklistitens'));
         }
 
         // Fotos de defeito de rádio que seguiu sem problema registrado (marcação desfeita): não ficam
@@ -1478,7 +1328,7 @@ class Delivery extends CommonDBTM
             if (count($open[(int) $usage['items_id']] ?? [])) {
                 continue;
             }
-            if (!self::atomically(static fn (): bool => self::refuseUsage($usage))) {
+            if (!Db::atomically(static fn (): bool => self::refuseUsage($usage))) {
                 return null;
             }
             $closed++;

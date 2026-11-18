@@ -4,8 +4,6 @@ namespace GlpiPlugin\Checklistitens;
 
 use CommonDBTM;
 use Session;
-use Throwable;
-use Toolbox;
 
 /**
  * Uso de equipamento: um registro por ciclo retirada → devolução, ou por retirada recusada
@@ -405,7 +403,7 @@ class Usage extends CommonDBTM
 
         $now   = Shift::now();
         $usage = new self();
-        $id    = self::safeAdd($usage, [
+        $id    = Db::add($usage, [
             'entities_id'          => (int) $item['entities_id'],
             'itemtype'             => $itemtype,
             'items_id'             => $items_id,
@@ -466,7 +464,7 @@ class Usage extends CommonDBTM
 
         $now   = Shift::now();
         $usage = new self();
-        $id    = self::safeAdd($usage, [
+        $id    = Db::add($usage, [
             'entities_id'          => (int) $item['entities_id'],
             'itemtype'             => $itemtype,
             'items_id'             => $items_id,
@@ -553,9 +551,7 @@ class Usage extends CommonDBTM
             'lock_open'           => 'NULL',
             'date_checkin'        => $now,
             'checkin_shift_start' => Shift::startFor($now),
-            // Em texto: a coluna começa vazia e o update() do GLPI trata vazio e o número 0 como
-            // iguais, então o "Não" (0) em número nunca chegava ao banco
-            'checkin_is_ok'       => (string) $is_ok,
+            'checkin_is_ok'       => Db::yesNo($is_ok),
             'checkin_known_issue' => $known ? 1 : 0,
             'checkin_selfie'      => $selfie,
         ] + Location::toFields('checkin_', Location::fromRequest()));
@@ -602,22 +598,5 @@ class Usage extends CommonDBTM
         }
 
         return ['ok' => true, 'message' => '', 'item' => $item];
-    }
-
-    /**
-     * add() que não deixa um erro de banco (ex.: índice único) virar erro de tela.
-     *
-     * @return int id criado, ou 0
-     */
-    private static function safeAdd(self $usage, array $input): int
-    {
-        try {
-            $id = $usage->add($input);
-        } catch (Throwable $e) {
-            Toolbox::logError('checklistitens: ' . $e->getMessage());
-            $id = false;
-        }
-
-        return $id ? (int) $id : 0;
     }
 }

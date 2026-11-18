@@ -204,19 +204,11 @@ class Vessel extends CommonDropdown
         return $row ? Ui::text($row['name']) : '';
     }
 
-    /**
-     * Quem vê todas as entidades recebe uma restrição vazia, que viraria "AND ()" (SQL inválido)
-     * se entrasse no WHERE como está; por isso só entra quando tem conteúdo.
-     */
     private static function getActiveCriteria(): array
     {
         $table = self::getTable();
         $where = ["$table.is_active" => 1];
-
-        $restriction = getEntitiesRestrictCriteria($table, '', '', true);
-        if (count($restriction)) {
-            $where[] = $restriction;
-        }
+        Db::addEntityRestriction($where, $table, true);
 
         return ['FROM' => $table, 'WHERE' => $where];
     }
