@@ -1,32 +1,12 @@
 {# Registro de uso completo de um equipamento (página própria e aba no Telefone) #}
-{% macro selfie(info) %}
-    {% if info.url %}
-        <a href="{{ info.url }}" target="_blank" rel="noopener" title="{{ __('Ver selfie', 'checklistitens') }}">
-            <img src="{{ info.url }}" class="ci-thumb" alt="{{ __('Selfie', 'checklistitens') }}" loading="lazy">
-        </a>
-    {% elseif info.removed %}
-        <span class="ci-small text-muted">{{ info.removed }}</span>
-    {% endif %}
-{% endmacro %}
 
-{# Resultado do checklist numa fase: problemas, problema conhecido (laudo) e fotos do defeito #}
+{# Resultado do checklist numa fase; aqui também o "ok" e os laudos exibidos sem ser o problema #}
 {% macro result(phase) %}
-    {% import '@checklistitens/parts/known_issue.html.twig' as known %}
-    {% if phase.problems|length %}
-        <ul class="ci-problem-tags">{% for p in phase.problems %}<li>{{ p }}</li>{% endfor %}</ul>
-        {% if phase.known %}{{ known.badge(phase.laudos) }}{% endif %}
-    {% else %}
+    {% import '@checklistitens/parts/record.html.twig' as record %}
+    {% if not phase.problems|length %}
         <span class="badge bg-green-lt">{{ __('Equipamento ok', 'checklistitens') }}</span>
     {% endif %}
-    {% if phase.photos|length %}
-        <div class="ci-photo-strip mt-1">
-            {% for p in phase.photos %}
-                <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ __('Foto do defeito', 'checklistitens') }}">
-                    <img src="{{ p.url }}" class="ci-thumb ci-thumb-photo" alt="{{ __('Foto do defeito', 'checklistitens') }}" loading="lazy">
-                </a>
-            {% endfor %}
-        </div>
-    {% endif %}
+    {{ record.problems(phase) }}
     {% if phase.laudos|length and not phase.known %}
         <div class="ci-small text-muted mt-1">
             <i class="ti ti-file-alert"></i> {{ __('Laudos em aberto exibidos', 'checklistitens') }}:
@@ -38,6 +18,7 @@
 {% endmacro %}
 
 {% import _self as ci %}
+{% import '@checklistitens/parts/record.html.twig' as record %}
 {% import '@checklistitens/parts/location.html.twig' as location %}
 {% import '@checklistitens/parts/known_issue.html.twig' as known %}
 
@@ -115,7 +96,7 @@
                 </div>
                 <div class="list-group list-group-flush">
                     <div class="list-group-item d-flex gap-3 align-items-center">
-                        {{ ci.selfie(e.checkout.selfie) }}
+                        {{ record.selfie(e.checkout.selfie) }}
                         <div class="flex-fill">
                             {% if e.delivery %}
                                 {# Uso que faz parte de uma entrega para embarcação, feita pelo gestor #}
@@ -145,7 +126,7 @@
 
                     {% if e.confirmation %}
                         <div class="list-group-item d-flex gap-3 align-items-center">
-                            {{ ci.selfie(e.confirmation.selfie) }}
+                            {{ record.selfie(e.confirmation.selfie) }}
                             <div>
                                 <div class="fw-bold"><i class="ti ti-user-check"></i> {{ __('Conferência do gestor', 'checklistitens') }}</div>
                                 <div class="ci-small">{{ e.confirmation.user }} · {{ e.confirmation.when }}</div>
@@ -156,7 +137,7 @@
 
                     {% if e.checkin %}
                         <div class="list-group-item d-flex gap-3 align-items-center">
-                            {{ ci.selfie(e.checkin.selfie) }}
+                            {{ record.selfie(e.checkin.selfie) }}
                             <div class="flex-fill">
                                 <div class="fw-bold"><i class="ti ti-logout"></i> {{ e.delivery ? __('Recebimento da embarcação', 'checklistitens') : __('Devolução', 'checklistitens') }}</div>
                                 <div class="ci-small">{{ e.checkin.when }} · {{ __('turno', 'checklistitens') }} {{ e.checkin.shift }}{% if e.duration %} · {{ __('duração', 'checklistitens') }} {{ e.duration }}{% endif %}</div>
@@ -168,7 +149,7 @@
 
                     {% if e.checkin_confirmation %}
                         <div class="list-group-item d-flex gap-3 align-items-center">
-                            {{ ci.selfie(e.checkin_confirmation.selfie) }}
+                            {{ record.selfie(e.checkin_confirmation.selfie) }}
                             <div>
                                 <div class="fw-bold"><i class="ti ti-user-check"></i> {{ __('Devolução conferida', 'checklistitens') }}</div>
                                 <div class="ci-small">{{ e.checkin_confirmation.user }} · {{ e.checkin_confirmation.when }}</div>
