@@ -8,7 +8,7 @@
 #}
 {% set ci_min = min_photos|default(1) %}
 {% set ci_max = max_photos|default(5) %}
-<div class="ci-defect-photos" data-ci-defect-photos data-ci-min="{{ ci_min }}" data-ci-max="{{ ci_max }}" data-ci-defect-count="0">
+<div class="ci-defect-photos" data-ci-defect-photos data-ci-min="{{ ci_min }}" data-ci-max="{{ ci_max }}">
     <p class="fw-bold mb-1">
         <i class="ti ti-camera"></i>
         {{ photos_title|default(__('Fotos do equipamento com defeito (1 a 5)', 'checklistitens')) }}

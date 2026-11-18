@@ -11,6 +11,12 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   `plugins/` e não abria com o plugin instalado pelo marketplace.
 - A aba "Registro de uso" do Telefone podia continuar com o visual antigo depois de atualizar o
   plugin (o navegador não buscava o CSS novo).
+- Na entrega e no recebimento da embarcação, os avisos das fotos (foto que não pôde ser lida, o que
+  falta em cada bateria ou capa com defeito) apareciam sem o destaque de aviso.
+- Foto ou selfie que o navegador não consegue reduzir e que não é JPEG nem PNG agora é avisada na
+  hora, em vez de ser guardada e recusada pelo servidor ao salvar.
+- Ao reabrir a tela da entrega ou do recebimento, a linha da localização mostra o mesmo texto da
+  leitura original, com o motivo quando ela não foi registrada.
 
 ## [0.12.0] - 2026-11-10
 

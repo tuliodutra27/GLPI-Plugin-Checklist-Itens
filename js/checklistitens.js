@@ -1,66 +1,162 @@
 /* Checklist uso de equipamentos: comportamento das telas do plugin (sem dependências). */
 
-/* Fotos do equipamento com defeito: módulo próprio, usado pelo fluxo de retirada/devolução abaixo. */
+/* Base comum: usada pelos módulos abaixo e pela tela da entrega (js/delivery.js). */
 (function () {
     'use strict';
 
-    var MAX_SIDE = 1600;               // maior lado de cada foto, em pixels (DefectPhoto::MAX_SIDE)
     var QUALITY = 0.8;                 // qualidade do JPEG gerado
-    var MAX_BYTES = 5 * 1024 * 1024;   // limite do arquivo original (DefectPhoto::MAX_BYTES)
+    var MAX_MB = 5;                    // limite de cada foto no servidor (UploadedImage::MAX_BYTES)
+    var MAX_BYTES = MAX_MB * 1024 * 1024;
 
     function qsa(selector, root) {
         return Array.prototype.slice.call((root || document).querySelectorAll(selector));
     }
 
-    function notify(element, detail) {
+    /** Dispara um evento que sobe pela página, com detalhe opcional. */
+    function emit(element, name, detail) {
         var event;
         if (typeof window.CustomEvent === 'function') {
-            event = new CustomEvent('ci:defectphotos', {bubbles: true, detail: detail});
+            event = new CustomEvent(name, {bubbles: true, detail: detail === undefined ? null : detail});
         } else {
             event = document.createEvent('CustomEvent');
-            event.initCustomEvent('ci:defectphotos', true, false, detail);
+            event.initCustomEvent(name, true, false, detail === undefined ? null : detail);
         }
         element.dispatchEvent(event);
     }
 
-    function count(container) {
-        return container ? qsa('[data-ci-defect-item]', container).length : 0;
+    /** Desenha a imagem (foto aberta ou quadro do vídeo) com o maior lado em maxSide. */
+    function reduce(source, width, height, maxSide) {
+        var scale = Math.min(1, maxSide / Math.max(width, height));
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+        return canvas;
     }
 
-    /** Reduz a foto (maior lado MAX_SIDE) e devolve o JPEG em data URL, como na selfie. */
-    function resize(file, done, fail) {
+    /** JPEG em data URL, ou '' (canvas vazio ou grande demais para o aparelho devolve "data:,"). */
+    function toDataUrl(canvas) {
+        var data = '';
+        try {
+            data = canvas.toDataURL('image/jpeg', QUALITY);
+        } catch (e) {
+            data = '';
+        }
+        return /^data:image\/(jpeg|png);base64,/.test(data) ? data : '';
+    }
+
+    /** Abre o arquivo como imagem: done(img), ou fail() quando o navegador não consegue ler. */
+    function loadImage(file, done, fail) {
         var url = URL.createObjectURL(file);
         var img = new Image();
-
         img.onload = function () {
             URL.revokeObjectURL(url);
-            var data = '';
-            try {
-                var width = img.naturalWidth;
-                var height = img.naturalHeight;
-                var scale = Math.min(1, MAX_SIDE / Math.max(width, height));
-                var canvas = document.createElement('canvas');
-                canvas.width = Math.round(width * scale);
-                canvas.height = Math.round(height * scale);
-                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                data = canvas.toDataURL('image/jpeg', QUALITY);
-            } catch (e) {
-                data = '';
-            }
-            // Canvas vazio ou grande demais para o aparelho devolve "data:,"
-            if (/^data:image\/(jpeg|png);base64,/.test(data)) {
-                done(data);
-            } else {
-                fail();
-            }
+            done(img);
         };
-
         img.onerror = function () {
             URL.revokeObjectURL(url);
             fail();
         };
-
         img.src = url;
+    }
+
+    /** Foto reduzida (maior lado maxSide) em JPEG data URL: done(data) ou fail(). */
+    function shrinkToDataUrl(file, maxSide, done, fail) {
+        loadImage(file, function (img) {
+            var data = '';
+            try {
+                data = toDataUrl(reduce(img, img.naturalWidth, img.naturalHeight, maxSide));
+            } catch (e) {
+                data = '';
+            }
+            if (data) {
+                done(data);
+            } else {
+                fail();
+            }
+        }, fail);
+    }
+
+    /** Foto reduzida (maior lado maxSide) como arquivo JPEG: done(blob) ou fail(). */
+    function shrinkToBlob(file, maxSide, done, fail) {
+        loadImage(file, function (img) {
+            var finished = false;
+            function result(blob) {
+                if (finished) {
+                    return;
+                }
+                finished = true;
+                if (blob && blob.size > 0) {
+                    done(blob);
+                } else {
+                    fail();
+                }
+            }
+            try {
+                var canvas = reduce(img, img.naturalWidth, img.naturalHeight, maxSide);
+                if (canvas.toBlob) {
+                    canvas.toBlob(result, 'image/jpeg', QUALITY);
+                } else {
+                    var data = toDataUrl(canvas);
+                    result(data ? dataUrlToBlob(data) : null);
+                }
+            } catch (e) {
+                result(null);
+            }
+        }, fail);
+    }
+
+    /** O servidor aceita o arquivo como está (quando o navegador não consegue reduzi-lo). */
+    function fitsAsIs(file) {
+        return (file.type === 'image/jpeg' || file.type === 'image/png') && file.size <= MAX_BYTES;
+    }
+
+    function dataUrlToBlob(dataUrl) {
+        try {
+            var parts = String(dataUrl).split(',');
+            var mime = (/^data:([^;]+);/.exec(parts[0]) || [])[1] || 'image/jpeg';
+            var binary = window.atob(parts[1]);
+            var bytes = new Uint8Array(binary.length);
+            for (var i = 0; i < binary.length; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return new Blob([bytes], {type: mime});
+        } catch (e) {
+            return null;
+        }
+    }
+
+    window.ChecklistItens = {
+        MAX_BYTES: MAX_BYTES,
+        MAX_MB: MAX_MB,
+        UNREADABLE: 'Não foi possível ler uma das fotos. Tire outra ou escolha outra imagem (JPEG ou PNG, até ' + MAX_MB + ' MB).',
+        PHOTO_SIDE: 1600,             // maior lado das fotos (defeito, entrega, peças)
+        SELFIE_SIDE: 1280,            // maior lado da selfie
+        QUALITY: QUALITY,
+        // Espera máxima pela localização ao enviar, se a leitura começada na selfie não terminou
+        LOCATION_WAIT_MS: 10000,
+        qsa: qsa,
+        emit: emit,
+        reduce: reduce,
+        toDataUrl: toDataUrl,
+        loadImage: loadImage,
+        shrinkToDataUrl: shrinkToDataUrl,
+        shrinkToBlob: shrinkToBlob,
+        fitsAsIs: fitsAsIs,
+        dataUrlToBlob: dataUrlToBlob
+    };
+})();
+
+/* Fotos do equipamento com defeito: módulo próprio, usado pelo fluxo de retirada/devolução abaixo
+   e pelo painel de problema da entrega. */
+(function () {
+    'use strict';
+
+    var base = window.ChecklistItens;
+    var qsa = base.qsa;
+
+    function count(container) {
+        return container ? qsa('[data-ci-defect-item]', container).length : 0;
     }
 
     /**
@@ -68,7 +164,7 @@
      * (defect_photo_files[]), se couber no limite e o navegador permitir montar o campo.
      */
     function originalField(file) {
-        if (file.size > MAX_BYTES || typeof window.DataTransfer !== 'function') {
+        if (!base.fitsAsIs(file) || typeof window.DataTransfer !== 'function') {
             return null;
         }
         try {
@@ -89,7 +185,7 @@
      * Fotos do defeito: câmera traseira (capture) ou galeria (várias de uma vez), de 1 até o
      * máximo do bloco. Cada foto vira uma miniatura com botão de remover e um campo oculto
      * defect_photos[]. A cada mudança dispara "ci:defectphotos" no bloco (detail.count e
-     * detail.busy) e atualiza o atributo data-ci-defect-count, para o fluxo liberar o salvamento.
+     * detail.busy), para o fluxo liberar o salvamento.
      */
     function setup(container) {
         if (!container || container.ciDefectPhotos) {
@@ -136,7 +232,6 @@
             var busy = pending() > 0;
             var full = total + pending() >= max;
 
-            container.setAttribute('data-ci-defect-count', String(total));
             if (busy) {
                 container.setAttribute('data-ci-defect-busy', '1');
             } else {
@@ -154,7 +249,7 @@
                 input.disabled = full;
             });
 
-            notify(container, {count: total, busy: busy});
+            base.emit(container, 'ci:defectphotos', {count: total, busy: busy});
         }
 
         function addItem(field, preview) {
@@ -213,7 +308,7 @@
 
             var file = current;
             var gen = generation;
-            resize(file, function (data) {
+            base.shrinkToDataUrl(file, base.PHOTO_SIDE, function (data) {
                 if (gen !== generation) {
                     return;
                 }
@@ -232,7 +327,7 @@
                     addItem(field, null);
                     notes.push('Uma foto não pôde ser reduzida aqui e será enviada como está.');
                 } else {
-                    notes.push('Não foi possível ler uma das fotos. Tire outra ou escolha outra imagem (JPEG ou PNG, até 5 MB).');
+                    notes.push(base.UNREADABLE);
                 }
                 next();
             });
@@ -286,11 +381,28 @@
     }
 
     window.ChecklistDefectPhotos = {
-        setup: function (container) {
-            setup(container);
+        setup: setup,
+        count: count,
+        /** Ainda há foto sendo reduzida no bloco. */
+        busy: function (container) {
+            return !!container && container.hasAttribute('data-ci-defect-busy');
         },
-        count: function (container) {
-            return count(container);
+        /** Fotos prontas para envio, como arquivos: as reduzidas (JPEG) e as originais. */
+        files: function (container) {
+            var list = [];
+            qsa('[data-ci-defect-fields] input', container).forEach(function (input) {
+                if (input.type === 'file') {
+                    if (input.files && input.files[0]) {
+                        list.push(input.files[0]);
+                    }
+                } else if (input.value) {
+                    var blob = base.dataUrlToBlob(input.value);
+                    if (blob) {
+                        list.push(blob);
+                    }
+                }
+            });
+            return list;
         },
         clear: function (container) {
             if (!container) {
@@ -307,42 +419,17 @@
             });
         }
     };
-
-    function init() {
-        qsa('[data-ci-defect-photos]').forEach(setup);
-    }
-
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
-    }
 })();
 
 (function () {
     'use strict';
 
-    var MAX_SIDE = 1280;   // maior lado da selfie, em pixels
-    var QUALITY = 0.8;     // qualidade do JPEG gerado
-
-    function qsa(selector, root) {
-        return Array.prototype.slice.call((root || document).querySelectorAll(selector));
-    }
-
-    function notify(element, name) {
-        var event;
-        if (typeof window.CustomEvent === 'function') {
-            event = new CustomEvent(name, {bubbles: true});
-        } else {
-            event = document.createEvent('CustomEvent');
-            event.initCustomEvent(name, true, false, null);
-        }
-        element.dispatchEvent(event);
-    }
+    var base = window.ChecklistItens;
+    var qsa = base.qsa;
+    var notify = base.emit;
 
     // Situações da localização (iguais às de Location.php)
     var LOCATION = {OK: 1, DENIED: 2, UNAVAILABLE: 3, TIMEOUT: 4, INSECURE: 5};
-    var LOCATION_WAIT_MS = 10000;   // espera máxima ao salvar, se a leitura ainda não terminou
 
     /**
      * Localização junto com a selfie: uma leitura só (não é rastreamento). Obrigatória, mas não
@@ -376,7 +463,8 @@
             }
         }
 
-        function finish(status, coords) {
+        // quiet: leitura restaurada do aparelho, sem avisar a página de uma mudança
+        function finish(status, coords, quiet) {
             var accuracy = coords && coords.accuracy ? Math.round(coords.accuracy) : null;
 
             pending = false;
@@ -405,7 +493,9 @@
             callbacks.forEach(function (callback) {
                 callback();
             });
-            notify(box, 'ci:change');
+            if (!quiet) {
+                notify(box, 'ci:change');
+            }
         }
 
         function request() {
@@ -434,6 +524,30 @@
         }
 
         return {
+            /** Leitura atual, ou null se ainda não houve. */
+            read: function () {
+                if (fields.status.value === '') {
+                    return null;
+                }
+                return {
+                    status: fields.status.value,
+                    latitude: fields.latitude.value,
+                    longitude: fields.longitude.value,
+                    accuracy: fields.accuracy.value
+                };
+            },
+            /** Leitura guardada no aparelho (tela reaberta) volta aos campos e à linha. */
+            restore: function (saved) {
+                var status = saved ? parseInt(saved.status, 10) : 0;
+                if (!status) {
+                    return;
+                }
+                finish(status, status === LOCATION.OK ? {
+                    latitude: saved.latitude,
+                    longitude: saved.longitude,
+                    accuracy: saved.accuracy ? parseFloat(saved.accuracy) : null
+                } : null, true);
+            },
             // Primeira leitura: ao tocar no botão da selfie (ou ao salvar, se ainda não houve)
             start: function () {
                 if (!pending && fields.status.value === '') {
@@ -509,21 +623,58 @@
             box.removeAttribute('data-ci-selfie-ready');
         }
 
-        /** Reduz a imagem (foto ou quadro do vídeo) e grava no campo oculto. */
+        /**
+         * Reduz a imagem (foto ou quadro do vídeo) e grava no campo oculto.
+         *
+         * @return {boolean} false quando o aparelho não conseguiu gerar a foto reduzida
+         */
         function store(source, width, height) {
-            var scale = Math.min(1, MAX_SIDE / Math.max(width, height));
-            var canvas = document.createElement('canvas');
-            canvas.width = Math.round(width * scale);
-            canvas.height = Math.round(height * scale);
-            canvas.getContext('2d').drawImage(source, 0, 0, canvas.width, canvas.height);
+            var data = '';
+            try {
+                data = base.toDataUrl(base.reduce(source, width, height, base.SELFIE_SIDE));
+            } catch (e) {
+                data = '';
+            }
+            if (!data) {
+                return false;
+            }
 
-            hidden.value = canvas.toDataURL('image/jpeg', QUALITY);
-            preview.src = hidden.value;
+            hidden.value = data;
+            preview.src = data;
             preview.hidden = false;
             box.setAttribute('data-ci-selfie-ready', '1');
             setStatus('Selfie pronta.');
             notify(box, 'ci:change');
+            return true;
         }
+
+        /** O navegador não reduziu a foto do aparelho: o arquivo original segue no envio. */
+        function keepOriginal() {
+            preview.hidden = true;
+            box.setAttribute('data-ci-selfie-ready', '1');
+            setStatus('Foto recebida (será enviada como está).');
+            notify(box, 'ci:change');
+        }
+
+        box.ciSelfie = {
+            read: function () {
+                return {
+                    ready: box.hasAttribute('data-ci-selfie-ready'),
+                    data: hidden.value,
+                    file: input.files && input.files[0] ? input.files[0] : null,
+                    location: geo ? geo.read() : null
+                };
+            },
+            restore: function (blob, location) {
+                preview.src = URL.createObjectURL(blob);
+                preview.hidden = false;
+                setStatus('Selfie guardada neste aparelho.');
+                box.setAttribute('data-ci-selfie-ready', '1');
+                if (geo) {
+                    geo.restore(location);
+                }
+            }
+        };
 
         // ---------------------------------------------------------- câmera nativa do aparelho
         input.addEventListener('change', function () {
@@ -535,28 +686,17 @@
             }
 
             setStatus('Processando a foto...');
-            var url = URL.createObjectURL(file);
-            var img = new Image();
-
-            img.onload = function () {
-                URL.revokeObjectURL(url);
-                store(img, img.naturalWidth, img.naturalHeight);
+            base.loadImage(file, function (img) {
+                if (!store(img, img.naturalWidth, img.naturalHeight)) {
+                    keepOriginal();
+                    return;
+                }
                 // A versão reduzida já está no campo oculto: não reenviar o arquivo original.
                 input.value = '';
                 if (label) {
                     label.textContent = 'Tirar outra selfie';
                 }
-            };
-
-            img.onerror = function () {
-                URL.revokeObjectURL(url);
-                preview.hidden = true;
-                box.setAttribute('data-ci-selfie-ready', '1');
-                setStatus('Foto recebida (será enviada como está).');
-                notify(box, 'ci:change');
-            };
-
-            img.src = url;
+            }, keepOriginal);
         });
 
         // ---------------------------------------------------------- câmera frontal na página
@@ -626,7 +766,10 @@
                 setStatus('A câmera ainda está carregando, tente de novo.');
                 return;
             }
-            store(video, video.videoWidth, video.videoHeight);
+            if (!store(video, video.videoWidth, video.videoHeight)) {
+                setStatus('Não foi possível usar esta foto. Tire de novo.');
+                return;
+            }
             stopCamera();
             openButton.hidden = false;
             if (openLabel) {
@@ -641,6 +784,52 @@
         }
         window.addEventListener('pagehide', stopCamera);
     }
+
+    /**
+     * Localização obrigatória sem bloquear: começa a leitura da selfie, se ainda não houve, e chama
+     * done uma vez quando ela termina ou depois de LOCATION_WAIT_MS. onWait é chamado só quando há
+     * espera (para avisar na tela).
+     */
+    function whenLocated(box, done, onWait) {
+        var geo = box ? box.ciLocation : null;
+        var called = false;
+        function once() {
+            if (!called) {
+                called = true;
+                done();
+            }
+        }
+
+        if (!geo) {
+            once();
+            return;
+        }
+        geo.start();
+        if (!geo.isPending()) {
+            once();
+            return;
+        }
+        if (onWait) {
+            onWait();
+        }
+        geo.whenDone(once);
+        window.setTimeout(once, base.LOCATION_WAIT_MS);
+    }
+
+    /** Bloco da selfie para quem monta a própria tela (entrega para embarcação). */
+    window.ChecklistSelfie = {
+        /** {ready, data (reduzida, data URL), file (original), location} ou null */
+        read: function (box) {
+            return box && box.ciSelfie ? box.ciSelfie.read() : null;
+        },
+        /** Selfie e localização guardadas no aparelho voltam ao bloco. */
+        restore: function (box, blob, location) {
+            if (box && box.ciSelfie) {
+                box.ciSelfie.restore(blob, location);
+            }
+        },
+        whenLocated: whenLocated
+    };
 
     /**
      * Fluxo de retirada/devolução: mostra cada passo só quando o anterior foi respondido,
@@ -688,15 +877,7 @@
 
         /** Quantas fotos do defeito estão prontas para envio (redimensionadas ou arquivo nativo). */
         function countPhotos() {
-            var section = form.querySelector('[data-ci-section="photos"]');
-            if (!section) {
-                return 0;
-            }
-            if (window.ChecklistDefectPhotos && window.ChecklistDefectPhotos.count) {
-                return window.ChecklistDefectPhotos.count(section);
-            }
-
-            return qsa('input[name="defect_photos[]"]', section).length;
+            return window.ChecklistDefectPhotos.count(form.querySelector('[data-ci-section="photos"]'));
         }
 
         /** Campos de uma parte escondida não vão no envio (ex.: a escolha "é o problema do laudo"). */
@@ -745,9 +926,7 @@
                 qsa('input[name="is_ok"], input[name="problems[]"], input[name="known_issue"]', form).forEach(function (input) {
                     input.checked = false;
                 });
-                if (window.ChecklistDefectPhotos && window.ChecklistDefectPhotos.clear) {
-                    window.ChecklistDefectPhotos.clear(form.querySelector('[data-ci-section="photos"]'));
-                }
+                window.ChecklistDefectPhotos.clear(form.querySelector('[data-ci-section="photos"]'));
             }
             lastKey = chosenKey;
             var answer = checked('is_ok');
@@ -835,17 +1014,15 @@
                         HTMLFormElement.prototype.submit.call(form);
                     };
 
+                    var left = waiting.length;
                     waiting.forEach(function (box) {
-                        box.ciLocation.whenDone(function () {
-                            var still = waiting.some(function (other) {
-                                return other.ciLocation.isPending();
-                            });
-                            if (!still) {
+                        whenLocated(box, function () {
+                            left -= 1;
+                            if (left === 0) {
                                 send();
                             }
                         });
                     });
-                    window.setTimeout(send, LOCATION_WAIT_MS);
                     disableButtons();
                     return;
                 }
@@ -920,28 +1097,18 @@
         }, 1000);
     }
 
-    function init(root) {
-        qsa('[data-ci-selfie-box]', root).forEach(setupSelfie);
-        if (window.ChecklistDefectPhotos) {
-            qsa('[data-ci-defect-photos]', root).forEach(window.ChecklistDefectPhotos.setup);
-        }
-        qsa('form[data-ci-flow]', root).forEach(setupFlow);
-        qsa('[data-ci-filter]', root).forEach(setupFilter);
-        qsa('[data-ci-idle]', root).forEach(setupIdle);
-        qsa('[data-ci-redirect]', root).forEach(setupRedirect);
+    function init() {
+        qsa('[data-ci-selfie-box]').forEach(setupSelfie);
+        qsa('[data-ci-defect-photos]').forEach(window.ChecklistDefectPhotos.setup);
+        qsa('form[data-ci-flow]').forEach(setupFlow);
+        qsa('[data-ci-filter]').forEach(setupFilter);
+        qsa('[data-ci-idle]').forEach(setupIdle);
+        qsa('[data-ci-redirect]').forEach(setupRedirect);
     }
 
-    window.ChecklistItens = {
-        init: init,
-        qsa: qsa,
-        notify: notify
-    };
-
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () {
-            init(document);
-        });
+        document.addEventListener('DOMContentLoaded', init);
     } else {
-        init(document);
+        init();
     }
 })();

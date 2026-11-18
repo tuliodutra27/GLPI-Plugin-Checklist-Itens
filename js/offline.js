@@ -9,7 +9,8 @@
  *   ChecklistOffline.open(namespace)     -> Promise<Store>
  *       Store: available, get, set, remove, keys, putBlob, getBlob, removeBlob, clear
  *   ChecklistOffline.createQueue(opções) -> Queue
- *       Queue: push, start, stop, retryNow, status, pending, clear
+ *       Queue: push, start, retryNow, status, pending, clear
+ *   ChecklistOffline.getJson(url)        -> Promise<objeto>   (leitura fora da fila)
  *   ChecklistOffline.uuid()              -> string
  */
 (function () {
@@ -22,8 +23,8 @@
     var OPEN_TIMEOUT_MS = 6000;         // há navegador que nunca responde ao abrir o banco
     var BACKOFF_MS = [2000, 5000, 10000, 30000, 60000];   // espera entre tentativas seguidas
     var MAX_TOKEN_SWAPS = 2;            // trocas de token seguidas para a mesma tarefa
-    var PING_MS = 300000;               // intervalo padrão do ping que mantém a sessão
-    var TIMEOUT_MS = 60000;             // tempo limite padrão de cada pedido
+    var PING_MS = 300000;               // intervalo do ping que mantém a sessão
+    var TIMEOUT_MS = 120000;            // tempo limite de cada pedido: conexão fraca, fotos de centenas de KB
     var SEQ_DIGITS = 12;                // zeros à esquerda: a ordem das chaves é a ordem de envio
     var LOGIN_MESSAGE = 'Sua sessão expirou. Entre de novo para continuar o envio.';
     var BLOB_MESSAGE = 'Arquivo não encontrado neste aparelho.';
@@ -35,10 +36,6 @@
     var blobAsBuffer = false;   // este navegador não grava Blob no banco
 
     function noop() {}
-
-    function positive(value, fallback) {
-        return typeof value === 'number' && value > 0 ? value : fallback;
-    }
 
     function isBlob(value) {
         return !!window.Blob && value instanceof window.Blob;
@@ -510,6 +507,23 @@
         }
     }
 
+    /** Cabeçalhos dos pedidos ao ajax do plugin; o token de segurança vai só nos envios. */
+    function ajaxHeaders(token) {
+        var list = {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'};
+
+        if (typeof token === 'string') {
+            list['X-Glpi-Csrf-Token'] = token;
+        }
+        return list;
+    }
+
+    /** Leitura no ajax do plugin, fora da fila: Promise com o JSON da resposta. */
+    function getJson(url) {
+        return window.fetch(url, {credentials: 'same-origin', headers: ajaxHeaders()}).then(function (response) {
+            return response.json();
+        });
+    }
+
     /**
      * Pedido HTTP com tempo limite (sem AbortController, segue sem limite). Nunca rejeita: devolve
      * {status, data} (data = o JSON da resposta, quando é um objeto) ou {network: true} quando não
@@ -628,18 +642,15 @@
         var store = settings.store;
         var prefix = 'queue:' + String(settings.name || 'default') + ':';
         var seqKey = prefix + 'seq';
-        var pingMs = positive(settings.pingMs, PING_MS);
-        var timeoutMs = positive(settings.timeoutMs, TIMEOUT_MS);
         var token = settings.token ? String(settings.token) : '';
         var state = {online: true, pending: 0, sending: false, needLogin: false, lastError: null};
         var started = false;
         var busy = false;                   // há uma rodada de envio em andamento
-        var epoch = 0;                      // muda em stop() e clear(): o que estava em andamento deixa de valer
+        var epoch = 0;                      // muda em clear(): o que estava em andamento deixa de valer
         var active = null;                  // tarefa em envio, para poder interromper o pedido
         var pingHolder = {abort: null};     // idem para o ping
         var probing = false;
         var retryTimer = null;
-        var pingTimer = null;
         var failures = 0;                   // tentativas seguidas sem sucesso: escolhe a espera
         var sequence = 0;                   // último número de ordem usado
         var lastContact = Date.now();       // última resposta boa do servidor
@@ -769,15 +780,6 @@
 
         // -------------------------------------------------------------- montagem do envio
 
-        function headers(withToken) {
-            var list = {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'};
-
-            if (withToken) {
-                list['X-Glpi-Csrf-Token'] = token;
-            }
-            return list;
-        }
-
         /** O PHP leria "true"/"false" como texto: sim e não vão como 1 e 0. */
         function fieldText(value) {
             if (value === true) {
@@ -799,7 +801,7 @@
             list.forEach(function (file) {
                 form.append(file.field, file.blob, file.name);
             });
-            return {method: 'POST', body: form, headers: headers(true), credentials: 'same-origin'};
+            return {method: 'POST', body: form, headers: ajaxHeaders(token), credentials: 'same-origin'};
         }
 
         /** Arquivos da tarefa, já em memória; null quando algum não existe mais ou não abre. */
@@ -826,9 +828,9 @@
          * "done" quer dizer token trocado.
          */
         function requestToken(holder) {
-            var init = {method: 'GET', headers: headers(false), credentials: 'same-origin', cache: 'no-store'};
+            var init = {method: 'GET', headers: ajaxHeaders(), credentials: 'same-origin', cache: 'no-store'};
 
-            return request(settings.tokenUrl, init, timeoutMs, holder).then(function (reply) {
+            return request(settings.tokenUrl, init, TIMEOUT_MS, holder).then(function (reply) {
                 var outcome = classify(reply);
 
                 if (outcome.kind === 'done' && typeof reply.data.token === 'string' && reply.data.token !== '') {
@@ -878,7 +880,7 @@
                 if (!list) {
                     return {kind: 'rejected', local: true, response: {ok: false, message: BLOB_MESSAGE, code: 'blob'}};
                 }
-                return request(settings.url, postOptions(job.task, list), timeoutMs, job).then(function (reply) {
+                return request(settings.url, postOptions(job.task, list), TIMEOUT_MS, job).then(function (reply) {
                     var outcome = classify(reply);
                     return outcome.kind === 'unexpected' ? renew(job, reply) : outcome;
                 });
@@ -1012,7 +1014,7 @@
             busy = false;
             active = null;
             setState({sending: false});
-            if (!state.online || Date.now() - lastContact >= pingMs) {
+            if (!state.online || Date.now() - lastContact >= PING_MS) {
                 probe();
             }
         }
@@ -1091,12 +1093,10 @@
             }
         }
 
-        function listen(on) {
-            var method = on ? 'addEventListener' : 'removeEventListener';
-
-            window[method]('online', wake);
-            window[method]('offline', wentOffline);
-            document[method]('visibilitychange', visibilityChanged);
+        function listen() {
+            window.addEventListener('online', wake);
+            window.addEventListener('offline', wentOffline);
+            document.addEventListener('visibilitychange', visibilityChanged);
         }
 
         // -------------------------------------------------------------- API da fila
@@ -1137,27 +1137,14 @@
             }
             if (!started) {
                 started = true;
-                listen(true);
-                pingTimer = window.setInterval(tick, pingMs);
+                listen();
+                window.setInterval(tick, PING_MS);
             }
             failures = 0;
             if (state.needLogin) {
                 setState({needLogin: false, lastError: null});
             }
             pump();
-        }
-
-        /** Para o envio e o ping. O pedido em andamento é interrompido e a tarefa fica na fila. */
-        function stop() {
-            if (!started) {
-                return;
-            }
-            started = false;
-            listen(false);
-            window.clearInterval(pingTimer);
-            pingTimer = null;
-            abort(pingHolder);
-            interrupt();
         }
 
         function pendingTasks() {
@@ -1203,7 +1190,6 @@
         return {
             push: push,
             start: start,
-            stop: stop,
             retryNow: wake,
             status: snapshot,
             pending: pendingTasks,
@@ -1214,6 +1200,7 @@
     window.ChecklistOffline = {
         open: open,
         createQueue: createQueue,
+        getJson: getJson,
         uuid: uuid
     };
 })();

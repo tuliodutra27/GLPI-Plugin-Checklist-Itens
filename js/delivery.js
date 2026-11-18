@@ -7,10 +7,8 @@
 (function () {
     'use strict';
 
-    var MAX_SIDE = 1600;               // maior lado de cada foto, em pixels
-    var QUALITY = 0.8;                 // qualidade do JPEG gerado
-    var MAX_BYTES = 5 * 1024 * 1024;   // limite de cada arquivo no servidor
-    var LOCATION_WAIT_MS = 10000;      // espera máxima pela localização ao concluir
+    var base = window.ChecklistItens;  // js/checklistitens.js: utilidades, fotos e limites comuns
+    var qsa = base.qsa;
     var SAVE_DELAY_MS = 400;           // espera para gravar o que está sendo digitado
     var VESSEL_FILTER_MIN = 7;         // com mais embarcações do que isso, aparece a busca
 
@@ -51,10 +49,6 @@
 
     // ------------------------------------------------------------------ utilidades
 
-    function qsa(selector, scope) {
-        return Array.prototype.slice.call((scope || document).querySelectorAll(selector));
-    }
-
     function el(tag, className, text) {
         var node = document.createElement(tag);
         if (className) {
@@ -82,51 +76,80 @@
         return parseInt(value, 10) || 0;
     }
 
-    // Contadores de baterias e capas (data-ci-counter); a ordem importa: as peças com defeito
-    // dependem das devolvidas
-    var COUNTERS = ['batteries', 'defective', 'covers', 'damaged'];
-
-    // Peças que voltam da embarcação (recebimento): contador das devolvidas, das com defeito e os
-    // textos de cada uma
+    /*
+     * Peças que vão com a embarcação. Cada uma tem dois contadores (data-ci-counter): "count", as
+     * que vão (entrega) ou voltam (recebimento), e "bad", no recebimento, as devolvidas agora com
+     * defeito. "sent" e "left": campos da entrega no servidor (foram / ainda não voltaram).
+     */
     var ACC = {
         battery: {
-            count: 'batteries', bad: 'defective', name: 'bateria', title: 'Bateria',
+            count: 'batteries', bad: 'defective', sent: 'spare_batteries', left: 'batteries_left',
+            name: 'bateria', title: 'Bateria',
             question: 'responder se as baterias devolvidas estão boas',
-            howMany: 'informar quantas baterias estão com defeito'
+            howMany: 'informar quantas baterias estão com defeito',
+            badHint: 'Conte só as baterias devolvidas agora que estão com defeito.'
         },
         cover: {
-            count: 'covers', bad: 'damaged', name: 'capa', title: 'Capa',
+            count: 'covers', bad: 'damaged', sent: 'spare_covers', left: 'covers_left',
+            name: 'capa', title: 'Capa',
             question: 'responder se as capas devolvidas estão em bom estado',
-            howMany: 'informar quantas capas estão com dano'
+            howMany: 'informar quantas capas estão com dano',
+            badHint: ''
         }
     };
     var ACC_MAX_PHOTOS = 5;            // fotos por peça com defeito (como no rádio)
+
+    // Contadores na ordem em que os limites são calculados: o de defeito depende do de devolvidas
+    var COUNTERS = [];
+    var COUNTER_OF = {};               // nome do contador => {spec, bad}
+    Object.keys(ACC).forEach(function (kind) {
+        var spec = ACC[kind];
+        COUNTERS.push(spec.count, spec.bad);
+        COUNTER_OF[spec.count] = {spec: spec, bad: false};
+        COUNTER_OF[spec.bad] = {spec: spec, bad: true};
+    });
 
     function clamp99(value) {
         return Math.min(99, Math.max(0, toInt(value)));
     }
 
+    /** Recebimento: a entrega de onde as peças voltam, como o servidor a conhece. */
+    function deliveryReturning() {
+        return !isDelivery && server && server.delivery ? server.delivery : null;
+    }
+
     /**
-     * Limite de cada contador. No recebimento, baterias e capas vão no máximo até o que foi com a
-     * embarcação e ainda não voltou; as baterias com defeito, até as devolvidas agora.
+     * Limite de cada contador. No recebimento, as peças vão no máximo até o que foi com a
+     * embarcação e ainda não voltou; as com defeito, até as devolvidas agora.
      */
     function counterMax(name) {
-        var delivery = !isDelivery && server && server.delivery ? server.delivery : null;
-        var left;
+        var counter = COUNTER_OF[name];
+        var delivery = deliveryReturning();
 
-        if (name === 'defective') {
-            return draft ? draft.batteries : 0;
+        if (counter.bad) {
+            return draft ? draft[counter.spec.count] : 0;
         }
-        if (name === 'damaged') {
-            return draft ? draft.covers : 0;
-        }
-        if (delivery) {
-            left = name === 'covers' ? delivery.covers_left : delivery.batteries_left;
-            if (left !== undefined) {
-                return clamp99(left);
-            }
+        if (delivery && delivery[counter.spec.left] !== undefined) {
+            return clamp99(delivery[counter.spec.left]);
         }
         return 99;
+    }
+
+    /** "Entregues com a embarcação: N. Ainda não voltaram: M." no recebimento. */
+    function counterHint(name) {
+        var counter = COUNTER_OF[name];
+        var delivery = deliveryReturning();
+
+        if (!delivery) {
+            return '';
+        }
+        if (counter.bad) {
+            return counter.spec.badHint;
+        }
+        if (delivery[counter.spec.left] === undefined) {
+            return '';
+        }
+        return 'Entregues com a embarcação: ' + toInt(delivery[counter.spec.sent]) + '. Ainda não voltaram: ' + counterMax(name) + '.';
     }
 
     function clampCounter(name, value) {
@@ -143,21 +166,6 @@
         return match ? match[3] + '/' + match[2] + '/' + match[1] : String(value || '');
     }
 
-    function dataUrlToBlob(dataUrl) {
-        try {
-            var parts = String(dataUrl).split(',');
-            var mime = (/^data:([^;]+);/.exec(parts[0]) || [])[1] || 'image/jpeg';
-            var binary = window.atob(parts[1]);
-            var bytes = new Uint8Array(binary.length);
-            for (var i = 0; i < binary.length; i++) {
-                bytes[i] = binary.charCodeAt(i);
-            }
-            return new Blob([bytes], {type: mime});
-        } catch (e) {
-            return null;
-        }
-    }
-
     // As chaves desta tela têm prefixo próprio, separado das chaves da fila de envio
     function key(name) {
         return 'form-' + mode + ':' + name;
@@ -169,6 +177,10 @@
 
     function defectKey(uuid) {
         return key('defect:' + uuid);
+    }
+
+    function accKey(uuid) {
+        return key('acc:' + uuid);
     }
 
     // ------------------------------------------------------------------ mensagens
@@ -228,32 +240,31 @@
     }
 
     function normalize(saved) {
-        var base = emptyDraft();
+        var clean = emptyDraft();
         if (!saved || typeof saved !== 'object') {
-            return base;
+            return clean;
         }
 
         if (typeof saved.uuid === 'string' && saved.uuid !== '') {
-            base.uuid = saved.uuid;
+            clean.uuid = saved.uuid;
         }
-        base.serverId = toInt(saved.serverId);
-        base.deliveryId = toInt(saved.deliveryId);
-        base.vessel = toInt(saved.vessel);
+        clean.serverId = toInt(saved.serverId);
+        clean.deliveryId = toInt(saved.deliveryId);
+        clean.vessel = toInt(saved.vessel);
         if (Array.isArray(saved.picked)) {
-            base.picked = saved.picked.map(toInt).filter(function (id) {
+            clean.picked = saved.picked.map(toInt).filter(function (id) {
                 return id > 0;
             });
         }
         // os limites de verdade só são conhecidos com o estado do servidor (renderCounters)
-        base.batteries = clamp99(saved.batteries);
-        base.defective = clamp99(saved.defective);
-        base.covers = clamp99(saved.covers);
-        base.damaged = clamp99(saved.damaged);
+        COUNTERS.forEach(function (name) {
+            clean[name] = clamp99(saved[name]);
+        });
         Object.keys(ACC).forEach(function (kind) {
             var ok = saved.accOk && typeof saved.accOk === 'object' ? saved.accOk[kind] : null;
             var pieces = saved.acc && Array.isArray(saved.acc[kind]) ? saved.acc[kind] : [];
-            base.accOk[kind] = ok === 0 || ok === 1 ? ok : null;
-            base.acc[kind] = pieces.map(function (piece) {
+            clean.accOk[kind] = ok === 0 || ok === 1 ? ok : null;
+            clean.acc[kind] = pieces.map(function (piece) {
                 piece = piece && typeof piece === 'object' ? piece : {};
                 return {
                     problems: Array.isArray(piece.problems) ? piece.problems.map(toInt).filter(function (id) {
@@ -265,26 +276,26 @@
                 };
             });
         });
-        base.isOk = saved.isOk === 0 || saved.isOk === 1 ? saved.isOk : null;
-        base.comment = typeof saved.comment === 'string' ? saved.comment : '';
+        clean.isOk = saved.isOk === 0 || saved.isOk === 1 ? saved.isOk : null;
+        clean.comment = typeof saved.comment === 'string' ? saved.comment : '';
         if (Array.isArray(saved.photos)) {
             saved.photos.forEach(function (photo) {
                 if (photo && typeof photo.uuid === 'string' && photo.uuid !== '') {
-                    base.photos.push({uuid: photo.uuid, sent: !!photo.sent, url: typeof photo.url === 'string' ? photo.url : ''});
+                    clean.photos.push({uuid: photo.uuid, sent: !!photo.sent, url: typeof photo.url === 'string' ? photo.url : ''});
                 }
             });
         }
         if (saved.returned && typeof saved.returned === 'object') {
-            base.returned = saved.returned;
+            clean.returned = saved.returned;
         }
         if (saved.problems && typeof saved.problems === 'object') {
-            base.problems = saved.problems;
+            clean.problems = saved.problems;
         }
-        base.selfie = !!saved.selfie;
-        base.location = saved.location && typeof saved.location === 'object' ? saved.location : null;
-        base.finishing = !!saved.finishing;
+        clean.selfie = !!saved.selfie;
+        clean.location = saved.location && typeof saved.location === 'object' ? saved.location : null;
+        clean.finishing = !!saved.finishing;
 
-        return base;
+        return clean;
     }
 
     function saveDraft() {
@@ -355,21 +366,12 @@
         return queue.clear().then(null, function () {});
     }
 
-    function getJson(action) {
-        return window.fetch(data.ajaxUrl + '?action=' + encodeURIComponent(action), {
-            credentials: 'same-origin',
-            headers: {'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json'}
-        }).then(function (response) {
-            return response.json();
-        });
-    }
-
     /** Atualiza a lista de rádios disponíveis (outra pessoa pode ter retirado algum). */
     function refreshAvailable() {
         if (!isDelivery || !window.fetch) {
             return;
         }
-        getJson('available').then(function (response) {
+        offline.getJson(data.ajaxUrl + '?action=available').then(function (response) {
             if (response && response.ok && Array.isArray(response.items)) {
                 available = response.items;
                 if (ready && !halted) {
@@ -1016,28 +1018,52 @@
         return node;
     }
 
+    // Situação do rádio, com os mesmos textos em todas as listas
+    function addState(text, message, problemNames) {
+        if (problemNames) {
+            text.appendChild(tags(Array.isArray(problemNames) ? problemNames : []));
+        }
+        text.appendChild(el('div', 'ci-delivery-state', message));
+    }
+
+    /** Entrega: o problema do rádio já tem laudo em aberto, então ele segue. */
+    function addKnownIssueState(text, item) {
+        addState(text, 'Segue na entrega com o problema já conhecido (laudo em aberto).', item.problems);
+    }
+
+    /** Recebimento: problema indicado agora. */
+    function addProblemState(text, problem) {
+        addState(text, problem.known
+            ? 'Problema já conhecido (laudo em aberto): não bloqueia.'
+            : 'Problema novo: o rádio fica bloqueado ao concluir.', problem.names);
+    }
+
+    /** Entrega: o problema indicado ainda está indo para o servidor. */
+    function problemPending(item) {
+        return countTasks('item_problem', 'items_id', item.items_id) > 0;
+    }
+
     /** Entrega: rádio reservado, com "Tirar" (o problema é indicado em "Rádios ok?"). */
     function deliveryRow(item) {
         var row = el('div', 'ci-item ci-delivery-item');
         var main = el('span', 'ci-delivery-main');
         var text = itemText(item);
-        var problemPending = countTasks('item_problem', 'items_id', item.items_id) > 0;
+        var pending = problemPending(item);
         var removePending = countTasks('remove_item', 'items_id', item.items_id) > 0;
 
         if (item.known_issue) {
-            text.appendChild(tags(Array.isArray(item.problems) ? item.problems : []));
-            text.appendChild(el('div', 'ci-delivery-state', 'Segue na entrega com o problema já conhecido (laudo em aberto).'));
+            addKnownIssueState(text, item);
         }
-        if (problemPending) {
-            text.appendChild(el('div', 'ci-delivery-state', 'Registrando o problema...'));
+        if (pending) {
+            addState(text, 'Registrando o problema...');
         }
         if (removePending) {
-            text.appendChild(el('div', 'ci-delivery-state', 'Tirando da entrega...'));
+            addState(text, 'Tirando da entrega...');
         }
         main.appendChild(text);
         row.appendChild(main);
 
-        if (!problemPending && !removePending) {
+        if (!pending && !removePending) {
             var actions = el('div', 'ci-item-actions');
             actions.appendChild(itemButton('btn btn-sm btn-outline-secondary', 'ti-x', 'Tirar', 'data-ci-item-remove', item.usage_id));
             row.appendChild(actions);
@@ -1060,12 +1086,9 @@
         main.appendChild(check);
 
         if (!returned) {
-            text.appendChild(el('div', 'ci-delivery-state', 'Continua com a embarcação.'));
+            addState(text, 'Continua com a embarcação.');
         } else if (problem) {
-            text.appendChild(tags(Array.isArray(problem.names) ? problem.names : []));
-            text.appendChild(el('div', 'ci-delivery-state', problem.known
-                ? 'Problema já conhecido (laudo em aberto): não bloqueia.'
-                : 'Problema novo: o rádio fica bloqueado ao concluir.'));
+            addProblemState(text, problem);
         }
         main.appendChild(text);
         row.appendChild(main);
@@ -1083,19 +1106,15 @@
         var text = itemText(item);
         var actions = el('div', 'ci-item-actions');
         var problem = isDelivery ? null : draft.problems[item.usage_id];
-        var pending = isDelivery && countTasks('item_problem', 'items_id', item.items_id) > 0;
+        var pending = isDelivery && problemPending(item);
 
         row.setAttribute('data-ci-ok-row', String(item.usage_id));
         if (isDelivery && item.known_issue) {
-            text.appendChild(tags(Array.isArray(item.problems) ? item.problems : []));
-            text.appendChild(el('div', 'ci-delivery-state', 'Segue na entrega com o problema já conhecido (laudo em aberto).'));
+            addKnownIssueState(text, item);
         } else if (pending) {
-            text.appendChild(el('div', 'ci-delivery-state', 'Registrando o problema...'));
+            addState(text, 'Registrando o problema...');
         } else if (problem) {
-            text.appendChild(tags(Array.isArray(problem.names) ? problem.names : []));
-            text.appendChild(el('div', 'ci-delivery-state', problem.known
-                ? 'Problema já conhecido (laudo em aberto): não bloqueia.'
-                : 'Problema novo: o rádio fica bloqueado ao concluir.'));
+            addProblemState(text, problem);
         }
         main.appendChild(text);
         row.appendChild(main);
@@ -1330,7 +1349,7 @@
         });
 
         clearMessage();
-        push(action, fields, [], {kind: action});
+        push(action, fields);
         saveDraft();
         render();
     }
@@ -1344,7 +1363,7 @@
             closeProblem();
         }
         clearMessage();
-        push('remove_item', [['delivery_id', draft.serverId], ['items_id', item.items_id]], [], {kind: 'remove_item', items_id: item.items_id});
+        push('remove_item', [['delivery_id', draft.serverId], ['items_id', item.items_id]], [], {items_id: item.items_id});
         render();
     }
 
@@ -1391,9 +1410,7 @@
         qsa('[data-ci-problem-check]', ui.problemPanel).forEach(function (check) {
             check.checked = false;
         });
-        if (window.ChecklistDefectPhotos) {
-            window.ChecklistDefectPhotos.clear(ui.problemPhotos);
-        }
+        window.ChecklistDefectPhotos.clear(ui.problemPhotos);
         render();
         if (ui.problemPanel.scrollIntoView) {
             ui.problemPanel.scrollIntoView({block: 'start'});
@@ -1405,9 +1422,7 @@
         if (ui.problemPanel) {
             ui.problemPanel.hidden = true;
         }
-        if (window.ChecklistDefectPhotos && ui.problemPhotos) {
-            window.ChecklistDefectPhotos.clear(ui.problemPhotos);
-        }
+        window.ChecklistDefectPhotos.clear(ui.problemPhotos);
     }
 
     function renderProblem() {
@@ -1418,8 +1433,8 @@
         var block = defectBlock();
         var hasLaudo = Array.isArray(panelItem.laudos) && panelItem.laudos.length > 0;
         var checked = qsa('[data-ci-problem-check]:checked', ui.problemPanel).length;
-        var photos = window.ChecklistDefectPhotos ? window.ChecklistDefectPhotos.count(block) : 0;
-        var busy = !!block && block.hasAttribute('data-ci-defect-busy');
+        var photos = window.ChecklistDefectPhotos.count(block);
+        var busy = window.ChecklistDefectPhotos.busy(block);
         var complete = checked > 0 && photos > 0 && !busy;
 
         ui.problemPanel.hidden = false;
@@ -1433,27 +1448,9 @@
         }
     }
 
-    /** Fotos do defeito que o bloco de fotos montou (reduzidas, ou o arquivo original). */
-    function collectDefectPhotos() {
-        var list = [];
-        qsa('[data-ci-defect-fields] input', ui.problemPhotos).forEach(function (input) {
-            if (input.type === 'file') {
-                if (input.files && input.files[0]) {
-                    list.push(input.files[0]);
-                }
-            } else if (input.value) {
-                var blob = dataUrlToBlob(input.value);
-                if (blob) {
-                    list.push(blob);
-                }
-            }
-        });
-        return list;
-    }
-
     function pushDefectPhoto(usageId, phase, uuid) {
         return push('defect_photo', [['usage_id', usageId], ['phase', phase], ['uuid', uuid]],
-            [['image', defectKey(uuid), 'defeito.jpg']], {kind: 'defect_photo', uuid: uuid, key: defectKey(uuid)});
+            [['image', defectKey(uuid), 'defeito.jpg']], {uuid: uuid, key: defectKey(uuid)});
     }
 
     /**
@@ -1474,7 +1471,7 @@
             ids.push(toInt(check.value));
             names.push(label ? label.textContent.replace(/\s+/g, ' ').trim() : '');
         });
-        var photos = collectDefectPhotos();
+        var photos = window.ChecklistDefectPhotos.files(ui.problemPhotos);
         if (!ids.length || !photos.length) {
             return;
         }
@@ -1513,7 +1510,7 @@
                     fields.push(['problems[]', id]);
                 });
                 fields.push(['known', known ? 1 : 0]);
-                return push('item_problem', fields, [], {kind: 'item_problem', items_id: item.items_id, label: item.label});
+                return push('item_problem', fields, [], {items_id: item.items_id, label: item.label});
             });
         }).then(function () {
             closeProblem();
@@ -1527,52 +1524,18 @@
 
     // ------------------------------------------------------------------ fotos
 
-    /** Reduz a foto (maior lado MAX_SIDE) e devolve o JPEG como arquivo. */
-    function shrink(file, done, failed) {
-        var url = URL.createObjectURL(file);
-        var img = new Image();
-
-        img.onload = function () {
-            URL.revokeObjectURL(url);
-            var finished = false;
-            function result(blob) {
-                if (finished) {
-                    return;
-                }
-                finished = true;
-                // canvas vazio ou grande demais para o aparelho não gera arquivo
-                if (blob && blob.size > 0) {
-                    done(blob);
-                } else {
-                    failed();
-                }
+    /**
+     * Foto pronta para guardar: reduzida, ou o arquivo original quando o navegador não consegue
+     * reduzi-lo e o servidor o aceita como está. unreadable() quando nenhum dos dois serve.
+     */
+    function preparePhoto(file, done, unreadable) {
+        base.shrinkToBlob(file, base.PHOTO_SIDE, done, function () {
+            if (base.fitsAsIs(file)) {
+                done(file);
+            } else {
+                unreadable();
             }
-
-            try {
-                var width = img.naturalWidth;
-                var height = img.naturalHeight;
-                var scale = Math.min(1, MAX_SIDE / Math.max(width, height));
-                var canvas = document.createElement('canvas');
-                canvas.width = Math.round(width * scale);
-                canvas.height = Math.round(height * scale);
-                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                if (canvas.toBlob) {
-                    canvas.toBlob(result, 'image/jpeg', QUALITY);
-                } else {
-                    var encoded = canvas.toDataURL('image/jpeg', QUALITY);
-                    result(/^data:image\/jpeg;base64,/.test(encoded) ? dataUrlToBlob(encoded) : null);
-                }
-            } catch (e) {
-                result(null);
-            }
-        };
-
-        img.onerror = function () {
-            URL.revokeObjectURL(url);
-            failed();
-        };
-
-        img.src = url;
+        });
     }
 
     function queuePhoto(uuid) {
@@ -1580,7 +1543,7 @@
             return;
         }
         push('photo', [['kind', mode], ['id', draft.serverId], ['uuid', uuid]],
-            [['image', photoKey(uuid), 'foto.jpg']], {kind: 'photo', uuid: uuid});
+            [['image', photoKey(uuid), 'foto.jpg']], {uuid: uuid});
     }
 
     /** Garante uma tarefa de envio para cada foto do aparelho que o servidor ainda não tem. */
@@ -1616,17 +1579,11 @@
             return;
         }
 
-        var file = photoCurrent;
-        shrink(file, function (blob) {
+        preparePhoto(photoCurrent, function (blob) {
             addPhoto(blob).then(nextPhoto);
         }, function () {
-            // o navegador não conseguiu reduzir: o arquivo original vai como está, se o servidor aceitar
-            if ((file.type === 'image/jpeg' || file.type === 'image/png') && file.size <= MAX_BYTES) {
-                addPhoto(file).then(nextPhoto);
-            } else {
-                photoNotes.push('Não foi possível ler uma das fotos. Tire outra ou escolha outra imagem (JPEG ou PNG, até 5 MB).');
-                nextPhoto();
-            }
+            photoNotes.push(base.UNREADABLE);
+            nextPhoto();
         });
     }
 
@@ -1680,7 +1637,7 @@
         }
         // a fila segue a ordem: se o envio ainda está nela, o pedido de apagar chega depois
         if (draft.serverId && (photo.sent || queued)) {
-            push('photo_delete', [['kind', mode], ['id', draft.serverId], ['uuid', uuid]], [], {kind: 'photo_delete', uuid: uuid});
+            push('photo_delete', [['kind', mode], ['id', draft.serverId], ['uuid', uuid]], [], {uuid: uuid});
         }
         if (!photoCurrent) {
             photoNotes = [];
@@ -1773,6 +1730,8 @@
             lines.push(plural(waiting, 'foto aguardando envio', 'fotos aguardando envio') + '.');
         }
         ui.photosStatus.textContent = lines.concat(photoNotes).join(' ');
+        // o "text-muted" do tema tem !important e esconderia a cor do aviso
+        ui.photosStatus.classList.toggle('text-muted', photoNotes.length === 0);
         ui.photosStatus.classList.toggle('ci-defect-warning', photoNotes.length > 0);
 
         renderFinish();
@@ -1797,7 +1756,7 @@
             draft.acc[kind].forEach(function (piece) {
                 piece.photos.slice().forEach(function (uuid) {
                     chain = chain.then(function () {
-                        return store.getBlob(key('acc:' + uuid)).then(function (blob) {
+                        return store.getBlob(accKey(uuid)).then(function (blob) {
                             if (blob) {
                                 photoUrls[uuid] = URL.createObjectURL(blob);
                             } else {
@@ -1828,25 +1787,10 @@
 
     // ------------------------------------------------------------------ selfie e localização
 
-    function locationFields() {
-        var fields = {};
-        qsa('[data-ci-location-field]', ui.selfieBox).forEach(function (input) {
-            fields[input.getAttribute('data-ci-location-field')] = input;
-        });
-        return fields;
-    }
-
+    /** Leitura da localização feita no bloco da selfie, ou null. */
     function readLocation() {
-        var fields = locationFields();
-        if (!fields.status || fields.status.value === '') {
-            return null;
-        }
-        return {
-            status: fields.status.value,
-            latitude: fields.latitude ? fields.latitude.value : '',
-            longitude: fields.longitude ? fields.longitude.value : '',
-            accuracy: fields.accuracy ? fields.accuracy.value : ''
-        };
+        var selfie = window.ChecklistSelfie.read(ui.selfieBox);
+        return selfie ? selfie.location : null;
     }
 
     function storeSelfie(blob) {
@@ -1866,35 +1810,32 @@
 
     /** O bloco da selfie avisou uma mudança (foto nova, câmera reaberta, localização lida). */
     function captureSelfie() {
-        if (!ready || !ui.selfieBox) {
+        var selfie = ready ? window.ChecklistSelfie.read(ui.selfieBox) : null;
+        if (!selfie) {
             return;
         }
-        var hidden = ui.selfieBox.querySelector('[data-ci-selfie-data]');
-        var input = ui.selfieBox.querySelector('[data-ci-selfie-input]');
-        var value = hidden ? hidden.value : '';
-        var file = input && input.files && input.files[0] ? input.files[0] : null;
 
-        if (!ui.selfieBox.hasAttribute('data-ci-selfie-ready')) {
+        if (!selfie.ready) {
             // tirando outra: a que estava guardada não vale mais
             lastSelfie = null;
             if (draft.selfie) {
                 draft.selfie = false;
                 store.removeBlob(key('selfie')).then(null, function () {});
             }
-        } else if (value !== '' && value !== lastSelfie) {
-            lastSelfie = value;
-            storeSelfie(dataUrlToBlob(value));
-        } else if (value === '' && file && file !== lastSelfie) {
+        } else if (selfie.data !== '' && selfie.data !== lastSelfie) {
+            lastSelfie = selfie.data;
+            storeSelfie(base.dataUrlToBlob(selfie.data));
+        } else if (selfie.data === '' && selfie.file && selfie.file !== lastSelfie) {
             // foto que o navegador não conseguiu reduzir: vai o arquivo original
-            lastSelfie = file;
-            if (file.size > MAX_BYTES) {
-                message('A selfie ficou grande demais (mais de 5 MB). Tire de novo.', 'danger', true);
+            lastSelfie = selfie.file;
+            if (base.fitsAsIs(selfie.file)) {
+                storeSelfie(selfie.file);
             } else {
-                storeSelfie(file);
+                message('Não foi possível usar esta selfie (JPEG ou PNG, até ' + base.MAX_MB + ' MB). Tire de novo.', 'danger', true);
             }
         }
 
-        draft.location = readLocation();
+        draft.location = selfie.location;
         saveDraft();
         renderFinish();
     }
@@ -1911,46 +1852,7 @@
                 draft.selfie = false;
                 return;
             }
-            var preview = ui.selfieBox.querySelector('[data-ci-selfie-preview]');
-            var status = ui.selfieBox.querySelector('[data-ci-selfie-status]');
-            if (preview) {
-                preview.src = URL.createObjectURL(blob);
-                preview.hidden = false;
-            }
-            if (status) {
-                status.textContent = 'Selfie guardada neste aparelho.';
-            }
-            ui.selfieBox.setAttribute('data-ci-selfie-ready', '1');
-
-            var saved = draft.location;
-            var fields = locationFields();
-            if (!saved || !saved.status || !fields.status) {
-                return;
-            }
-            fields.status.value = String(saved.status);
-            ['latitude', 'longitude', 'accuracy'].forEach(function (name) {
-                if (fields[name]) {
-                    fields[name].value = saved[name] ? String(saved[name]) : '';
-                }
-            });
-
-            var ok = String(saved.status) === '1';
-            var line = ui.selfieBox.querySelector('[data-ci-location]');
-            var text = ui.selfieBox.querySelector('[data-ci-location-text]');
-            var retry = ui.selfieBox.querySelector('[data-ci-location-retry]');
-            if (line) {
-                line.hidden = false;
-                line.classList.toggle('ci-location-ok', ok);
-                line.classList.toggle('ci-location-missing', !ok);
-            }
-            if (text) {
-                text.textContent = ok
-                    ? 'Localização registrada' + (saved.accuracy ? ' (±' + saved.accuracy + ' m)' : '') + '.'
-                    : 'A localização não foi registrada com esta selfie. Toque em "Tentar de novo".';
-            }
-            if (retry) {
-                retry.hidden = ok;
-            }
+            window.ChecklistSelfie.restore(ui.selfieBox, blob, draft.location);
         }, function () {
             draft.selfie = false;
         });
@@ -2037,31 +1939,6 @@
         }
     }
 
-    /** Espera a leitura da localização em andamento (no máximo LOCATION_WAIT_MS), como na retirada. */
-    function waitLocation(done) {
-        var location = ui.selfieBox ? ui.selfieBox.ciLocation : null;
-        var called = false;
-        function once() {
-            if (!called) {
-                called = true;
-                done();
-            }
-        }
-
-        if (!location) {
-            done();
-            return;
-        }
-        location.start();
-        if (!location.isPending()) {
-            done();
-            return;
-        }
-        ui.finishHint.textContent = 'Obtendo a localização...';
-        location.whenDone(once);
-        window.setTimeout(once, LOCATION_WAIT_MS);
-    }
-
     function finish() {
         if (!ready || draft.finishing || whatIsMissing().length) {
             return;
@@ -2069,7 +1946,7 @@
         ui.finish.disabled = true;
         clearMessage();
 
-        waitLocation(function () {
+        window.ChecklistSelfie.whenLocated(ui.selfieBox, function () {
             (selfieSaving || Promise.resolve()).then(function () {
                 if (draft.finishing || whatIsMissing().length) {
                     renderFinish();
@@ -2078,7 +1955,8 @@
 
                 var fields = [];
                 var chain = Promise.resolve();
-                var location = readLocation() || draft.location || {};
+                draft.location = readLocation() || draft.location;
+                var location = draft.location || {};
 
                 if (isDelivery) {
                     fields.push(['delivery_id', draft.serverId]);
@@ -2104,7 +1982,7 @@
                             piece.photos.forEach(function (uuid) {
                                 chain = chain.then(function () {
                                     return push('photo', [['kind', 'receipt'], ['id', draft.serverId], ['uuid', uuid], ['ref', ref]],
-                                        [['image', key('acc:' + uuid), 'peca.jpg']], {kind: 'acc_photo', uuid: uuid});
+                                        [['image', accKey(uuid), 'peca.jpg']], {kind: 'acc_photo', uuid: uuid});
                                 });
                             });
                         });
@@ -2136,7 +2014,6 @@
                 fields.push(['location_longitude', location.longitude || '']);
                 fields.push(['location_accuracy', location.accuracy || '']);
 
-                draft.location = readLocation() || draft.location;
                 draft.finishing = true;
                 saveDraft();
                 render();
@@ -2151,6 +2028,8 @@
                     }
                 });
             });
+        }, function () {
+            ui.finishHint.textContent = 'Obtendo a localização...';
         });
     }
 
@@ -2248,24 +2127,6 @@
         return target && target.closest ? target.closest(selector) : null;
     }
 
-    /** "Entregues com a embarcação: N. Ainda não voltaram: M." no recebimento. */
-    function counterHint(name) {
-        var delivery = !isDelivery && server && server.delivery ? server.delivery : null;
-
-        if (!delivery) {
-            return '';
-        }
-        if (name === 'batteries' && delivery.batteries_left !== undefined) {
-            return 'Entregues com a embarcação: ' + toInt(delivery.spare_batteries) + '. Ainda não voltaram: ' + counterMax('batteries') + '.';
-        }
-        if (name === 'covers' && delivery.covers_left !== undefined) {
-            return 'Entregues com a embarcação: ' + toInt(delivery.spare_covers) + '. Ainda não voltaram: ' + counterMax('covers') + '.';
-        }
-        if (name === 'defective') {
-            return 'Conte só as baterias devolvidas agora que estão com defeito.';
-        }
-        return '';
-    }
 
     function renderCounters() {
         // primeiro os valores (cada limite depende do anterior), depois a tela
@@ -2332,7 +2193,7 @@
             URL.revokeObjectURL(photoUrls[uuid]);
             delete photoUrls[uuid];
         }
-        store.removeBlob(key('acc:' + uuid)).then(null, function () {});
+        store.removeBlob(accKey(uuid)).then(null, function () {});
     }
 
     function renderAccessories() {
@@ -2470,7 +2331,7 @@
         var job = accCurrent;
         function keep(blob) {
             var uuid = offline.uuid();
-            store.putBlob(key('acc:' + uuid), blob).then(function () {
+            store.putBlob(accKey(uuid), blob).then(function () {
                 // a peça pode ter saído enquanto a foto era processada
                 if (draft.acc[job.kind].indexOf(job.piece) !== -1 && job.piece.photos.length < ACC_MAX_PHOTOS) {
                     photoUrls[uuid] = URL.createObjectURL(blob);
@@ -2478,7 +2339,7 @@
                     saveDraft();
                     renderPieces(job.kind);
                 } else {
-                    store.removeBlob(key('acc:' + uuid)).then(null, function () {});
+                    store.removeBlob(accKey(uuid)).then(null, function () {});
                 }
                 nextAccPhoto();
             }, function () {
@@ -2486,13 +2347,9 @@
                 nextAccPhoto();
             });
         }
-        shrink(job.file, keep, function () {
-            if ((job.file.type === 'image/jpeg' || job.file.type === 'image/png') && job.file.size <= MAX_BYTES) {
-                keep(job.file);
-            } else {
-                message('Não foi possível ler uma das fotos. Tire outra ou escolha outra imagem (JPEG ou PNG, até 5 MB).', 'warning', true);
-                nextAccPhoto();
-            }
+        preparePhoto(job.file, keep, function () {
+            message(base.UNREADABLE, 'warning', true);
+            nextAccPhoto();
         });
     }
 
@@ -2550,7 +2407,7 @@
                 if (value > 0) {
                     draft.vessel = value;
                     if (draft.serverId) {
-                        push('set_vessel', [['delivery_id', draft.serverId], ['vessels_id', value]], [], {kind: 'set_vessel'});
+                        push('set_vessel', [['delivery_id', draft.serverId], ['vessels_id', value]]);
                     }
                 } else if (!draft.serverId) {
                     draft.vessel = 0;
@@ -2912,8 +2769,6 @@
                 url: data.ajaxUrl,
                 tokenUrl: data.ajaxUrl + '?action=token',
                 token: data.token,
-                // conexão fraca: cada foto reduzida tem algumas centenas de KB
-                timeoutMs: 120000,
                 onDone: onDone,
                 onRejected: onRejected,
                 onStatus: function () {
