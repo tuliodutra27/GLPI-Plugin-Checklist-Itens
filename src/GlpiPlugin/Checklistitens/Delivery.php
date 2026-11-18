@@ -322,9 +322,9 @@ class Delivery extends DeliveryProcess
         $refused = self::getUsages($id, Usage::STATUS_REFUSED);
 
         $draft_ids = array_map(static fn ($u) => (int) $u['id'], $drafts);
-        $problems  = self::getProblemNames(
-            array_merge($draft_ids, array_map(static fn ($u) => (int) $u['id'], $refused)),
-            Usage::PHASE_CHECKOUT
+        $problems  = array_map(
+            static fn ($phases) => $phases[Usage::PHASE_CHECKOUT] ?? [],
+            UsageProblem::namesFor(array_merge($draft_ids, array_map(static fn ($u) => (int) $u['id'], $refused)))
         );
         $defects   = DefectPhoto::getForUsages($draft_ids);
         // Laudos em aberto agora (uma consulta só): é o que decide o "problema conhecido"
@@ -337,7 +337,7 @@ class Delivery extends DeliveryProcess
             $items[]  = [
                 'usage_id' => $usage_id,
                 'items_id' => $items_id,
-            ] + self::describeItem($items_id) + [
+            ] + ItemProvider::labelOf(ItemProvider::RADIO, $items_id) + [
                 'laudos'        => $laudos[$items_id] ?? [],
                 'known_issue'   => (int) $usage['checkout_known_issue'] === 1,
                 'problems'      => $problems[$usage_id] ?? [],
@@ -352,7 +352,7 @@ class Delivery extends DeliveryProcess
             $removed[] = [
                 'usage_id' => $usage_id,
                 'items_id' => $items_id,
-            ] + self::describeItem($items_id) + [
+            ] + ItemProvider::labelOf(ItemProvider::RADIO, $items_id) + [
                 'problems' => $problems[$usage_id] ?? [],
             ];
         }
@@ -812,22 +812,6 @@ class Delivery extends DeliveryProcess
     }
 
     /**
-     * Rótulo e detalhe de um rádio para as telas (o mesmo da retirada comum).
-     *
-     * @return array{label: string, detail: string}
-     */
-    public static function describeItem(int $items_id): array
-    {
-        $row = ItemProvider::getRow(ItemProvider::RADIO, $items_id);
-        if ($row === null) {
-            return ['label' => '#' . $items_id, 'detail' => ''];
-        }
-        $item = ItemProvider::present(ItemProvider::RADIO, $row);
-
-        return ['label' => $item['label'], 'detail' => $item['detail']];
-    }
-
-    /**
      * Executa uma ação com a entrega travada no banco: a conclusão, o cancelamento e a ação
      * automática de expirar não se atropelam quando chegam juntos por sessões diferentes.
      *
@@ -1204,34 +1188,6 @@ class Delivery extends DeliveryProcess
         ])->current();
 
         return $row ? $row : null;
-    }
-
-    /**
-     * Problemas marcados em vários usos, numa consulta.
-     *
-     * @param int[] $usage_ids
-     * @return array<int, string[]> usages_id => textos dos problemas
-     */
-    private static function getProblemNames(array $usage_ids, int $phase): array
-    {
-        global $DB;
-
-        if (!count($usage_ids)) {
-            return [];
-        }
-
-        $names = [];
-        $iterator = $DB->request([
-            'SELECT' => ['plugin_checklistitens_usages_id', 'problem_name'],
-            'FROM'   => UsageProblem::getTable(),
-            'WHERE'  => ['plugin_checklistitens_usages_id' => array_values($usage_ids), 'phase' => $phase],
-            'ORDER'  => 'id',
-        ]);
-        foreach ($iterator as $row) {
-            $names[(int) $row['plugin_checklistitens_usages_id']][] = Ui::text($row['problem_name']);
-        }
-
-        return $names;
     }
 
     private static function unavailableMessage(): string

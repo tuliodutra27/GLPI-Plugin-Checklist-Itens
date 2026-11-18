@@ -178,8 +178,7 @@ class ItemBlock extends CommonDBTM
     public static function present(array $row): array
     {
         $itemtype = (string) $row['itemtype'];
-        $item_row = ItemProvider::getRow($itemtype, (int) $row['items_id']);
-        $item     = $item_row !== null ? ItemProvider::present($itemtype, $item_row) : ['label' => '#' . $row['items_id'], 'detail' => ''];
+        $item     = ItemProvider::labelOf($itemtype, (int) $row['items_id']);
         $phase    = self::phaseOf($row);
         $ticket   = (int) $row['tickets_id'];
         $status   = (int) $row['status'];
@@ -250,6 +249,29 @@ class ItemBlock extends CommonDBTM
         }
 
         return self::getActiveFor($itemtype, $items_id) !== null;
+    }
+
+    /**
+     * Bloqueios criados por vários usos, numa consulta.
+     *
+     * @param int[] $usage_ids
+     * @return array<int, array> usages_id => linha do bloqueio
+     */
+    public static function getForUsages(array $usage_ids): array
+    {
+        global $DB;
+
+        $usage_ids = array_values(array_unique(array_filter(array_map('intval', $usage_ids))));
+        if (!count($usage_ids)) {
+            return [];
+        }
+
+        $blocks = [];
+        foreach ($DB->request(['FROM' => self::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $row) {
+            $blocks[(int) $row['plugin_checklistitens_usages_id']] = $row;
+        }
+
+        return $blocks;
     }
 
     public static function getActiveFor(string $itemtype, int $items_id): ?array

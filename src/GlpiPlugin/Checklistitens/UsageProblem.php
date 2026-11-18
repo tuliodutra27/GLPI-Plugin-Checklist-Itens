@@ -107,4 +107,26 @@ class UsageProblem extends CommonDBTM
 
         return !count(array_diff_key($problems, $stored));
     }
+    /**
+     * Nomes dos problemas marcados em vários usos, numa consulta.
+     *
+     * @param int[] $usage_ids
+     * @return array<int, array<int, string[]>> usages_id => fase => textos dos problemas
+     */
+    public static function namesFor(array $usage_ids): array
+    {
+        global $DB;
+
+        $usage_ids = array_values(array_unique(array_filter(array_map('intval', $usage_ids))));
+        if (!count($usage_ids)) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($DB->request(['FROM' => self::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $row) {
+            $names[(int) $row['plugin_checklistitens_usages_id']][(int) $row['phase']][] = Ui::text($row['problem_name']);
+        }
+
+        return $names;
+    }
 }

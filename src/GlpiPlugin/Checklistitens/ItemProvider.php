@@ -178,6 +178,22 @@ class ItemProvider
         ];
     }
 
+    /**
+     * Rótulo e detalhe de um item para as telas; "#id" quando o ativo não existe mais.
+     *
+     * @return array{label: string, detail: string}
+     */
+    public static function labelOf(string $itemtype, int $items_id): array
+    {
+        $row = self::getRow($itemtype, $items_id);
+        if ($row === null) {
+            return ['label' => '#' . $items_id, 'detail' => ''];
+        }
+        $item = self::present($itemtype, $row);
+
+        return ['label' => $item['label'], 'detail' => $item['detail']];
+    }
+
     /** Descrição de uma linha só, ex.: "Rádio ABC123 - 0001 (Fabricante Modelo)". */
     public static function describe(string $itemtype, int $items_id): string
     {

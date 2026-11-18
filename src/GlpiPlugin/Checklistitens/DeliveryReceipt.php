@@ -211,7 +211,7 @@ class DeliveryReceipt extends DeliveryProcess
             $items[]  = [
                 'usage_id' => $usage_id,
                 'items_id' => $items_id,
-            ] + Delivery::describeItem($items_id) + [
+            ] + ItemProvider::labelOf(ItemProvider::RADIO, $items_id) + [
                 'laudos'        => $laudos[$items_id] ?? [],
                 'defect_photos' => count($defects[$usage_id][Usage::PHASE_CHECKIN] ?? []),
             ];
@@ -471,7 +471,7 @@ class DeliveryReceipt extends DeliveryProcess
                     ItemProvider::RADIO,
                     $marked,
                     DefectPhoto::countFor($usage_id, Usage::PHASE_CHECKIN),
-                    Delivery::describeItem((int) $on_vessel[$usage_id]['items_id'])['label']
+                    ItemProvider::labelOf(ItemProvider::RADIO, (int) $on_vessel[$usage_id]['items_id'])['label']
                 );
                 if ($report['error'] !== '') {
                     return Reply::fail($report['error'], $state());

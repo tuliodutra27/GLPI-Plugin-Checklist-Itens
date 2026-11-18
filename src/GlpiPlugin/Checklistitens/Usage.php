@@ -281,20 +281,29 @@ class Usage extends CommonDBTM
 
         return iterator_to_array($DB->request([
             'FROM'  => self::getTable(),
-            'WHERE' => ['users_id' => $users_id, 'lock_open' => 1, 'plugin_checklistitens_deliveries_id' => 0],
+            'WHERE' => ['users_id' => $users_id, 'lock_open' => 1] + self::commonUse(),
             'ORDER' => 'date_checkout',
         ]), false);
     }
 
+    /** Usos abertos do usuário num tipo, para o limite por pessoa. */
     public static function countOpenForUser(int $users_id, string $itemtype): int
     {
         return countElementsInTable(self::getTable(), [
             'users_id'  => $users_id,
             'itemtype'  => $itemtype,
             'lock_open' => 1,
-            // entregas para embarcação não contam no limite por pessoa
-            'plugin_checklistitens_deliveries_id' => 0,
-        ]);
+        ] + self::commonUse());
+    }
+
+    /**
+     * Critério do uso comum (retirada e devolução pelo colaborador). O rádio entregue a uma
+     * embarcação também é um uso, mas não está com o gestor: não conta no limite por pessoa, na
+     * conferência do turno nem no alerta de não devolvido.
+     */
+    public static function commonUse(): array
+    {
+        return ['plugin_checklistitens_deliveries_id' => 0];
     }
 
     /**
@@ -303,10 +312,7 @@ class Usage extends CommonDBTM
     public static function present(array $row): array
     {
         $itemtype = (string) $row['itemtype'];
-        $item     = ItemProvider::getRow($itemtype, (int) $row['items_id']);
-        $info     = $item !== null
-            ? ItemProvider::present($itemtype, $item)
-            : ['label' => '#' . $row['items_id'], 'detail' => ''];
+        $info     = ItemProvider::labelOf($itemtype, (int) $row['items_id']);
         $status   = (int) $row['status'];
 
         return [

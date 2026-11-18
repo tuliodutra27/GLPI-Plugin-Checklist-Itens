@@ -51,19 +51,7 @@ class Home
         }
 
         if (Profile::isManager() || Profile::isAdmin()) {
-            $pending = 0;
-            $scope   = Sector::forCurrentUser();
-            if (count($scope)) {
-                $pending = countElementsInTable(Usage::getTable(), ['groups_id' => $scope, 'status' => Usage::STATUS_IN_USE])
-                    + countElementsInTable(Usage::getTable(), [
-                        'groups_id' => $scope,
-                        'status'    => Usage::STATUS_RETURNED,
-                        'plugin_checklistitens_confirmations_id_checkin' => 0,
-                        // rádio recebido de volta da embarcação não passa pela conferência do turno
-                        'plugin_checklistitens_deliveries_id' => 0,
-                    ])
-                    + countElementsInTable(ItemBlock::getTable(), ['groups_id' => $scope, 'plugin_checklistitens_confirmations_id' => 0]);
-            }
+            $pending = Confirmation::countPending(Sector::forCurrentUser());
             $cards[] = [
                 'title'       => __('Conferência do setor', 'checklistitens'),
                 'description' => __('Conferir os checklists do turno, abrir chamados e liberar a devolução.', 'checklistitens'),

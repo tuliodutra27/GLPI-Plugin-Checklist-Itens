@@ -145,19 +145,15 @@ class EquipmentRecord extends CommonGLPI
                 $id   = (int) $row['id'];
                 $item = ItemProvider::present($itemtype, $row);
 
-                $holder = '';
-                if (isset($blocks[$id])) {
-                    $situation = (int) $blocks[$id]['status'] === ItemBlock::STATUS_REPAIR ? self::SITUATION_REPAIR : self::SITUATION_BLOCKED;
-                } elseif (isset($open[$id])) {
-                    $situation = self::situationForOpenUsage($open[$id]);
-                    $vessel    = $vessels[(int) $open[$id]['plugin_checklistitens_deliveries_id']] ?? '';
-                    $holder    = $vessel !== ''
-                        ? sprintf(__('%1$s desde %2$s', 'checklistitens'), $vessel, Ui::datetime($open[$id]['date_checkout']))
-                        : sprintf(__('%1$s desde %2$s', 'checklistitens'), Ui::text(getUserName((int) $open[$id]['users_id'])), Ui::datetime($open[$id]['date_checkout']));
-                } elseif (!in_array((int) $row['states_id'], $states, true)) {
-                    $situation = self::SITUATION_OUT;
-                } else {
-                    $situation = self::SITUATION_AVAILABLE;
+                $situation = self::situationOf($blocks[$id] ?? null, $open[$id] ?? null, $row, $states);
+                $holder    = '';
+                if (!isset($blocks[$id]) && isset($open[$id])) {
+                    $vessel = $vessels[(int) $open[$id]['plugin_checklistitens_deliveries_id']] ?? '';
+                    $holder = sprintf(
+                        __('%1$s desde %2$s', 'checklistitens'),
+                        $vessel !== '' ? $vessel : Ui::text(getUserName((int) $open[$id]['users_id'])),
+                        Ui::datetime($open[$id]['date_checkout'])
+                    );
                 }
 
                 if (!empty($filters['situation']) && $filters['situation'] !== $situation) {
@@ -193,10 +189,27 @@ class EquipmentRecord extends CommonGLPI
         return Ui::url(sprintf('front/equipment.form.php?itemtype=%s&items_id=%d', urlencode($itemtype), $items_id));
     }
 
-    /** Situação do equipamento a partir do uso aberto (retirada comum ou entrega para embarcação). */
-    private static function situationForOpenUsage(array $usage): string
+    /**
+     * Situação do equipamento: bloqueado (aguardando conferência ou em reparo), preso por um uso
+     * aberto (retirada comum ou entrega para embarcação), fora de uso pelo estado ou disponível.
+     *
+     * @param array|null $block    bloqueio ativo
+     * @param array|null $open     uso aberto
+     * @param array|null $item_row linha do ativo (estado)
+     * @param int[]      $states   estados disponíveis para retirada
+     */
+    private static function situationOf(?array $block, ?array $open, ?array $item_row, array $states): string
     {
-        switch ((int) $usage['status']) {
+        if ($block !== null) {
+            return (int) $block['status'] === ItemBlock::STATUS_REPAIR ? self::SITUATION_REPAIR : self::SITUATION_BLOCKED;
+        }
+        if ($open === null) {
+            return $item_row !== null && !in_array((int) $item_row['states_id'], $states, true)
+                ? self::SITUATION_OUT
+                : self::SITUATION_AVAILABLE;
+        }
+
+        switch ((int) $open['status']) {
             case Usage::STATUS_ON_VESSEL:
                 return self::SITUATION_ON_VESSEL;
             case Usage::STATUS_DELIVERY_DRAFT:
@@ -341,18 +354,7 @@ class EquipmentRecord extends CommonGLPI
             $confirmation_ids[] = (int) $u['plugin_checklistitens_confirmations_id_checkin'];
         }
         $confirmations = self::loadById(Confirmation::getTable(), array_filter($confirmation_ids));
-        $blocks        = [];
-        $problems      = [];
-        if (count($ids)) {
-            foreach ($DB->request(['FROM' => ItemBlock::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $ids]]) as $b) {
-                $blocks[(int) $b['plugin_checklistitens_usages_id']] = $b;
-            }
-            foreach ($DB->request(['FROM' => UsageProblem::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $ids], 'ORDER' => 'id']) as $p) {
-                $problems[(int) $p['plugin_checklistitens_usages_id']][(int) $p['phase']][] = Ui::text($p['problem_name']);
-            }
-        }
-        $photos = DefectPhoto::getForUsages($ids);
-        $laudos = UsageLaudo::getForUsages($ids);
+        $view          = new UsageView($usages);
 
         // Entregas para embarcação e recebimentos ligados aos usos (selfie e localização vêm deles)
         $deliveries = self::loadById(Delivery::getTable(), array_filter(array_column($usages, 'plugin_checklistitens_deliveries_id')));
@@ -386,8 +388,8 @@ class EquipmentRecord extends CommonGLPI
             }
 
             $block = null;
-            if (isset($blocks[$id])) {
-                $b = $blocks[$id];
+            $b     = $view->block($u);
+            if ($b !== null) {
                 $stats['blocks']++;
                 if ((int) $b['tickets_id'] > 0) {
                     $stats['tickets'][(int) $b['tickets_id']] = true;
@@ -433,25 +435,17 @@ class EquipmentRecord extends CommonGLPI
                     'url'    => DeliveryReport::getUrl((int) $delivery['id']),
                 ] : null,
                 'checkout'     => [
-                    'when'     => Ui::datetime($u['date_checkout']),
-                    'shift'    => Shift::label($u['checkout_shift_start']),
-                    'is_ok'    => (int) $u['checkout_is_ok'] === 1,
-                    'known'    => $known_out,
-                    'problems' => $problems[$id][Usage::PHASE_CHECKOUT] ?? [],
-                    'photos'   => $photos[$id][Usage::PHASE_CHECKOUT] ?? [],
-                    'laudos'   => $laudos[$id][Usage::PHASE_CHECKOUT] ?? [],
+                    'when'  => Ui::datetime($u['date_checkout']),
+                    'shift' => Shift::label($u['checkout_shift_start']),
+                ] + $view->result($u, Usage::PHASE_CHECKOUT) + [
                     'selfie'   => $checkout_selfie,
                     'location' => $checkout_location,
                 ],
                 'confirmation' => self::confirmationInfo($confirmations[(int) $u['plugin_checklistitens_confirmations_id']] ?? null),
                 'checkin'      => $u['date_checkin'] ? [
-                    'when'     => Ui::datetime($u['date_checkin']),
-                    'shift'    => Shift::label($u['checkin_shift_start']),
-                    'is_ok'    => (int) $u['checkin_is_ok'] === 1,
-                    'known'    => $known_in,
-                    'problems' => $problems[$id][Usage::PHASE_CHECKIN] ?? [],
-                    'photos'   => $photos[$id][Usage::PHASE_CHECKIN] ?? [],
-                    'laudos'   => $laudos[$id][Usage::PHASE_CHECKIN] ?? [],
+                    'when'  => Ui::datetime($u['date_checkin']),
+                    'shift' => Shift::label($u['checkin_shift_start']),
+                ] + $view->result($u, Usage::PHASE_CHECKIN) + [
                     'selfie'   => $checkin_selfie,
                     'location' => $checkin_location,
                 ] : null,
@@ -463,18 +457,12 @@ class EquipmentRecord extends CommonGLPI
 
         $active_block = ItemBlock::getActiveFor($itemtype, $items_id);
         $situations   = self::getSituations();
-        if ($active_block !== null) {
-            $situation = (int) $active_block['status'] === ItemBlock::STATUS_REPAIR ? self::SITUATION_REPAIR : self::SITUATION_BLOCKED;
-        } else {
-            $open = self::getOpenUsages($itemtype)[$items_id] ?? null;
-            if ($open !== null) {
-                $situation = self::situationForOpenUsage($open);
-            } elseif ($row !== null && !in_array((int) $row['states_id'], Config::getAvailableStates(), true)) {
-                $situation = self::SITUATION_OUT;
-            } else {
-                $situation = self::SITUATION_AVAILABLE;
-            }
-        }
+        $situation    = self::situationOf(
+            $active_block,
+            $active_block === null ? (self::getOpenUsages($itemtype)[$items_id] ?? null) : null,
+            $row,
+            Config::getAvailableStates()
+        );
 
         return [
             'itemtype'        => $itemtype,
