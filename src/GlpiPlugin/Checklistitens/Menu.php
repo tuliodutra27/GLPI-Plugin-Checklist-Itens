@@ -5,8 +5,9 @@ namespace GlpiPlugin\Checklistitens;
 use CommonGLPI;
 
 /**
- * Menu "Ativos > Checklist uso de equipamentos" da interface padrão. Na interface simplificada
- * o plugin tem uma entrada única (setup.php) que abre a tela inicial.
+ * Menu "Ativos > Checklist uso de equipamentos" da interface padrão, montado a partir das telas
+ * do plugin (Home::pages). Na interface simplificada o plugin tem uma entrada única (setup.php) que
+ * abre a tela inicial.
  */
 class Menu extends CommonGLPI
 {
@@ -24,7 +25,7 @@ class Menu extends CommonGLPI
 
     public static function getMenuContent()
     {
-        if (!Profile::canUse() && !Profile::isManager() && !Profile::isAdmin()) {
+        if (!Home::canSee()) {
             return false;
         }
 
@@ -40,73 +41,19 @@ class Menu extends CommonGLPI
             'icon'  => self::getIcon(),
         ];
 
-        if (Profile::isManager() || Profile::isAdmin()) {
-            $menu['options']['manager'] = [
-                'title' => __('Conferência do setor', 'checklistitens'),
-                'page'  => Ui::path('front/manager.php'),
-                'icon'  => Confirmation::getIcon(),
-            ];
-            $menu['options']['equipment'] = [
-                'title' => __('Equipamentos', 'checklistitens'),
-                'page'  => Ui::path('front/equipment.php'),
-                'icon'  => EquipmentRecord::getIcon(),
-            ];
-            $menu['options']['usage'] = [
-                'title' => Usage::getTypeName(2),
-                'page'  => Ui::path('front/usage.php'),
-                'icon'  => Usage::getIcon(),
-                'links' => ['search' => Ui::path('front/usage.php')],
-            ];
-
-            // Entrega de rádios para embarcação (só com o tipo Rádio habilitado)
-            if (DeliveryReport::isFeatureAvailable()) {
-                $menu['options']['delivery'] = [
-                    'title' => Delivery::getTypeName(2),
-                    'page'  => Ui::path('front/delivery.php'),
-                    'icon'  => Delivery::getIcon(),
-                    'links' => [
-                        'search' => Ui::path('front/delivery.php'),
-                    ] + (Delivery::canDeliver() ? ['add' => Ui::path('front/delivery.form.php')] : []),
-                ];
+        foreach (Home::pages() as $key => $page) {
+            if (!$page['menu']) {
+                continue;
             }
-        }
-
-        if (Profile::isAdmin()) {
-            $menu['options']['itemblock'] = [
-                'title' => ItemBlock::getTypeName(2),
-                'page'  => Ui::path('front/itemblock.php'),
-                'icon'  => ItemBlock::getIcon(),
+            $option = [
+                'title' => $page['title'],
+                'page'  => Home::url($page, false),
+                'icon'  => $page['icon'],
             ];
-
-            $menu['options']['problemtype'] = [
-                'title' => ProblemType::getTypeName(2),
-                'page'  => ProblemType::getSearchURL(false),
-                'icon'  => ProblemType::getIcon(),
-                'links' => [
-                    'search' => ProblemType::getSearchURL(false),
-                ] + (Profile::canAdministrate() ? ['add' => ProblemType::getFormURL(false)] : []),
-            ];
-
-            $menu['options']['vessel'] = [
-                'title' => Vessel::getTypeName(2),
-                'page'  => Vessel::getSearchURL(false),
-                'icon'  => Vessel::getIcon(),
-                'links' => [
-                    'search' => Vessel::getSearchURL(false),
-                ] + (Profile::canAdministrate() ? ['add' => Vessel::getFormURL(false)] : []),
-            ];
-
-            $menu['options']['selfiepurge'] = [
-                'title' => SelfiePurge::getTypeName(1),
-                'page'  => Ui::path('front/selfiepurge.php'),
-                'icon'  => SelfiePurge::getIcon(),
-            ];
-
-            $menu['options']['config'] = [
-                'title' => Config::getTypeName(),
-                'page'  => Ui::path('front/config.form.php'),
-                'icon'  => 'ti ti-settings',
-            ];
+            if (!empty($page['search'])) {
+                $option['links'] = ['search' => $option['page']] + (!empty($page['add']) ? ['add' => $page['add']] : []);
+            }
+            $menu['options'][$key] = $option;
         }
 
         return $menu;
