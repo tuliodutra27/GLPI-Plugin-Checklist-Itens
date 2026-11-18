@@ -228,6 +228,30 @@ class ItemBlock extends CommonDBTM
         return (int) $row['reason'] === self::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
     }
 
+    /**
+     * Garante o bloqueio ativo do item de um uso (o pedido pode chegar de novo).
+     *
+     * @param array $usage linha do uso (users_id = quem encontrou o problema)
+     * @return bool false quando o item não ficou bloqueado
+     */
+    public static function ensureFor(array $usage, int $phase): bool
+    {
+        $itemtype = (string) $usage['itemtype'];
+        $items_id = (int) $usage['items_id'];
+
+        if (self::getActiveFor($itemtype, $items_id) !== null) {
+            return true;
+        }
+
+        try {
+            self::createFor($usage, $phase);
+        } catch (\Throwable $e) {
+            \Toolbox::logError('checklistitens: ' . $e->getMessage());
+        }
+
+        return self::getActiveFor($itemtype, $items_id) !== null;
+    }
+
     public static function getActiveFor(string $itemtype, int $items_id): ?array
     {
         global $DB;

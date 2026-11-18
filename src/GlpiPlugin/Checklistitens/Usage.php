@@ -359,19 +359,16 @@ class Usage extends CommonDBTM
         $laudos   = LaudoProvider::getOpenForItem($itemtype, $items_id);
         $problems = $photos = [];
         if ($known_issue) {
-            $problems = ProblemType::getValidForType($itemtype, $problem_ids);
-            if (!count($problems)) {
-                return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
-            }
             $photos = DefectPhoto::collectFromRequest();
-            if (count($photos) < DefectPhoto::MIN_PHOTOS) {
-                return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
+            $report = UsageProblem::validate($itemtype, $problem_ids, count($photos));
+            if ($report['error'] !== '') {
+                return ['ok' => false, 'message' => $report['error']];
             }
-            if (!count($laudos)) {
+            $problems = $report['problems'];
+            if (!LaudoProvider::acceptsKnown(true, $laudos)) {
                 $result = self::refuse($itemtype, $items_id, $problem_ids);
                 if ($result['ok']) {
-                    $result['message'] = __('O laudo deste equipamento foi concluído: o problema bloqueia o item.', 'checklistitens')
-                        . ' ' . $result['message'];
+                    $result['message'] = LaudoProvider::closedMessage() . ' ' . $result['message'];
                 }
 
                 return $result + ['refused' => true];
@@ -435,14 +432,12 @@ class Usage extends CommonDBTM
         }
         $item = $check['item'];
 
-        $problems = ProblemType::getValidForType($itemtype, $problem_ids);
-        if (!count($problems)) {
-            return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
-        }
         $photos = DefectPhoto::collectFromRequest();
-        if (count($photos) < DefectPhoto::MIN_PHOTOS) {
-            return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
+        $report = UsageProblem::validate($itemtype, $problem_ids, count($photos));
+        if ($report['error'] !== '') {
+            return ['ok' => false, 'message' => $report['error']];
         }
+        $problems = $report['problems'];
 
         $now   = Shift::now();
         $usage = new self();
@@ -467,7 +462,7 @@ class Usage extends CommonDBTM
         if (count($laudos)) {
             UsageLaudo::recordAll($id, self::PHASE_CHECKOUT, $laudos);
         }
-        ItemBlock::createFor($usage->fields, ItemBlock::REASON_CHECKOUT);
+        ItemBlock::ensureFor($usage->fields, self::PHASE_CHECKOUT);
 
         return [
             'ok'      => true,
@@ -507,19 +502,16 @@ class Usage extends CommonDBTM
 
         $problems = $photos = [];
         if ($is_ok === 0) {
-            $problems = ProblemType::getValidForType($itemtype, $problem_ids);
-            if (!count($problems)) {
-                return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
-            }
             $photos = DefectPhoto::collectFromRequest();
-            if (count($photos) < DefectPhoto::MIN_PHOTOS) {
-                return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
+            $report = UsageProblem::validate($itemtype, $problem_ids, count($photos));
+            if ($report['error'] !== '') {
+                return ['ok' => false, 'message' => $report['error']];
             }
+            $problems = $report['problems'];
         }
 
-        // "É o problema do laudo" só vale se o laudo ainda estiver em aberto agora
-        $laudo_closed = $is_ok === 0 && $known_issue && !count($laudos);
-        $known        = $is_ok === 0 && $known_issue && count($laudos) > 0;
+        $known        = $is_ok === 0 && LaudoProvider::acceptsKnown($known_issue, $laudos);
+        $laudo_closed = $is_ok === 0 && $known_issue && !$known;
 
         $selfie = Selfie::storeFromRequest(Selfie::KIND_CHECKIN, $users_id);
         if ($selfie === null) {
@@ -551,12 +543,12 @@ class Usage extends CommonDBTM
         }
         $blocked = $is_ok === 0 && !$known;
         if ($blocked) {
-            ItemBlock::createFor($usage->fields, ItemBlock::REASON_CHECKIN);
+            ItemBlock::ensureFor($usage->fields, self::PHASE_CHECKIN);
         }
 
         return [
             'ok'           => true,
-            'message'      => $laudo_closed ? __('O laudo deste equipamento foi concluído: o problema bloqueia o item.', 'checklistitens') : '',
+            'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
             'id'           => $usages_id,
             'blocked'      => $blocked,
             'laudo_closed' => $laudo_closed,

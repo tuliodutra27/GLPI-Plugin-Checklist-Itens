@@ -637,7 +637,7 @@ class Delivery extends DeliveryProcess
                 if (self::findUsage($id, $items_id, Usage::STATUS_REFUSED) !== null) {
                     return [
                         'ok'           => true,
-                        'message'      => $known ? self::laudoClosedMessage() : '',
+                        'message'      => $known ? LaudoProvider::closedMessage() : '',
                         'delivery'     => self::stateOf($id),
                         'blocked'      => true,
                         'laudo_closed' => $known,
@@ -652,24 +652,21 @@ class Delivery extends DeliveryProcess
             }
 
             $usage_id = (int) $row['id'];
-            $problems = ProblemType::getValidForType(ItemProvider::RADIO, $problem_ids);
-            if (!count($problems)) {
-                return Reply::fail(__('Marque pelo menos um problema encontrado.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
+            $report = UsageProblem::validate(ItemProvider::RADIO, $problem_ids, DefectPhoto::countFor($usage_id, Usage::PHASE_CHECKOUT));
+            if ($report['error'] !== '') {
+                return Reply::fail($report['error'], ['delivery' => self::stateOf($id)]);
             }
-            if (DefectPhoto::countFor($usage_id, Usage::PHASE_CHECKOUT) < DefectPhoto::MIN_PHOTOS) {
-                return Reply::fail(__('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
-            }
+            $problems = $report['problems'];
 
-            // "É o problema do laudo" só vale se o laudo ainda estiver em aberto agora
             $laudos   = LaudoProvider::getOpenForItem(ItemProvider::RADIO, $items_id);
-            $accepted = $known && count($laudos) > 0;
+            $accepted = LaudoProvider::acceptsKnown($known, $laudos);
 
             $done = Db::atomically(static function () use ($row, $usage_id, $problems, $laudos, $accepted): bool {
                 // Cópia dos laudos em aberto: registra que o alerta foi exibido
                 if (count($laudos)) {
                     UsageLaudo::recordAll($usage_id, Usage::PHASE_CHECKOUT, $laudos);
                 }
-                if (!self::addProblems($usage_id, Usage::PHASE_CHECKOUT, $problems)) {
+                if (!UsageProblem::record($usage_id, Usage::PHASE_CHECKOUT, $problems)) {
                     return false;
                 }
                 if ($accepted) {
@@ -691,7 +688,7 @@ class Delivery extends DeliveryProcess
 
             return [
                 'ok'           => true,
-                'message'      => $laudo_closed ? self::laudoClosedMessage() : '',
+                'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
                 'delivery'     => self::stateOf($id),
                 'blocked'      => !$accepted,
                 'laudo_closed' => $laudo_closed,
@@ -814,11 +811,6 @@ class Delivery extends DeliveryProcess
         return __('Você não tem permissão para fazer entregas para embarcação.', 'checklistitens');
     }
 
-    public static function laudoClosedMessage(): string
-    {
-        return __('O laudo deste equipamento foi concluído: o problema bloqueia o item.', 'checklistitens');
-    }
-
     /**
      * Rótulo e detalhe de um rádio para as telas (o mesmo da retirada comum).
      *
@@ -848,53 +840,6 @@ class Delivery extends DeliveryProcess
             $work,
             static fn (): array => Reply::retry(__('Esta entrega está sendo atualizada agora. Tente de novo em instantes.', 'checklistitens'))
         );
-    }
-
-    /**
-     * Grava os problemas marcados que ainda não estão no uso e confere se todos ficaram gravados.
-     *
-     * @param array<int, array> $problems linhas do catálogo (ProblemType::getValidForType)
-     */
-    public static function addProblems(int $usages_id, int $phase, array $problems): bool
-    {
-        $stored  = array_flip(array_column(UsageProblem::getFor($usages_id, $phase), 'problemtypes_id'));
-        $missing = array_diff_key($problems, $stored);
-        if (!count($missing)) {
-            return true;
-        }
-
-        try {
-            UsageProblem::addAll($usages_id, $phase, $missing);
-        } catch (Throwable $e) {
-            Toolbox::logError('checklistitens: ' . $e->getMessage());
-        }
-        $stored = array_flip(array_column(UsageProblem::getFor($usages_id, $phase), 'problemtypes_id'));
-
-        return !count(array_diff_key($problems, $stored));
-    }
-
-    /**
-     * Garante o bloqueio ativo do item de um uso.
-     *
-     * @param array $usage linha do uso (users_id = quem encontrou o problema)
-     * @return bool false quando o item não ficou bloqueado
-     */
-    public static function ensureBlocked(array $usage, int $reason): bool
-    {
-        $itemtype = (string) $usage['itemtype'];
-        $items_id = (int) $usage['items_id'];
-
-        if (ItemBlock::getActiveFor($itemtype, $items_id) !== null) {
-            return true;
-        }
-
-        try {
-            ItemBlock::createFor($usage, $reason);
-        } catch (Throwable $e) {
-            Toolbox::logError('checklistitens: ' . $e->getMessage());
-        }
-
-        return ItemBlock::getActiveFor($itemtype, $items_id) !== null;
     }
 
     // ------------------------------------------------------------------ interno
@@ -1190,7 +1135,7 @@ class Delivery extends DeliveryProcess
      */
     private static function refuseUsage(array $usage): bool
     {
-        if (!self::ensureBlocked($usage, ItemBlock::REASON_CHECKOUT)) {
+        if (!ItemBlock::ensureFor($usage, Usage::PHASE_CHECKOUT)) {
             return false;
         }
 

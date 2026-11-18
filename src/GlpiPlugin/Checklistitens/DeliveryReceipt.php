@@ -467,15 +467,16 @@ class DeliveryReceipt extends DeliveryProcess
                 if (!is_array($marked) || !count($marked)) {
                     continue;
                 }
-                $label = Delivery::describeItem((int) $on_vessel[$usage_id]['items_id'])['label'];
-                $valid = ProblemType::getValidForType(ItemProvider::RADIO, $marked);
-                if (!count($valid)) {
-                    return Reply::fail(sprintf(__('Marque pelo menos um problema encontrado no rádio %s.', 'checklistitens'), $label), $state());
+                $report = UsageProblem::validate(
+                    ItemProvider::RADIO,
+                    $marked,
+                    DefectPhoto::countFor($usage_id, Usage::PHASE_CHECKIN),
+                    Delivery::describeItem((int) $on_vessel[$usage_id]['items_id'])['label']
+                );
+                if ($report['error'] !== '') {
+                    return Reply::fail($report['error'], $state());
                 }
-                if (DefectPhoto::countFor($usage_id, Usage::PHASE_CHECKIN) < DefectPhoto::MIN_PHOTOS) {
-                    return Reply::fail(sprintf(__('Tire pelo menos uma foto do defeito do rádio %s.', 'checklistitens'), $label), $state());
-                }
-                $with_problem[$usage_id] = $valid;
+                $with_problem[$usage_id] = $report['problems'];
             }
             if (!count($with_problem)) {
                 return Reply::fail(__('Indique o rádio com problema ou responda Sim.', 'checklistitens'), $state());
@@ -602,20 +603,19 @@ class DeliveryReceipt extends DeliveryProcess
                 $open        = $laudos[(int) $row['items_id']] ?? [];
                 $has_problem = isset($with_problem[$usage_id]);
                 $said_known  = $has_problem && !empty($known[$usage_id]);
-                // "É o problema do laudo" só vale se o laudo ainda estiver em aberto agora
-                $accepted    = $said_known && count($open) > 0;
+                $accepted    = LaudoProvider::acceptsKnown($said_known, $open);
 
                 // Cópia dos laudos em aberto: registra que o alerta foi exibido
                 if (count($open)) {
                     UsageLaudo::recordAll($usage_id, Usage::PHASE_CHECKIN, $open);
                 }
                 if ($has_problem) {
-                    if (!Delivery::addProblems($usage_id, Usage::PHASE_CHECKIN, $with_problem[$usage_id])) {
+                    if (!UsageProblem::record($usage_id, Usage::PHASE_CHECKIN, $with_problem[$usage_id])) {
                         return false;
                     }
                     if (!$accepted) {
                         // Bloqueio antes de o uso soltar o rádio; quem encontrou o problema é quem recebe
-                        if (!Delivery::ensureBlocked(['users_id' => $users_id] + $row, ItemBlock::REASON_CHECKIN)) {
+                        if (!ItemBlock::ensureFor(['users_id' => $users_id] + $row, Usage::PHASE_CHECKIN)) {
                             return false;
                         }
                         $blocked++;
@@ -675,7 +675,7 @@ class DeliveryReceipt extends DeliveryProcess
 
         return [
             'ok'           => true,
-            'message'      => $laudo_closed ? Delivery::laudoClosedMessage() : '',
+            'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
             'redirect'     => self::doneUrl($deliveries_id),
             'blocked'      => $blocked,
             'laudo_closed' => $laudo_closed,
@@ -720,7 +720,7 @@ class DeliveryReceipt extends DeliveryProcess
 
         return [
             'ok'           => true,
-            'message'      => $laudo_closed ? Delivery::laudoClosedMessage() : '',
+            'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
             'redirect'     => self::doneUrl((int) $row['plugin_checklistitens_deliveries_id']),
             'blocked'      => $blocked,
             'laudo_closed' => $laudo_closed,
