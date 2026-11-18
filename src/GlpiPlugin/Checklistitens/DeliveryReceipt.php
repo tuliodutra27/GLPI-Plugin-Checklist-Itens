@@ -2,8 +2,6 @@
 
 namespace GlpiPlugin\Checklistitens;
 
-use CommonDBTM;
-use Dropdown;
 use Session;
 
 /**
@@ -11,20 +9,17 @@ use Session;
  * rádios voltaram, responde "Rádios ok?", fotografa, tira a selfie e conclui. A volta pode ser
  * parcial, por isso uma entrega pode ter vários recebimentos.
  *
- * Os rádios já estão presos pela entrega, então o recebimento em andamento não reserva nada:
- * descartá-lo deixa tudo como estava. lock_draft = 1 enquanto está em andamento; o índice único
- * (users_id, lock_draft) garante um recebimento por gestor. Como a entrega, é enviado pelo aparelho
- * em partes, e toda ação aceita ser repetida.
+ * Os rádios já estão presos pela entrega, então o recebimento em andamento (STATUS_DRAFT) não
+ * reserva nada: descartá-lo deixa tudo como estava.
  */
-class DeliveryReceipt extends CommonDBTM
+class DeliveryReceipt extends DeliveryProcess
 {
-    public const STATUS_DRAFT     = 1; // em andamento
     public const STATUS_DONE      = 2; // concluído
     public const STATUS_DISCARDED = 3; // descartado ou expirado
 
-    public static $rightname = Profile::RIGHT_MANAGER;
-
-    public $dohistory = true;
+    /** Fase das fotos do defeito e situação dos rádios desta etapa (DeliveryProcess::holdsItem). */
+    public const DEFECT_PHASE = Usage::PHASE_CHECKIN;
+    public const ITEM_STATUS  = Usage::STATUS_ON_VESSEL;
 
     public static function getTypeName($nb = 0)
     {
@@ -36,55 +31,47 @@ class DeliveryReceipt extends CommonDBTM
         return 'ti ti-arrow-back-up';
     }
 
-    public static function canView()
-    {
-        return Profile::isManager() || Profile::isAdmin();
-    }
-
-    public function canViewItem()
-    {
-        if (Profile::isAdmin() || (int) $this->fields['users_id'] === (int) Session::getLoginUserID()) {
-            return true;
-        }
-
-        // Gestor: a entrega tem rádio de um grupo do setor dele
-        $groups = Sector::forCurrentUser();
-
-        return Profile::isManager() && count($groups) > 0 && countElementsInTable(Usage::getTable(), [
-            'plugin_checklistitens_deliveries_id' => (int) $this->fields['plugin_checklistitens_deliveries_id'],
-            'groups_id'                           => $groups,
-        ]) > 0;
-    }
-
-    // O recebimento só muda pelos fluxos daqui, nunca pela edição direta.
-    public static function canCreate()
-    {
-        return false;
-    }
-
-    public static function canUpdate()
-    {
-        return false;
-    }
-
-    public static function canDelete()
-    {
-        return false;
-    }
-
-    public static function canPurge()
-    {
-        return false;
-    }
-
     /**
      * Link do registro (histórico, busca): o recebimento aparece no detalhe da entrega dele.
      */
     public static function getFormURLWithID($id = 0, $full = true)
     {
-        $row = self::getRow((int) $id);
+        return DeliveryReport::getUrl(self::deliveryIdOf(self::getRow((int) $id) ?? []));
+    }
 
-        return Ui::url('front/delivery.php?id=' . (int) ($row['plugin_checklistitens_deliveries_id'] ?? 0));
+    protected static function deliveryIdOf(array $row): int
+    {
+        return (int) ($row['plugin_checklistitens_deliveries_id'] ?? 0);
+    }
+
+    public static function photoOwner(array $row): array
+    {
+        return [self::deliveryIdOf($row), (int) $row['id']];
+    }
+
+    protected static function goneMessage(int $status): string
+    {
+        if ($status === self::STATUS_DONE) {
+            return __('Este recebimento já foi concluído.', 'checklistitens');
+        }
+        if ($status === self::STATUS_DISCARDED) {
+            return __('Este recebimento foi descartado ou passou do prazo. Os rádios continuam com a embarcação: comece outro.', 'checklistitens');
+        }
+
+        return __('Este recebimento não existe mais. Comece outro.', 'checklistitens');
+    }
+
+    protected static function concludedStatuses(): array
+    {
+        return [self::STATUS_DONE];
+    }
+
+    public static function limits(): array
+    {
+        return [
+            'min_photos' => Config::getReceiptMinPhotos(),
+            'max_photos' => Config::getDeliveryMaxPhotos(),
+        ];
     }
 
     public function rawSearchOptions()
@@ -188,31 +175,6 @@ class DeliveryReceipt extends CommonDBTM
         ];
     }
 
-    public static function getSpecificValueToDisplay($field, $values, array $options = [])
-    {
-        if (!is_array($values)) {
-            $values = [$field => $values];
-        }
-        if ($field === 'status') {
-            return htmlspecialchars(self::getStatusLabels()[(int) $values['status']] ?? '');
-        }
-
-        return parent::getSpecificValueToDisplay($field, $values, $options);
-    }
-
-    public static function getSpecificValueToSelect($field, $name = '', $values = '', array $options = [])
-    {
-        if (!is_array($values)) {
-            $values = [$field => $values];
-        }
-        $options['display'] = false;
-        if ($field === 'status') {
-            return Dropdown::showFromArray($name, self::getStatusLabels(), $options + ['value' => $values[$field]]);
-        }
-
-        return parent::getSpecificValueToSelect($field, $name, $values, $options);
-    }
-
     /** @return array<int, string> */
     public static function getStatusLabels(): array
     {
@@ -224,36 +186,6 @@ class DeliveryReceipt extends CommonDBTM
     }
 
     // ------------------------------------------------------------------ leitura
-
-    public static function getRow(int $id): ?array
-    {
-        global $DB;
-
-        if ($id <= 0) {
-            return null;
-        }
-        $row = $DB->request(['FROM' => self::getTable(), 'WHERE' => ['id' => $id]])->current();
-
-        return $row ? $row : null;
-    }
-
-    /**
-     * Recebimento em andamento do gestor (só pode haver um), ou null.
-     */
-    public static function getDraftFor(int $users_id): ?array
-    {
-        global $DB;
-
-        if ($users_id <= 0) {
-            return null;
-        }
-        $row = $DB->request([
-            'FROM'  => self::getTable(),
-            'WHERE' => ['users_id' => $users_id, 'lock_draft' => 1],
-        ])->current();
-
-        return $row ? $row : null;
-    }
 
     /**
      * Estado completo do recebimento, no formato que a tela e o aparelho usam. Os itens são os
@@ -300,13 +232,10 @@ class DeliveryReceipt extends CommonDBTM
                 'covers_left'         => self::coversLeft($deliveries_id),
             ],
             'date_start'  => (string) $row['date_start'],
-            'expires_at'  => Delivery::expiresAt($row['date_mod'] ?: $row['date_start']),
+            'expires_at'  => self::expiresAt($row),
             'items'       => $items,
-            'photos'      => Delivery::photoList($deliveries_id, $id),
-            'limits'      => [
-                'min_photos' => Config::getReceiptMinPhotos(),
-                'max_photos' => Config::getDeliveryMaxPhotos(),
-            ],
+            'photos'      => DeliveryPhoto::forState($deliveries_id, $id),
+            'limits'      => self::limits(),
         ];
     }
 
@@ -426,26 +355,6 @@ class DeliveryReceipt extends CommonDBTM
     // ------------------------------------------------------------------ apoio
 
     /**
-     * Resposta para o recebimento que não existe mais: o aparelho descarta a cópia que guardou.
-     *
-     * @param array|null $row linha do recebimento, quando ele existe e é do usuário
-     */
-    public static function gone(?array $row = null): array
-    {
-        $status = $row !== null ? (int) $row['status'] : 0;
-        if ($status === self::STATUS_DONE) {
-            $message = __('Este recebimento já foi concluído.', 'checklistitens');
-        } elseif ($status === self::STATUS_DISCARDED) {
-            $message = __('Este recebimento foi descartado ou passou do prazo. Os rádios continuam com a embarcação: comece outro.', 'checklistitens');
-        } else {
-            $message = __('Este recebimento não existe mais. Comece outro.', 'checklistitens');
-        }
-
-        // "concluded": as fotos já estão no servidor, o aparelho não precisa guardar para reenviar
-        return ['ok' => false, 'code' => 'gone', 'message' => $message, 'retry' => false, 'concluded' => $status === self::STATUS_DONE];
-    }
-
-    /**
      * Baterias reserva da entrega que ainda não voltaram: as entregues menos as devolvidas nos
      * recebimentos já concluídos (a volta pode ser em partes).
      */
@@ -484,18 +393,6 @@ class DeliveryReceipt extends CommonDBTM
         }
 
         return max(0, (int) ($delivery[$delivered_field] ?? 0) - $returned);
-    }
-
-    /**
-     * Marca atividade no recebimento: é a data da última atividade que decide a expiração.
-     */
-    public static function touch(int $id): void
-    {
-        global $DB;
-
-        if ($id > 0) {
-            $DB->update(self::getTable(), ['date_mod' => Shift::now()], ['id' => $id]);
-        }
     }
 
     // ------------------------------------------------------------------ interno

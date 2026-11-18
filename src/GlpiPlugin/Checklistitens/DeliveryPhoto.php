@@ -3,7 +3,6 @@
 namespace GlpiPlugin\Checklistitens;
 
 use CommonDBTM;
-use Session;
 use Throwable;
 use Toolbox;
 
@@ -19,6 +18,8 @@ use Toolbox;
  */
 class DeliveryPhoto extends CommonDBTM
 {
+    use ReadOnlyRecord;
+
     public static $rightname = Profile::RIGHT_MANAGER;
 
     public const MAX_BYTES = 5 * 1024 * 1024;
@@ -34,27 +35,6 @@ class DeliveryPhoto extends CommonDBTM
     public static function canView()
     {
         return Profile::isManager() || Profile::isAdmin();
-    }
-
-    // As fotos só entram e saem pelos fluxos da entrega e do recebimento.
-    public static function canCreate()
-    {
-        return false;
-    }
-
-    public static function canUpdate()
-    {
-        return false;
-    }
-
-    public static function canDelete()
-    {
-        return false;
-    }
-
-    public static function canPurge()
-    {
-        return false;
     }
 
     public static function getBaseDir(): string
@@ -273,13 +253,6 @@ class DeliveryPhoto extends CommonDBTM
             return $fail(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'), true);
         }
 
-        // A foto conta como atividade: a separação (ou o recebimento) parada é que expira
-        if ($receipts_id > 0) {
-            DeliveryReceipt::touch($receipts_id);
-        } else {
-            Delivery::touch($deliveries_id);
-        }
-
         return [
             'ok'      => true,
             'message' => '',
@@ -312,12 +285,6 @@ class DeliveryPhoto extends CommonDBTM
             return false;
         }
         self::deleteFile((string) $row['filepath']);
-
-        if ($receipts_id > 0) {
-            DeliveryReceipt::touch($receipts_id);
-        } else {
-            Delivery::touch($deliveries_id);
-        }
 
         return true;
     }
@@ -361,6 +328,19 @@ class DeliveryPhoto extends CommonDBTM
         }
 
         return $list;
+    }
+
+    /**
+     * Fotos gerais no formato do estado da separação ou do recebimento.
+     *
+     * @return array<int, array{uuid: string, url: string}>
+     */
+    public static function forState(int $deliveries_id, int $receipts_id): array
+    {
+        return array_map(
+            static fn ($photo) => ['uuid' => $photo['uuid'], 'url' => $photo['url']],
+            self::getFor($deliveries_id, $receipts_id)
+        );
     }
 
     /**
@@ -478,37 +458,18 @@ class DeliveryPhoto extends CommonDBTM
     }
 
     /**
-     * Quem pode ver a foto: o TI, quem fez a entrega (ou o recebimento a que a foto pertence) e o
-     * gestor cujo setor inclui o grupo de algum rádio daquela entrega.
+     * Quem pode ver a foto: quem pode ver a entrega, e quem fez o recebimento a que ela pertence.
      *
      * @param array $photo linha da tabela de fotos
      */
     public static function canViewPhoto(array $photo): bool
     {
-        if (Profile::isAdmin()) {
-            return true;
-        }
+        $receipts_id = (int) ($photo['plugin_checklistitens_deliveryreceipts_id'] ?? 0);
 
-        $users_id      = (int) Session::getLoginUserID();
-        $deliveries_id = (int) ($photo['plugin_checklistitens_deliveries_id'] ?? 0);
-        $receipts_id   = (int) ($photo['plugin_checklistitens_deliveryreceipts_id'] ?? 0);
-        if ($users_id <= 0 || $deliveries_id <= 0) {
-            return false;
-        }
-
-        if (countElementsInTable(Delivery::getTable(), ['id' => $deliveries_id, 'users_id' => $users_id]) > 0) {
-            return true;
-        }
-        if ($receipts_id > 0 && countElementsInTable(DeliveryReceipt::getTable(), ['id' => $receipts_id, 'users_id' => $users_id]) > 0) {
-            return true;
-        }
-
-        $groups = Sector::forCurrentUser();
-
-        return Profile::isManager() && count($groups) > 0 && countElementsInTable(Usage::getTable(), [
-            'plugin_checklistitens_deliveries_id' => $deliveries_id,
-            'groups_id'                           => $groups,
-        ]) > 0;
+        return DeliveryReport::canViewDelivery(
+            (int) ($photo['plugin_checklistitens_deliveries_id'] ?? 0),
+            $receipts_id > 0 ? DeliveryReceipt::getRow($receipts_id) : null
+        );
     }
 
     /** Linha da foto com aquele identificador na entrega (o índice único é por entrega), ou null. */

@@ -14,6 +14,8 @@ use Toolbox;
  */
 class AccessoryDefect extends CommonDBTM
 {
+    use ReadOnlyRecord;
+
     public static $rightname = Profile::RIGHT_MANAGER;
 
     public const KIND_BATTERY = 1;

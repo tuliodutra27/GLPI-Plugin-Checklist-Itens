@@ -12,7 +12,7 @@ use GlpiPlugin\Checklistitens\Vessel;
 include('../../../inc/includes.php');
 
 // Entrega de rádios para embarcação e recebimento de volta: só o gestor (ou o TI) que confere
-if (!DeliveryReport::isFeatureAvailable() || !Delivery::canDeliver()) {
+if (!Delivery::canDeliver()) {
     Html::displayRightError();
 }
 
@@ -77,11 +77,7 @@ $data = [
         'cover'   => ProblemType::getGroupedForType(ProblemType::ACCESSORY_COVER),
     ] : [],
     'state'     => $state,
-    'limits'    => [
-        'max_items'  => Config::getDeliveryMaxItems(),
-        'min_photos' => $mode === 'delivery' ? Config::getDeliveryMinPhotos() : Config::getReceiptMinPhotos(),
-        'max_photos' => Config::getDeliveryMaxPhotos(),
-    ],
+    'limits'    => ['max_items' => Config::getDeliveryMaxItems()] + ($mode === 'delivery' ? Delivery::limits() : DeliveryReceipt::limits()),
 ];
 // Os sinais de HTML saem como \u00XX: o JSON vai dentro de uma tag <script>
 $json = json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);

@@ -14,6 +14,8 @@ use Session;
  */
 class Usage extends CommonDBTM
 {
+    use ReadOnlyRecord;
+
     public const STATUS_IN_USE   = 1; // retirado, aguardando conferência do gestor
     public const STATUS_RELEASED = 2; // conferido, liberado para devolução
     public const STATUS_RETURNED = 3;
@@ -53,26 +55,6 @@ class Usage extends CommonDBTM
         }
 
         return Profile::isManager() && in_array((int) $this->fields['groups_id'], Sector::forCurrentUser(), true);
-    }
-
-    public static function canCreate()
-    {
-        return false;
-    }
-
-    public static function canUpdate()
-    {
-        return false;
-    }
-
-    public static function canDelete()
-    {
-        return false;
-    }
-
-    public static function canPurge()
-    {
-        return false;
     }
 
     public function getName($options = [])

@@ -12,6 +12,8 @@ use Session;
  */
 class Confirmation extends CommonDBTM
 {
+    use ReadOnlyRecord;
+
     public static $rightname = Profile::RIGHT_MANAGER;
 
     public $dohistory = true;
@@ -29,26 +31,6 @@ class Confirmation extends CommonDBTM
     public static function canView()
     {
         return Profile::isManager() || Profile::isAdmin();
-    }
-
-    public static function canCreate()
-    {
-        return false;
-    }
-
-    public static function canUpdate()
-    {
-        return false;
-    }
-
-    public static function canDelete()
-    {
-        return false;
-    }
-
-    public static function canPurge()
-    {
-        return false;
     }
 
     /**

@@ -13,6 +13,8 @@ use CommonDBTM;
  */
 class ItemBlock extends CommonDBTM
 {
+    use ReadOnlyRecord;
+
     public const STATUS_WAITING  = 1; // aguardando conferência (sem chamado)
     public const STATUS_REPAIR   = 2; // em reparo (chamado aberto)
     public const STATUS_RELEASED = 3;
@@ -40,27 +42,6 @@ class ItemBlock extends CommonDBTM
     public static function canView()
     {
         return Profile::isManager() || Profile::isAdmin();
-    }
-
-    // Bloqueios só mudam pelos fluxos do plugin, nunca pela edição direta.
-    public static function canCreate()
-    {
-        return false;
-    }
-
-    public static function canUpdate()
-    {
-        return false;
-    }
-
-    public static function canDelete()
-    {
-        return false;
-    }
-
-    public static function canPurge()
-    {
-        return false;
     }
 
     /** @return array<int, string> */

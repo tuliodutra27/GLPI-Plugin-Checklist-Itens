@@ -63,14 +63,35 @@ class DeliveryReport
         return array_keys($ids);
     }
 
-    public static function canViewDelivery(array $row): bool
+    /**
+     * Quem vê uma entrega (e as fotos, os recebimentos e o histórico dela): o TI, quem fez a
+     * entrega, quem fez o recebimento informado e o gestor cujo setor inclui o grupo de algum rádio
+     * da entrega.
+     *
+     * @param array|null $receipt linha do recebimento, quando é dele que se trata
+     */
+    public static function canViewDelivery(int $deliveries_id, ?array $receipt = null): bool
     {
-        if (!self::canView()) {
+        $users_id = (int) Session::getLoginUserID();
+        if ($deliveries_id <= 0 || $users_id <= 0) {
             return false;
         }
-        $visible = self::getVisibleIds();
+        if (Profile::isAdmin()) {
+            return true;
+        }
+        if ($receipt !== null && (int) $receipt['users_id'] === $users_id) {
+            return true;
+        }
+        if (countElementsInTable(Delivery::getTable(), ['id' => $deliveries_id, 'users_id' => $users_id]) > 0) {
+            return true;
+        }
 
-        return $visible === null || in_array((int) $row['id'], $visible, true);
+        $groups = Sector::forCurrentUser();
+
+        return Profile::isManager() && count($groups) > 0 && countElementsInTable(Usage::getTable(), [
+            'plugin_checklistitens_deliveries_id' => $deliveries_id,
+            'groups_id'                           => $groups,
+        ]) > 0;
     }
 
     /**
@@ -322,7 +343,7 @@ class DeliveryReport
         global $CFG_GLPI, $DB;
 
         $row = $DB->request(['FROM' => Delivery::getTable(), 'WHERE' => ['id' => $id]])->current();
-        if (!$row || !self::canViewDelivery($row)) {
+        if (!$row || !self::canView() || !self::canViewDelivery((int) $row['id'])) {
             return null;
         }
 
