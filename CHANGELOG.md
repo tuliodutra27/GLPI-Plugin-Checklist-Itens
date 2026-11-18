@@ -6,6 +6,12 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Corrigido
+- O link "Conferência do setor" do e-mail de equipamento não devolvido apontava sempre para a pasta
+  `plugins/` e não abria com o plugin instalado pelo marketplace.
+- A aba "Registro de uso" do Telefone podia continuar com o visual antigo depois de atualizar o
+  plugin (o navegador não buscava o CSS novo).
+
 ## [0.12.0] - 2026-11-10
 
 Requer Atualizar em Configurar > Plugins.

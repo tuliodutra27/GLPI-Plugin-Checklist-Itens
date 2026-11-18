@@ -97,7 +97,7 @@ class EquipmentRecord extends CommonGLPI
     public static function displayTabContentForItem(CommonGLPI $item, $tabnum = 1, $withtemplate = 0)
     {
         if ($item instanceof Phone) {
-            echo Html::css(\Plugin::getWebDir('checklistitens', false) . '/css/checklistitens.css');
+            echo Ui::css();
             Ui::render('equipment_record.html.twig', self::getRecord(ItemProvider::PHONE, (int) $item->getID(), []) + [
                 'embedded'   => true,
                 'page_url'   => Ui::url('front/equipment.form.php'),
@@ -325,11 +325,8 @@ class EquipmentRecord extends CommonGLPI
         $row  = ItemProvider::getRow($itemtype, $items_id);
         $item = $row !== null ? ItemProvider::present($itemtype, $row) : ['id' => $items_id, 'label' => '#' . $items_id, 'detail' => '', 'groups_id' => 0];
 
-        // Datas só no formato AAAA-MM-DD (o valor vai direto para a consulta)
         foreach (['date_from', 'date_to'] as $key) {
-            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($filters[$key] ?? ''))) {
-                $filters[$key] = '';
-            }
+            $filters[$key] = Ui::date($filters[$key] ?? '');
         }
 
         // Separação de entrega cancelada não chegou a ser um uso: fica só no detalhe da entrega
@@ -499,18 +496,13 @@ class EquipmentRecord extends CommonGLPI
     }
 
     /**
-     * CSV (separador ";" e BOM UTF-8, para abrir direto no Excel).
+     * CSV do registro de uso, uma linha por uso.
      */
     public static function sendCsv(string $itemtype, int $items_id, array $filters): void
     {
         $record = self::getRecord($itemtype, $items_id, $filters);
 
-        header('Content-Type: text/csv; charset=UTF-8');
-        header(sprintf('Content-Disposition: attachment; filename="registro_uso_%s_%d.csv"', strtolower($itemtype), $items_id));
-
-        $out = fopen('php://output', 'w');
-        fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, [
+        $header = [
             __('Uso', 'checklistitens'), __('Equipamento', 'checklistitens'), __('Colaborador', 'checklistitens'),
             __('Setor', 'checklistitens'), __('Situação', 'checklistitens'), __('Retirada', 'checklistitens'),
             __('Turno da retirada', 'checklistitens'), __('Problemas na retirada', 'checklistitens'),
@@ -523,11 +515,12 @@ class EquipmentRecord extends CommonGLPI
             __('Problema conhecido na retirada', 'checklistitens'), __('Problema conhecido na devolução', 'checklistitens'),
             __('Laudos em aberto', 'checklistitens'), __('Fotos do defeito', 'checklistitens'),
             __('Embarcação', 'checklistitens'),
-        ], ';');
+        ];
 
+        $rows  = [];
         $label = trim($record['label'] . ' ' . $record['detail']);
         foreach ($record['timeline'] as $entry) {
-            fputcsv($out, [
+            $rows[] = [
                 $entry['id'],
                 $label,
                 $entry['user'],
@@ -556,10 +549,10 @@ class EquipmentRecord extends CommonGLPI
                 ))),
                 count($entry['checkout']['photos']) + count($entry['checkin']['photos'] ?? []),
                 $entry['delivery']['vessel'] ?? '',
-            ], ';');
+            ];
         }
-        fclose($out);
-        exit;
+
+        Ui::sendCsv(sprintf('registro_uso_%s_%d.csv', strtolower($itemtype), $items_id), $header, $rows);
     }
 
     /** @return array<int, array> */

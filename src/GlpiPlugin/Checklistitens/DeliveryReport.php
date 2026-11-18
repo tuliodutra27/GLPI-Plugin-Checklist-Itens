@@ -304,11 +304,10 @@ class DeliveryReport
         if (!empty($filters['groups_id'])) {
             $where['groups_id'] = (int) $filters['groups_id'];
         }
-        // Datas só no formato AAAA-MM-DD (o valor vai direto para a consulta)
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($filters['date_from'] ?? ''))) {
+        if (Ui::date($filters['date_from'] ?? '') !== '') {
             $where[] = ['date_start' => ['>=', $filters['date_from'] . ' 00:00:00']];
         }
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($filters['date_to'] ?? ''))) {
+        if (Ui::date($filters['date_to'] ?? '') !== '') {
             $where[] = ['date_start' => ['<=', $filters['date_to'] . ' 23:59:59']];
         }
 
@@ -452,7 +451,7 @@ class DeliveryReport
     }
 
     /**
-     * CSV de uma entrega, uma linha por rádio (separador ";" e BOM UTF-8, para abrir no Excel).
+     * CSV de uma entrega, uma linha por rádio.
      */
     public static function sendCsv(int $id): void
     {
@@ -462,12 +461,7 @@ class DeliveryReport
             exit;
         }
 
-        header('Content-Type: text/csv; charset=UTF-8');
-        header(sprintf('Content-Disposition: attachment; filename="entrega_embarcacao_%d.csv"', $id));
-
-        $out = fopen('php://output', 'w');
-        fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, [
+        $header = [
             __('Entrega', 'checklistitens'), __('Embarcação', 'checklistitens'), __('Situação da entrega', 'checklistitens'),
             __('Gestor', 'checklistitens'), __('Entregue em', 'checklistitens'), __('Baterias reserva', 'checklistitens'),
             __('Capas', 'checklistitens'),
@@ -481,14 +475,15 @@ class DeliveryReport
             __('Baterias devolvidas', 'checklistitens'), __('Baterias com defeito', 'checklistitens'),
             __('Capas devolvidas', 'checklistitens'), __('Capas em bom estado', 'checklistitens'),
             __('Baterias e capas com defeito', 'checklistitens'), __('Chamado das baterias e capas', 'checklistitens'),
-        ], ';');
+        ];
 
+        $rows     = [];
         $yes      = __('Sim', 'checklistitens');
         $no       = __('Não', 'checklistitens');
         $receipts = array_column($detail['receipts'], null, 'id');
         foreach ($detail['items'] as $item) {
             $receipt = $receipts[$item['receipt_id']] ?? null;
-            fputcsv($out, [
+            $rows[] = [
                 $detail['id'],
                 $detail['vessel'],
                 $detail['status_label'],
@@ -514,9 +509,9 @@ class DeliveryReport
                 $receipt === null || $receipt['covers_ok'] === null ? '' : ($receipt['covers_ok'] ? $yes : $no),
                 $receipt === null ? '' : AccessoryDefect::summary($receipt['defects']),
                 $receipt === null || $receipt['tickets_id'] === 0 ? '' : $receipt['tickets_id'],
-            ], ';');
+            ];
         }
-        fclose($out);
-        exit;
+
+        Ui::sendCsv(sprintf('entrega_embarcacao_%d.csv', $id), $header, $rows);
     }
 }

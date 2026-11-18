@@ -26,6 +26,9 @@ class ItemBlock extends CommonDBTM
     public const RELEASE_TICKET = 1;
     public const RELEASE_MANUAL = 2;
 
+    /** Situações do chamado que liberam o item bloqueado. */
+    public const TICKET_DONE = [\CommonITILObject::SOLVED, \CommonITILObject::CLOSED];
+
     public static $rightname = Profile::RIGHT_CONFIG;
 
     public $dohistory = true;
@@ -159,7 +162,7 @@ class ItemBlock extends CommonDBTM
             ],
             'WHERE'      => [
                 self::getTable() . '.lock_active' => 1,
-                'glpi_tickets.status'             => [\CommonITILObject::SOLVED, \CommonITILObject::CLOSED],
+                'glpi_tickets.status'             => self::TICKET_DONE,
             ],
         ]);
 

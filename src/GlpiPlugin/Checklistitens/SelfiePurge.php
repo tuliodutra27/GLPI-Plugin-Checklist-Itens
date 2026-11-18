@@ -96,7 +96,7 @@ class SelfiePurge extends CommonDBTM
     {
         global $DB;
 
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $limit_date) || $limit_date > self::getMaxLimitDate()) {
+        if (Ui::date($limit_date) === '' || $limit_date > self::getMaxLimitDate()) {
             return ['ok' => false, 'message' => sprintf(
                 __('Escolha uma data até %s (as selfies ficam guardadas por pelo menos %d dias).', 'checklistitens'),
                 \Html::convDate(self::getMaxLimitDate()),
@@ -177,7 +177,7 @@ class SelfiePurge extends CommonDBTM
     {
         global $DB;
 
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $limit_date) || $limit_date > self::getLocationMaxLimitDate()) {
+        if (Ui::date($limit_date) === '' || $limit_date > self::getLocationMaxLimitDate()) {
             return ['ok' => false, 'message' => sprintf(
                 __('Escolha uma data até %s (as localizações ficam guardadas por %d dias).', 'checklistitens'),
                 \Html::convDate(self::getLocationMaxLimitDate()),

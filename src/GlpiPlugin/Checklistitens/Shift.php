@@ -66,11 +66,6 @@ class Shift
         return sprintf('%s, %s–%s', date('d/m', $start), self::formatHour($start), self::formatHour($end));
     }
 
-    public static function isCurrent(?string $shift_start): bool
-    {
-        return $shift_start !== null && $shift_start === self::startFor();
-    }
-
     private static function formatHour(int $ts): string
     {
         $minutes = date('i', $ts);

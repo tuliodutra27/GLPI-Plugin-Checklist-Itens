@@ -23,6 +23,16 @@ use Toolbox;
  */
 class Install
 {
+    /**
+     * Colunas padrão das listas (histórico de usos, catálogo e embarcações), por tipo. Embarcações:
+     * ativa, observação e última atualização (o nome já é a primeira coluna).
+     */
+    private const DISPLAY_PREFERENCES = [
+        Usage::class       => [2, 3, 4, 5, 6, 7, 9],
+        ProblemType::class => [101, 102, 103, 104, 105],
+        Vessel::class      => [101, 16, 19],
+    ];
+
     public static function install(Migration $migration): void
     {
         self::createTables();
@@ -47,22 +57,12 @@ class Install
         self::installNotifications();
     }
 
-    /**
-     * Colunas padrão das listas (histórico de usos, catálogo e embarcações), se ainda não houver
-     * nenhuma.
-     */
+    /** Colunas padrão das listas, só para o tipo que ainda não tem nenhuma. */
     private static function installDisplayPreferences(): void
     {
         global $DB;
 
-        $defaults = [
-            Usage::class       => [2, 3, 4, 5, 6, 7, 9],
-            ProblemType::class => [101, 102, 103, 104, 105],
-            // ativa, observação e última atualização (o nome já é a primeira coluna)
-            Vessel::class      => [101, 16, 19],
-        ];
-
-        foreach ($defaults as $itemtype => $nums) {
+        foreach (self::DISPLAY_PREFERENCES as $itemtype => $nums) {
             if (countElementsInTable('glpi_displaypreferences', ['itemtype' => $itemtype, 'users_id' => 0]) > 0) {
                 continue;
             }
@@ -319,7 +319,7 @@ class Install
 
         // Vínculos de chamados com registros de uso que deixam de existir
         $DB->delete(Item_Ticket::getTable(), ['itemtype' => Usage::class]);
-        $DB->delete('glpi_displaypreferences', ['itemtype' => [Usage::class, ProblemType::class, Vessel::class]]);
+        $DB->delete('glpi_displaypreferences', ['itemtype' => array_keys(self::DISPLAY_PREFERENCES)]);
         self::uninstallNotifications();
     }
 
