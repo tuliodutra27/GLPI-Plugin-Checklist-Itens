@@ -21,7 +21,7 @@ $filters = [
 
 $types = [];
 foreach (Config::getEnabledTypes() as $itemtype) {
-    $types[$itemtype] = ItemProvider::getShortTypeLabel($itemtype);
+    $types[$itemtype] = ItemProvider::getTypeLabel($itemtype);
 }
 $situations = [];
 foreach (EquipmentRecord::getSituations() as $key => $situation) {

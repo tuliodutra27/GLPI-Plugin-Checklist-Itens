@@ -47,7 +47,7 @@ class DeliveryPhoto extends CommonDBTM
     /** Peça da foto: vazio (foto geral) ou "battery:N" / "cover:N" (N de 1 a 99). */
     public static function isValidRef(string $ref): bool
     {
-        return $ref === '' || preg_match('/^(battery|cover):[1-9][0-9]?$/', $ref) === 1;
+        return $ref === '' || preg_match('/^(' . implode('|', AccessoryDefect::keys()) . '):[1-9][0-9]?$/', $ref) === 1;
     }
 
     /**

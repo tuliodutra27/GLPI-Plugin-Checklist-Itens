@@ -169,7 +169,7 @@ class EquipmentRecord extends CommonGLPI
 
                 $list[] = $item + [
                     'itemtype'        => $itemtype,
-                    'type_label'      => ItemProvider::getShortTypeLabel($itemtype),
+                    'type_label'      => ItemProvider::getTypeLabel($itemtype),
                     'icon'            => ItemProvider::getTypeIcon($itemtype),
                     'sector'          => Sector::getName((int) $row['groups_id']),
                     'state'           => Ui::text($row['state_name'] ?? ''),

@@ -189,7 +189,7 @@ class Usage extends CommonDBTM
         }
         switch ($field) {
             case 'itemtype':
-                return htmlspecialchars(ItemProvider::getShortTypeLabel((string) $values['itemtype']));
+                return htmlspecialchars(ItemProvider::getTypeLabel((string) $values['itemtype']));
             case 'items_id':
                 if (!empty($values['itemtype'])) {
                     return htmlspecialchars(ItemProvider::describe((string) $values['itemtype'], (int) $values['items_id']));
@@ -212,7 +212,7 @@ class Usage extends CommonDBTM
             case 'itemtype':
                 $types = [];
                 foreach (ItemProvider::getSupportedTypes() as $itemtype) {
-                    $types[$itemtype] = ItemProvider::getShortTypeLabel($itemtype);
+                    $types[$itemtype] = ItemProvider::getTypeLabel($itemtype);
                 }
                 return \Dropdown::showFromArray($name, $types, $options + ['value' => $values[$field]]);
             case 'status':
@@ -352,7 +352,7 @@ class Usage extends CommonDBTM
             return ['ok' => false, 'message' => sprintf(
                 __('Você já está com o limite de %1$d %2$s. Devolva antes de retirar outro.', 'checklistitens'),
                 $limit,
-                mb_strtolower(ItemProvider::getShortTypeLabel($itemtype))
+                mb_strtolower(ItemProvider::getTypeLabel($itemtype))
             )];
         }
 

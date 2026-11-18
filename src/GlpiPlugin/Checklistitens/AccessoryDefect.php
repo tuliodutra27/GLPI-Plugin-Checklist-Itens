@@ -21,33 +21,54 @@ class AccessoryDefect extends CommonDBTM
     public const KIND_BATTERY = 1;
     public const KIND_COVER   = 2;
 
+    /**
+     * Cada tipo de peça: chave usada pelo aparelho e nas fotos ("battery:1"), rótulo numerado e o
+     * tipo do catálogo de problemas.
+     *
+     * @return array<int, array{key: string, label: string, problem_type: string}>
+     */
+    private static function kinds(): array
+    {
+        return [
+            self::KIND_BATTERY => ['key' => 'battery', 'label' => __('Bateria %d', 'checklistitens'), 'problem_type' => ProblemType::ACCESSORY_BATTERY],
+            self::KIND_COVER   => ['key' => 'cover', 'label' => __('Capa %d', 'checklistitens'), 'problem_type' => ProblemType::ACCESSORY_COVER],
+        ];
+    }
+
+    /** @return array<int, string> tipo da peça => chave ("battery", "cover") */
+    public static function keys(): array
+    {
+        return array_map(static fn ($kind) => $kind['key'], self::kinds());
+    }
+
     /** Nome da peça na foto e no envio do aparelho: "battery:1", "cover:2". */
     public static function ref(int $kind, int $number): string
     {
-        return ($kind === self::KIND_COVER ? 'cover' : 'battery') . ':' . $number;
+        return self::kinds()[$kind]['key'] . ':' . $number;
     }
 
     public static function label(int $kind, int $number): string
     {
-        return $kind === self::KIND_COVER
-            ? sprintf(__('Capa %d', 'checklistitens'), $number)
-            : sprintf(__('Bateria %d', 'checklistitens'), $number);
+        return sprintf(self::kinds()[$kind]['label'], $number);
     }
 
     public static function problemType(int $kind): string
     {
-        return $kind === self::KIND_COVER ? ProblemType::ACCESSORY_COVER : ProblemType::ACCESSORY_BATTERY;
+        return self::kinds()[$kind]['problem_type'];
     }
 
     /**
      * Confere as peças com defeito enviadas na conclusão do recebimento: cada uma precisa de pelo
      * menos um problema do catálogo e de uma foto.
      *
-     * @param array $posted número da peça => ids dos problemas marcados
+     * @param array $posted envio do aparelho: chave da peça ("battery", "cover") => número => ids dos
+     *                      problemas marcados
      * @return array{pieces: array<int, array>, error: string}
      */
     public static function readPieces(int $deliveries_id, int $receipts_id, int $kind, int $count, array $posted): array
     {
+        $posted = $posted[self::kinds()[$kind]['key']] ?? [];
+        $posted = is_array($posted) ? $posted : [];
         $pieces = [];
         for ($number = 1; $number <= $count; $number++) {
             $label  = self::label($kind, $number);

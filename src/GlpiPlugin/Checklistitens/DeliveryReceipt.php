@@ -533,8 +533,8 @@ class DeliveryReceipt extends DeliveryProcess
 
         // Cada bateria com defeito e cada capa com dano: problemas do catálogo e pelo menos uma foto
         $pieces = [];
-        foreach ([AccessoryDefect::KIND_BATTERY => [$defective, 'battery'], AccessoryDefect::KIND_COVER => [$damaged, 'cover']] as $kind => [$count, $key]) {
-            $read = AccessoryDefect::readPieces($deliveries_id, $id, $kind, $count, is_array($accessory[$key] ?? null) ? $accessory[$key] : []);
+        foreach ([AccessoryDefect::KIND_BATTERY => $defective, AccessoryDefect::KIND_COVER => $damaged] as $kind => $count) {
+            $read = AccessoryDefect::readPieces($deliveries_id, $id, $kind, $count, $accessory);
             if ($read['error'] !== '') {
                 return Reply::fail($read['error'], $state());
             }

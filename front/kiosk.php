@@ -52,7 +52,6 @@ foreach (Config::getEnabledTypes() as $itemtype) {
     $types[] = [
         'itemtype'      => $itemtype,
         'label'         => ItemProvider::getTypeLabel($itemtype),
-        'short_label'   => ItemProvider::getShortTypeLabel($itemtype),
         'icon'          => ItemProvider::getTypeIcon($itemtype),
         'items'         => $items,
         'limit_reached' => $limitReached,

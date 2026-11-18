@@ -64,7 +64,7 @@ class NotificationTargetUsage extends NotificationTarget
                 continue;
             }
             $items[] = [
-                '##item.type##'     => ItemProvider::getShortTypeLabel((string) $usage->fields['itemtype']),
+                '##item.type##'     => ItemProvider::getTypeLabel((string) $usage->fields['itemtype']),
                 '##item.label##'    => ItemProvider::describe((string) $usage->fields['itemtype'], (int) $usage->fields['items_id']),
                 '##item.user##'     => Ui::text(getUserName((int) $usage->fields['users_id'])),
                 '##item.checkout##' => Ui::datetime($usage->fields['date_checkout']),
