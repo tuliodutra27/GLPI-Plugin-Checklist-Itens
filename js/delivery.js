@@ -97,7 +97,6 @@
             badHint: ''
         }
     };
-    var ACC_MAX_PHOTOS = 5;            // fotos por peça com defeito (como no rádio)
 
     // Contadores na ordem em que os limites são calculados: o de defeito depende do de devolvidas
     var COUNTERS = [];
@@ -408,7 +407,7 @@
     }
 
     function maxItems() {
-        return toInt(limits.max_items) || 8;
+        return toInt(limits.max_items);
     }
 
     function minPhotos() {
@@ -416,7 +415,16 @@
     }
 
     function maxPhotos() {
-        return toInt(limits.max_photos) || 40;
+        return toInt(limits.max_photos);
+    }
+
+    /** Fotos de cada peça com defeito: os limites das fotos do defeito do rádio (DefectPhoto). */
+    function accMinPhotos() {
+        return toInt((limits.defect_photos || {}).min);
+    }
+
+    function accMaxPhotos() {
+        return toInt((limits.defect_photos || {}).max);
     }
 
     function findPhoto(uuid) {
@@ -2228,7 +2236,7 @@
             var title = el('div', 'ci-acc-piece-title');
             var pickers = el('div', 'row g-2 mt-1');
             var grid = el('div', 'ci-defect-grid mt-2');
-            var full = piece.photos.length >= ACC_MAX_PHOTOS;
+            var full = piece.photos.length >= accMaxPhotos();
             var missing = [];
 
             box.setAttribute('data-ci-acc-piece', kind);
@@ -2258,7 +2266,7 @@
                 box.appendChild(block);
             });
 
-            box.appendChild(el('div', 'fw-bold mt-2', 'Fotos desta ' + spec.name + ' (1 a ' + ACC_MAX_PHOTOS + ')'));
+            box.appendChild(el('div', 'fw-bold mt-2', 'Fotos desta ' + spec.name + ' (' + accMinPhotos() + ' a ' + accMaxPhotos() + ')'));
             [['Tirar foto', 'ti-camera', 'btn-primary', true], ['Escolher da galeria', 'ti-photo', 'btn-outline-primary', false]].forEach(function (option) {
                 var column = el('div', 'col-12 col-sm-6');
                 var picker = el('label', 'btn ' + option[2] + ' w-100 ci-defect-button' + (full ? ' disabled' : ''));
@@ -2303,7 +2311,7 @@
                 missing.push('tire a foto');
             }
             box.appendChild(el('div', 'ci-small mt-1 ' + (missing.length ? 'ci-defect-warning' : 'ci-defect-counter-ok'),
-                missing.length ? 'Falta: ' + missing.join(' e ') + '.' : piece.photos.length + ' de ' + ACC_MAX_PHOTOS + ' fotos.'));
+                missing.length ? 'Falta: ' + missing.join(' e ') + '.' : piece.photos.length + ' de ' + accMaxPhotos() + ' fotos.'));
             list.appendChild(box);
         });
     }
@@ -2333,7 +2341,7 @@
             var uuid = offline.uuid();
             store.putBlob(accKey(uuid), blob).then(function () {
                 // a peça pode ter saído enquanto a foto era processada
-                if (draft.acc[job.kind].indexOf(job.piece) !== -1 && job.piece.photos.length < ACC_MAX_PHOTOS) {
+                if (draft.acc[job.kind].indexOf(job.piece) !== -1 && job.piece.photos.length < accMaxPhotos()) {
                     photoUrls[uuid] = URL.createObjectURL(blob);
                     job.piece.photos.push(uuid);
                     saveDraft();
@@ -2363,7 +2371,7 @@
         var waiting = accQueue.filter(function (job) {
             return job.piece === found.piece;
         }).length + (accCurrent && accCurrent.piece === found.piece ? 1 : 0);
-        files.slice(0, Math.max(0, ACC_MAX_PHOTOS - found.piece.photos.length - waiting)).forEach(function (file) {
+        files.slice(0, Math.max(0, accMaxPhotos() - found.piece.photos.length - waiting)).forEach(function (file) {
             accQueue.push({kind: found.kind, piece: found.piece, file: file});
         });
         if (!accCurrent) {

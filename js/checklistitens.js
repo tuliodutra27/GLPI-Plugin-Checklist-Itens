@@ -198,8 +198,8 @@
         var fields = container.querySelector('[data-ci-defect-fields]');
         var counter = container.querySelector('[data-ci-defect-counter]');
         var status = container.querySelector('[data-ci-defect-status]');
-        var min = parseInt(container.getAttribute('data-ci-min'), 10) || 1;
-        var max = parseInt(container.getAttribute('data-ci-max'), 10) || 5;
+        var min = parseInt(container.getAttribute('data-ci-min'), 10);
+        var max = parseInt(container.getAttribute('data-ci-max'), 10);
         var queue = [];
         var current = null;
         var notes = [];

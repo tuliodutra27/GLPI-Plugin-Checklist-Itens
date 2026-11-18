@@ -1,6 +1,7 @@
 <?php
 
 use GlpiPlugin\Checklistitens\Config;
+use GlpiPlugin\Checklistitens\DefectPhoto;
 use GlpiPlugin\Checklistitens\Delivery;
 use GlpiPlugin\Checklistitens\DeliveryReceipt;
 use GlpiPlugin\Checklistitens\DeliveryReport;
@@ -77,7 +78,11 @@ $data = [
         'cover'   => ProblemType::getGroupedForType(ProblemType::ACCESSORY_COVER),
     ] : [],
     'state'     => $state,
-    'limits'    => ['max_items' => Config::getDeliveryMaxItems()] + ($mode === 'delivery' ? Delivery::limits() : DeliveryReceipt::limits()),
+    'limits'    => [
+        'max_items'     => Config::getDeliveryMaxItems(),
+        'defect_photos' => DefectPhoto::limits(),
+        'comment_max'   => Delivery::COMMENT_MAX,
+    ] + ($mode === 'delivery' ? Delivery::limits() : DeliveryReceipt::limits()),
 ];
 // Os sinais de HTML saem como \u00XX: o JSON vai dentro de uma tag <script>
 $json = json_encode($data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE);

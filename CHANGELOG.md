@@ -17,6 +17,8 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
   hora, em vez de ser guardada e recusada pelo servidor ao salvar.
 - Ao reabrir a tela da entrega ou do recebimento, a linha da localização mostra o mesmo texto da
   leitura original, com o motivo quando ela não foi registrada.
+- Na configuração, o máximo de fotos por entrega ou recebimento aceitava mais de 200 no campo e
+  voltava a 200 ao salvar sem aviso; agora o próprio campo avisa.
 
 ## [0.12.0] - 2026-11-10
 

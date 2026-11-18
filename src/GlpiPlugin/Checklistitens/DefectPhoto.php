@@ -27,6 +27,12 @@ class DefectPhoto extends CommonDBChild
     public const MIN_PHOTOS = 1;
     public const MAX_PHOTOS = 5;
 
+    /** Limites para as telas (bloco de fotos do defeito e peças com defeito). */
+    public static function limits(): array
+    {
+        return ['min' => self::MIN_PHOTOS, 'max' => self::MAX_PHOTOS];
+    }
+
     public static function getTypeName($nb = 0)
     {
         return _n('Foto do defeito', 'Fotos do defeito', $nb, 'checklistitens');

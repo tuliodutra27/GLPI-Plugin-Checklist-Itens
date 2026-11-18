@@ -23,8 +23,21 @@ class Config extends CommonGLPI
     /** Mínimo de dias que uma selfie fica guardada antes de poder ser limpa. */
     public const MIN_RETENTION_DAYS = 90;
 
-    /** Retenção padrão das localizações (ajustável na configuração). */
-    public const DEFAULT_LOCATION_RETENTION_DAYS = 90;
+    /**
+     * Números da configuração: [padrão, mínimo, máximo ou null]. Valem para a instalação, a
+     * leitura, a gravação e o formulário.
+     */
+    private const NUMBERS = [
+        'idle_logout'             => [60, 0, null],
+        'selfie_retention_days'   => [self::MIN_RETENTION_DAYS, self::MIN_RETENTION_DAYS, null],
+        'location_retention_days' => [90, 1, null],
+        'delivery_max_items'      => [8, 1, null],
+        'delivery_min_photos'     => [10, 0, null],
+        'receipt_min_photos'      => [10, 0, null],
+        'delivery_max_photos'     => [40, 1, 200],
+        'delivery_draft_hours'    => [12, 1, null],
+        'delivery_alert_days'     => [0, 0, null],
+    ];
 
     public static $rightname = Profile::RIGHT_CONFIG;
 
@@ -56,23 +69,27 @@ class Config extends CommonGLPI
             'inherit_subgroups'     => '1',
             'shift_starts'          => '07:00,19:00',
             'itilcategories'        => '',
-            'idle_logout'           => '60',
-            'selfie_retention_days' => (string) self::MIN_RETENTION_DAYS,
             'landing_profiles'      => '',
             // Atalhos do plugin na página inicial do GLPI (interface simplificada)
             'home_shortcuts'          => '0',
             'home_shortcuts_profiles' => '',
-            'location_retention_days' => (string) self::DEFAULT_LOCATION_RETENTION_DAYS,
             'laudo_enabled'         => '1',
             'laudo_done_statuses'   => '',
-            // Entrega de rádios para embarcação
-            'delivery_max_items'    => '8',
-            'delivery_min_photos'   => '10',
-            'receipt_min_photos'    => '10',
-            'delivery_max_photos'   => '40',
-            'delivery_draft_hours'  => '12',
-            'delivery_alert_days'   => '0',
-        ];
+        ] + array_map(static fn (array $number): string => (string) $number[0], self::NUMBERS);
+    }
+
+    /** Número da configuração dentro da faixa; o padrão quando não veio nada. */
+    private static function number(string $key, $value): int
+    {
+        [$default, $min, $max] = self::NUMBERS[$key];
+        $number = max($min, $value === null ? $default : (int) $value);
+
+        return $max === null ? $number : min($number, $max);
+    }
+
+    private static function getNumber(string $key): int
+    {
+        return self::number($key, self::getValue($key));
     }
 
     /**
@@ -207,54 +224,54 @@ class Config extends CommonGLPI
 
     public static function getIdleSeconds(): int
     {
-        return max(0, (int) self::getValue('idle_logout'));
+        return self::getNumber('idle_logout');
     }
 
     public static function getRetentionDays(): int
     {
-        return max(self::MIN_RETENTION_DAYS, (int) self::getValue('selfie_retention_days'));
+        return self::getNumber('selfie_retention_days');
     }
 
-    /** Dias que as localizações ficam guardadas antes de poderem ser limpas (padrão 90). */
+    /** Dias que as localizações ficam guardadas antes de poderem ser limpas. */
     public static function getLocationRetentionDays(): int
     {
-        return max(1, (int) self::getValue('location_retention_days'));
+        return self::getNumber('location_retention_days');
     }
 
-    /** Entrega para embarcação: quantos rádios o gestor separa de uma vez (padrão 8). */
+    /** Entrega para embarcação: quantos rádios o gestor separa de uma vez. */
     public static function getDeliveryMaxItems(): int
     {
-        return max(1, (int) self::getValue('delivery_max_items'));
+        return self::getNumber('delivery_max_items');
     }
 
-    /** Fotos exigidas para concluir a entrega (padrão 10; 0 = não exige). */
+    /** Fotos exigidas para concluir a entrega (0 = não exige), no máximo o teto de fotos. */
     public static function getDeliveryMinPhotos(): int
     {
-        return min(max(0, (int) self::getValue('delivery_min_photos')), self::getDeliveryMaxPhotos());
+        return min(self::getNumber('delivery_min_photos'), self::getDeliveryMaxPhotos());
     }
 
-    /** Fotos exigidas para concluir o recebimento de volta (padrão 10; 0 = não exige). */
+    /** Fotos exigidas para concluir o recebimento de volta (0 = não exige), no máximo o teto. */
     public static function getReceiptMinPhotos(): int
     {
-        return min(max(0, (int) self::getValue('receipt_min_photos')), self::getDeliveryMaxPhotos());
+        return min(self::getNumber('receipt_min_photos'), self::getDeliveryMaxPhotos());
     }
 
-    /** Teto de fotos por entrega ou por recebimento (padrão 40). */
+    /** Teto de fotos por entrega ou por recebimento. */
     public static function getDeliveryMaxPhotos(): int
     {
-        return min(max(1, (int) self::getValue('delivery_max_photos')), 200);
+        return self::getNumber('delivery_max_photos');
     }
 
-    /** Horas até uma separação (ou recebimento) parada ser cancelada sozinha (padrão 12). */
+    /** Horas até uma separação (ou recebimento) parada ser cancelada sozinha. */
     public static function getDeliveryDraftHours(): int
     {
-        return max(1, (int) self::getValue('delivery_draft_hours'));
+        return self::getNumber('delivery_draft_hours');
     }
 
     /** Dias até uma entrega aberta ganhar destaque no painel do gestor (0 = desligado). */
     public static function getDeliveryAlertDays(): int
     {
-        return max(0, (int) self::getValue('delivery_alert_days'));
+        return self::getNumber('delivery_alert_days');
     }
 
     /**
@@ -357,23 +374,25 @@ class Config extends CommonGLPI
             'inherit_subgroups'     => !empty($input['inherit_subgroups']) ? '1' : '0',
             'shift_starts'          => implode(',', $starts),
             'itilcategories'        => implode(',', $categories),
-            'idle_logout'           => (string) max(0, (int) ($input['idle_logout'] ?? 60)),
-            'selfie_retention_days' => (string) max(self::MIN_RETENTION_DAYS, (int) ($input['selfie_retention_days'] ?? self::MIN_RETENTION_DAYS)),
             'landing_profiles'      => implode(',', array_filter(array_map('intval', (array) ($input['landing_profiles'] ?? [])))),
             'home_shortcuts'          => !empty($input['home_shortcuts']) ? '1' : '0',
             'home_shortcuts_profiles' => implode(',', array_filter(array_map('intval', (array) ($input['home_shortcuts_profiles'] ?? [])))),
-            'location_retention_days' => (string) max(1, (int) ($input['location_retention_days'] ?? self::DEFAULT_LOCATION_RETENTION_DAYS)),
             'laudo_enabled'         => !empty($input['laudo_enabled']) ? '1' : '0',
             'laudo_done_statuses'   => implode(',', array_filter(array_map('intval', (array) ($input['laudo_done_statuses'] ?? [])))),
-            'delivery_max_items'    => (string) max(1, (int) ($input['delivery_max_items'] ?? 8)),
-            'delivery_min_photos'   => (string) max(0, (int) ($input['delivery_min_photos'] ?? 10)),
-            'receipt_min_photos'    => (string) max(0, (int) ($input['receipt_min_photos'] ?? 10)),
-            'delivery_max_photos'   => (string) min(max(1, (int) ($input['delivery_max_photos'] ?? 40)), 200),
-            'delivery_draft_hours'  => (string) max(1, (int) ($input['delivery_draft_hours'] ?? 12)),
-            'delivery_alert_days'   => (string) max(0, (int) ($input['delivery_alert_days'] ?? 0)),
-        ]);
+        ] + array_map(
+            static fn (string $key): string => (string) self::number($key, $input[$key] ?? null),
+            array_combine(array_keys(self::NUMBERS), array_keys(self::NUMBERS))
+        ));
 
         Session::addMessageAfterRedirect(__('Configuração salva.', 'checklistitens'));
+    }
+
+    /** Campo de número com a faixa aceita na gravação. */
+    private static function numberInput(string $key, int $value): void
+    {
+        [, $min, $max] = self::NUMBERS[$key];
+        echo "<input type='number' min='" . $min . "'" . ($max !== null ? " max='" . $max . "'" : '')
+            . " class='form-control' style='max-width:8rem' name='" . $key . "' value='" . $value . "'>";
     }
 
     public static function showForm(): void
@@ -453,15 +472,15 @@ class Config extends CommonGLPI
         echo "</td></tr>";
 
         echo "<tr class='tab_bg_1'><td>" . __('Logoff por inatividade nas telas do colaborador (segundos, 0 = desligado)', 'checklistitens') . "</td><td>";
-        echo "<input type='number' min='0' class='form-control' style='max-width:8rem' name='idle_logout' value='" . self::getIdleSeconds() . "'>";
+        self::numberInput('idle_logout', self::getIdleSeconds());
         echo "</td></tr>";
 
         echo "<tr class='tab_bg_1'><td>" . sprintf(__('Retenção mínima das selfies (dias, mínimo %d)', 'checklistitens'), self::MIN_RETENTION_DAYS) . "</td><td>";
-        echo "<input type='number' min='" . self::MIN_RETENTION_DAYS . "' class='form-control' style='max-width:8rem' name='selfie_retention_days' value='" . self::getRetentionDays() . "'>";
+        self::numberInput('selfie_retention_days', self::getRetentionDays());
         echo "</td></tr>";
 
         echo "<tr class='tab_bg_1'><td>" . __('Retenção das localizações das selfies (dias)', 'checklistitens') . "</td><td>";
-        echo "<input type='number' min='1' class='form-control' style='max-width:8rem' name='location_retention_days' value='" . self::getLocationRetentionDays() . "'>";
+        self::numberInput('location_retention_days', self::getLocationRetentionDays());
         echo "<div class='text-muted'>" . __('Depois desse prazo, os administradores podem limpar as localizações em "Limpeza de selfies e localizações".', 'checklistitens') . "</div>";
         echo "</td></tr>";
 
@@ -487,19 +506,19 @@ class Config extends CommonGLPI
         echo "<tr><th colspan='2'>" . __('Entrega de rádios para embarcação', 'checklistitens') . "</th></tr>";
 
         $rows = [
-            ['delivery_max_items', __('Máximo de rádios por entrega', 'checklistitens'), self::getDeliveryMaxItems(), 1, ''],
-            ['delivery_min_photos', __('Mínimo de fotos por entrega (0 = não exige)', 'checklistitens'), self::getDeliveryMinPhotos(), 0,
+            ['delivery_max_items', __('Máximo de rádios por entrega', 'checklistitens'), self::getDeliveryMaxItems(), ''],
+            ['delivery_min_photos', __('Mínimo de fotos por entrega (0 = não exige)', 'checklistitens'), self::getDeliveryMinPhotos(),
                 __('Sem esse número de fotos, o botão de concluir a entrega não libera.', 'checklistitens')],
-            ['receipt_min_photos', __('Mínimo de fotos por recebimento (0 = não exige)', 'checklistitens'), self::getReceiptMinPhotos(), 0, ''],
-            ['delivery_max_photos', __('Máximo de fotos por entrega ou recebimento', 'checklistitens'), self::getDeliveryMaxPhotos(), 1, ''],
-            ['delivery_draft_hours', __('Cancelar separação parada há mais de (horas)', 'checklistitens'), self::getDeliveryDraftHours(), 1,
+            ['receipt_min_photos', __('Mínimo de fotos por recebimento (0 = não exige)', 'checklistitens'), self::getReceiptMinPhotos(), ''],
+            ['delivery_max_photos', __('Máximo de fotos por entrega ou recebimento', 'checklistitens'), self::getDeliveryMaxPhotos(), ''],
+            ['delivery_draft_hours', __('Cancelar separação parada há mais de (horas)', 'checklistitens'), self::getDeliveryDraftHours(),
                 __('Depois desse prazo, a separação não concluída é cancelada e os rádios são liberados.', 'checklistitens')],
-            ['delivery_alert_days', __('Destacar entrega aberta há mais de (dias, 0 = desligado)', 'checklistitens'), self::getDeliveryAlertDays(), 0,
+            ['delivery_alert_days', __('Destacar entrega aberta há mais de (dias, 0 = desligado)', 'checklistitens'), self::getDeliveryAlertDays(),
                 __('Só um destaque no painel do gestor; não envia aviso.', 'checklistitens')],
         ];
-        foreach ($rows as [$name, $label, $value, $min, $hint]) {
+        foreach ($rows as [$name, $label, $value, $hint]) {
             echo "<tr class='tab_bg_1'><td>" . $label . "</td><td>";
-            echo "<input type='number' min='" . $min . "' class='form-control' style='max-width:8rem' name='" . $name . "' value='" . (int) $value . "'>";
+            self::numberInput($name, $value);
             if ($hint !== '') {
                 echo "<div class='text-muted'>" . $hint . "</div>";
             }

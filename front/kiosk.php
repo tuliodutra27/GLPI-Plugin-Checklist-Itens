@@ -1,6 +1,7 @@
 <?php
 
 use GlpiPlugin\Checklistitens\Config;
+use GlpiPlugin\Checklistitens\DefectPhoto;
 use GlpiPlugin\Checklistitens\ItemProvider;
 use GlpiPlugin\Checklistitens\LaudoProvider;
 use GlpiPlugin\Checklistitens\ProblemType;
@@ -85,5 +86,6 @@ Ui::render('kiosk.html.twig', [
     'checkin_url'   => Ui::url('front/kiosk.php?step=checkin'),
     'logout_url'    => Ui::logoutUrl(),
     'idle_seconds'  => Config::getIdleSeconds(),
+    'defect_limits' => DefectPhoto::limits(),
 ]);
 Ui::footer();

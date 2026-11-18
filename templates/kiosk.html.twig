@@ -24,9 +24,9 @@
 {% endmacro %}
 
 {# Fotos do equipamento com defeito: obrigatórias quando há problema marcado #}
-{% macro defect_photos() %}
+{% macro defect_photos(limits) %}
     <div data-ci-section="photos" hidden class="mt-3">
-        {% include '@checklistitens/parts/defect_photos.html.twig' %}
+        {% include '@checklistitens/parts/defect_photos.html.twig' with {defect_limits: limits} only %}
     </div>
 {% endmacro %}
 
@@ -186,7 +186,7 @@
 
                     {{ ci.ok_question(3) }}
                     {{ ci.problems_list(types, __('Este equipamento será bloqueado e conferido pelo gestor. Depois você escolhe outro.', 'checklistitens')) }}
-                    {{ ci.defect_photos() }}
+                    {{ ci.defect_photos(defect_limits) }}
 
                     <button type="submit" name="refuse" value="1" class="btn btn-warning btn-lg w-100 mt-3" data-ci-section="refuse" data-ci-require="defect" hidden>
                         <i class="ti ti-lock"></i> {{ __('Bloquear e escolher outro', 'checklistitens') }}
@@ -257,7 +257,7 @@
 
                     {{ ci.ok_question(2) }}
                     {{ ci.problems_list(types, __('O equipamento será devolvido e ficará bloqueado até o TI resolver.', 'checklistitens')) }}
-                    {{ ci.defect_photos() }}
+                    {{ ci.defect_photos(defect_limits) }}
 
                     {# Item com laudo em aberto: o colaborador diz se o problema é o do laudo #}
                     <div data-ci-section="known-choice" hidden class="row g-2 mt-1">
