@@ -2,6 +2,7 @@
 
 namespace GlpiPlugin\Checklistitens;
 
+use CommonDBTM;
 use Throwable;
 use Toolbox;
 
@@ -11,8 +12,10 @@ use Toolbox;
  * "capa 2"), com os problemas marcados no catálogo e as fotos (nas fotos da entrega, com a peça
  * em defect_ref).
  */
-class AccessoryDefect
+class AccessoryDefect extends CommonDBTM
 {
+    public static $rightname = Profile::RIGHT_MANAGER;
+
     public const KIND_BATTERY = 1;
     public const KIND_COVER   = 2;
 
@@ -73,7 +76,7 @@ class AccessoryDefect
         foreach ($pieces as $piece) {
             $names = array_map(static fn ($row) => Ui::text($row['name']), array_values($piece['problems']));
             try {
-                $ok = $DB->insert(Install::TABLE_ACCESSORYDEFECTS, [
+                $ok = $DB->insert(AccessoryDefect::getTable(), [
                     'plugin_checklistitens_deliveries_id'       => $deliveries_id,
                     'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
                     'kind'                                      => (int) $piece['kind'],
@@ -113,7 +116,7 @@ class AccessoryDefect
         $list   = [];
         $photos = [];
         $iterator = $DB->request([
-            'FROM'  => Install::TABLE_ACCESSORYDEFECTS,
+            'FROM'  => AccessoryDefect::getTable(),
             'WHERE' => ['plugin_checklistitens_deliveryreceipts_id' => $receipt_ids],
             'ORDER' => ['kind', 'number'],
         ]);

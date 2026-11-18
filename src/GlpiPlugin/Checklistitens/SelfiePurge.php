@@ -55,8 +55,8 @@ class SelfiePurge extends CommonDBTM
             [Usage::getTable(), 'checkin_selfie', 'date_checkin'],
             [Confirmation::getTable(), 'selfie', 'date_confirmation'],
             // Selfies do gestor na entrega para embarcação e no recebimento de volta
-            [Install::TABLE_DELIVERIES, 'selfie', 'date_delivery'],
-            [Install::TABLE_DELIVERYRECEIPTS, 'selfie', 'date_receipt'],
+            [Delivery::getTable(), 'selfie', 'date_delivery'],
+            [DeliveryReceipt::getTable(), 'selfie', 'date_receipt'],
         ];
 
         $files = [];
@@ -158,8 +158,8 @@ class SelfiePurge extends CommonDBTM
             [Usage::getTable(), 'checkout_', 'date_checkout'],
             [Usage::getTable(), 'checkin_', 'date_checkin'],
             [Confirmation::getTable(), '', 'date_confirmation'],
-            [Install::TABLE_DELIVERIES, '', 'date_delivery'],
-            [Install::TABLE_DELIVERYRECEIPTS, '', 'date_receipt'],
+            [Delivery::getTable(), '', 'date_delivery'],
+            [DeliveryReceipt::getTable(), '', 'date_receipt'],
         ];
 
         $rows = [];

@@ -181,8 +181,8 @@ class ItemProvider
 
         $open = $blocked = 0;
         if (count($ids)) {
-            $open    = countElementsInTable(Install::TABLE_USAGES, ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_open' => 1]);
-            $blocked = countElementsInTable(Install::TABLE_ITEMBLOCKS, ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_active' => 1]);
+            $open    = countElementsInTable(Usage::getTable(), ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_open' => 1]);
+            $blocked = countElementsInTable(ItemBlock::getTable(), ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_active' => 1]);
         }
 
         $state_names = [];
@@ -261,12 +261,12 @@ class ItemProvider
             "$table.states_id"  => $states,
             ['NOT' => ["$table.id" => new QuerySubQuery([
                 'SELECT' => 'items_id',
-                'FROM'   => Install::TABLE_USAGES,
+                'FROM'   => Usage::getTable(),
                 'WHERE'  => ['itemtype' => $itemtype, 'lock_open' => 1],
             ])]],
             ['NOT' => ["$table.id" => new QuerySubQuery([
                 'SELECT' => 'items_id',
-                'FROM'   => Install::TABLE_ITEMBLOCKS,
+                'FROM'   => ItemBlock::getTable(),
                 'WHERE'  => ['itemtype' => $itemtype, 'lock_active' => 1],
             ])]],
         ];

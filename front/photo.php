@@ -1,8 +1,8 @@
 <?php
 
 use GlpiPlugin\Checklistitens\DefectPhoto;
-use GlpiPlugin\Checklistitens\Install;
 use GlpiPlugin\Checklistitens\Selfie;
+use GlpiPlugin\Checklistitens\Usage;
 
 include('../../../inc/includes.php');
 
@@ -12,9 +12,9 @@ global $DB;
 
 $id = (int) ($_GET['id'] ?? 0);
 
-$photo = $DB->request(['FROM' => Install::TABLE_DEFECTPHOTOS, 'WHERE' => ['id' => $id]])->current();
+$photo = $DB->request(['FROM' => DefectPhoto::getTable(), 'WHERE' => ['id' => $id]])->current();
 $usage = $photo
-    ? $DB->request(['FROM' => Install::TABLE_USAGES, 'WHERE' => ['id' => (int) $photo['plugin_checklistitens_usages_id']]])->current()
+    ? $DB->request(['FROM' => Usage::getTable(), 'WHERE' => ['id' => (int) $photo['plugin_checklistitens_usages_id']]])->current()
     : null;
 
 if (!$photo || !$usage) {

@@ -23,20 +23,6 @@ use Toolbox;
  */
 class Install
 {
-    public const TABLE_USAGES        = 'glpi_plugin_checklistitens_usages';
-    public const TABLE_CONFIRMATIONS = 'glpi_plugin_checklistitens_confirmations';
-    public const TABLE_PROBLEMTYPES  = 'glpi_plugin_checklistitens_problemtypes';
-    public const TABLE_USAGEPROBLEMS = 'glpi_plugin_checklistitens_usageproblems';
-    public const TABLE_ITEMBLOCKS    = 'glpi_plugin_checklistitens_itemblocks';
-    public const TABLE_SELFIEPURGES  = 'glpi_plugin_checklistitens_selfiepurges';
-    public const TABLE_USAGELAUDOS   = 'glpi_plugin_checklistitens_usagelaudos';
-    public const TABLE_DEFECTPHOTOS  = 'glpi_plugin_checklistitens_defectphotos';
-    public const TABLE_VESSELS          = 'glpi_plugin_checklistitens_vessels';
-    public const TABLE_DELIVERIES       = 'glpi_plugin_checklistitens_deliveries';
-    public const TABLE_DELIVERYRECEIPTS = 'glpi_plugin_checklistitens_deliveryreceipts';
-    public const TABLE_DELIVERYPHOTOS   = 'glpi_plugin_checklistitens_deliveryphotos';
-    public const TABLE_ACCESSORYDEFECTS = 'glpi_plugin_checklistitens_accessorydefects';
-
     public static function install(Migration $migration): void
     {
         self::createTables();
@@ -101,7 +87,7 @@ class Install
 
         $columns = [
             // 0.9.0: localização na selfie
-            self::TABLE_USAGES => [
+            Usage::getTable() => [
                 'checkout_latitude'        => ['decimal(10,7) NULL DEFAULT NULL', 'date_alert_not_returned'],
                 'checkout_longitude'       => ['decimal(10,7) NULL DEFAULT NULL', 'checkout_latitude'],
                 'checkout_accuracy'        => ['int unsigned NULL DEFAULT NULL', 'checkout_longitude'],
@@ -119,10 +105,10 @@ class Install
                 'plugin_checklistitens_deliveryreceipts_id' => ['int unsigned NOT NULL DEFAULT 0', 'plugin_checklistitens_deliveries_id'],
             ],
             // 0.11.0: capas entregues e devolvidas, estado das capas e baterias que voltaram com defeito
-            self::TABLE_DELIVERIES => [
+            Delivery::getTable() => [
                 'spare_covers' => ['int unsigned NOT NULL DEFAULT 0', 'spare_batteries'],
             ],
-            self::TABLE_DELIVERYRECEIPTS => [
+            DeliveryReceipt::getTable() => [
                 // todas depois de returned_batteries, na ordem inversa: a coluna de referência já existe
                 'covers_ok'           => ['tinyint NULL DEFAULT NULL', 'returned_batteries'],
                 'returned_covers'     => ['int unsigned NOT NULL DEFAULT 0', 'returned_batteries'],
@@ -132,20 +118,20 @@ class Install
                 'damaged_covers'      => ['int unsigned NOT NULL DEFAULT 0', 'covers_ok'],
             ],
             // foto de bateria ou capa com defeito ("battery:N", "cover:N"); vazio = foto geral
-            self::TABLE_DELIVERYPHOTOS => [
+            DeliveryPhoto::getTable() => [
                 'defect_ref' => ["varchar(20) NOT NULL DEFAULT ''", 'plugin_checklistitens_deliveryreceipts_id'],
             ],
             // 0.11.0: identificador gerado no aparelho, para reenviar a mesma foto sem duplicar
-            self::TABLE_DEFECTPHOTOS => [
+            DefectPhoto::getTable() => [
                 'client_uuid' => ["varchar(36) NOT NULL DEFAULT ''", 'phase'],
             ],
-            self::TABLE_CONFIRMATIONS => [
+            Confirmation::getTable() => [
                 'latitude'        => ['decimal(10,7) NULL DEFAULT NULL', 'selfie'],
                 'longitude'       => ['decimal(10,7) NULL DEFAULT NULL', 'latitude'],
                 'accuracy'        => ['int unsigned NULL DEFAULT NULL', 'longitude'],
                 'location_status' => ['tinyint unsigned NOT NULL DEFAULT 0', 'accuracy'],
             ],
-            self::TABLE_SELFIEPURGES => [
+            SelfiePurge::getTable() => [
                 'purge_type' => ['tinyint unsigned NOT NULL DEFAULT 1', 'users_id'],
             ],
         ];
@@ -163,9 +149,9 @@ class Install
 
         // Índices das colunas novas (addKey não repete um índice que já existe)
         $keys = [
-            self::TABLE_USAGES       => ['plugin_checklistitens_deliveries_id', 'plugin_checklistitens_deliveryreceipts_id'],
-            self::TABLE_DEFECTPHOTOS => ['client_uuid'],
-            self::TABLE_DELIVERYPHOTOS => ['defect_ref'],
+            Usage::getTable()       => ['plugin_checklistitens_deliveries_id', 'plugin_checklistitens_deliveryreceipts_id'],
+            DefectPhoto::getTable() => ['client_uuid'],
+            DeliveryPhoto::getTable() => ['defect_ref'],
         ];
         foreach ($keys as $table => $fields) {
             if (!$DB->tableExists($table)) {
@@ -186,8 +172,8 @@ class Install
     {
         global $DB;
 
-        if ($DB->tableExists(self::TABLE_USAGES)) {
-            $DB->update(self::TABLE_USAGES, ['checkin_is_ok' => 0], [
+        if ($DB->tableExists(Usage::getTable())) {
+            $DB->update(Usage::getTable(), ['checkin_is_ok' => 0], [
                 'status'        => Usage::STATUS_RETURNED,
                 'checkin_is_ok' => null,
             ]);
@@ -341,19 +327,19 @@ class Install
     public static function getTables(): array
     {
         return [
-            self::TABLE_USAGES,
-            self::TABLE_CONFIRMATIONS,
-            self::TABLE_PROBLEMTYPES,
-            self::TABLE_USAGEPROBLEMS,
-            self::TABLE_ITEMBLOCKS,
-            self::TABLE_SELFIEPURGES,
-            self::TABLE_USAGELAUDOS,
-            self::TABLE_DEFECTPHOTOS,
-            self::TABLE_VESSELS,
-            self::TABLE_DELIVERIES,
-            self::TABLE_DELIVERYRECEIPTS,
-            self::TABLE_DELIVERYPHOTOS,
-            self::TABLE_ACCESSORYDEFECTS,
+            Usage::getTable(),
+            Confirmation::getTable(),
+            ProblemType::getTable(),
+            UsageProblem::getTable(),
+            ItemBlock::getTable(),
+            SelfiePurge::getTable(),
+            UsageLaudo::getTable(),
+            DefectPhoto::getTable(),
+            Vessel::getTable(),
+            Delivery::getTable(),
+            DeliveryReceipt::getTable(),
+            DeliveryPhoto::getTable(),
+            AccessoryDefect::getTable(),
         ];
     }
 
@@ -363,7 +349,7 @@ class Install
             // Um registro por ciclo retirada → devolução, ou por retirada recusada com problema.
             // lock_open vale 1 enquanto o uso está aberto e NULL depois: o índice único
             // (itemtype, items_id, lock_open) garante um único uso aberto por item.
-            self::TABLE_USAGES => "
+            Usage::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `entities_id` int unsigned NOT NULL DEFAULT 0,
                 `itemtype` varchar(100) NOT NULL DEFAULT '',
@@ -411,7 +397,7 @@ class Install
             ",
 
             // Conferência do gestor (selfie do gestor + o que foi conferido aponta para cá).
-            self::TABLE_CONFIRMATIONS => "
+            Confirmation::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `entities_id` int unsigned NOT NULL DEFAULT 0,
                 `groups_id` int unsigned NOT NULL DEFAULT 0,
@@ -432,7 +418,7 @@ class Install
             ",
 
             // Catálogo de problemas por tipo de equipamento.
-            self::TABLE_PROBLEMTYPES => "
+            ProblemType::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `name` varchar(255) DEFAULT NULL,
                 `itemtype` varchar(100) NOT NULL DEFAULT '',
@@ -454,7 +440,7 @@ class Install
             ",
 
             // Problemas marcados em cada uso (só os marcados; "Sim" não gera linhas).
-            self::TABLE_USAGEPROBLEMS => "
+            UsageProblem::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `plugin_checklistitens_usages_id` int unsigned NOT NULL DEFAULT 0,
                 `plugin_checklistitens_problemtypes_id` int unsigned NOT NULL DEFAULT 0,
@@ -467,7 +453,7 @@ class Install
 
             // Item fora de circulação por problema, até o chamado ser solucionado.
             // lock_active vale 1 enquanto ativo e NULL depois: um bloqueio ativo por item.
-            self::TABLE_ITEMBLOCKS => "
+            ItemBlock::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `entities_id` int unsigned NOT NULL DEFAULT 0,
                 `itemtype` varchar(100) NOT NULL DEFAULT '',
@@ -498,7 +484,7 @@ class Install
             ",
 
             // Registro de cada limpeza de selfies feita por um administrador.
-            self::TABLE_SELFIEPURGES => "
+            SelfiePurge::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `users_id` int unsigned NOT NULL DEFAULT 0,
                 `purge_type` tinyint unsigned NOT NULL DEFAULT 1,
@@ -515,7 +501,7 @@ class Install
             // Cópia dos laudos em aberto (plugin Laudo) exibidos na retirada/devolução. Sem chave
             // estrangeira para o Laudo, que pode ser desinstalado; o histórico não muda quando o
             // laudo é editado ou concluído.
-            self::TABLE_USAGELAUDOS => "
+            UsageLaudo::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `plugin_checklistitens_usages_id` int unsigned NOT NULL DEFAULT 0,
                 `phase` tinyint unsigned NOT NULL DEFAULT 1,
@@ -532,7 +518,7 @@ class Install
 
             // Fotos do equipamento com defeito (de 1 a 5 por problema marcado). Nunca são apagadas
             // pelo plugin; documents_id aponta o documento criado ao anexar no chamado.
-            self::TABLE_DEFECTPHOTOS => "
+            DefectPhoto::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `plugin_checklistitens_usages_id` int unsigned NOT NULL DEFAULT 0,
                 `phase` tinyint unsigned NOT NULL DEFAULT 1,
@@ -548,7 +534,7 @@ class Install
             ",
 
             // Embarcações que recebem rádios (cadastro do TI). Desativar em vez de apagar.
-            self::TABLE_VESSELS => "
+            Vessel::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `name` varchar(255) DEFAULT NULL,
                 `is_active` tinyint NOT NULL DEFAULT 1,
@@ -568,7 +554,7 @@ class Install
             // (usages.plugin_checklistitens_deliveries_id). lock_draft vale 1 enquanto a entrega
             // está em separação e NULL depois: uma separação aberta por gestor. client_uuid é o
             // identificador gerado no aparelho, para reenviar sem duplicar.
-            self::TABLE_DELIVERIES => "
+            Delivery::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `entities_id` int unsigned NOT NULL DEFAULT 0,
                 `groups_id` int unsigned NOT NULL DEFAULT 0,
@@ -605,7 +591,7 @@ class Install
 
             // Recebimento dos rádios de volta da embarcação. Uma entrega pode ter vários, porque a
             // volta pode ser parcial. lock_draft: um recebimento em andamento por gestor.
-            self::TABLE_DELIVERYRECEIPTS => "
+            DeliveryReceipt::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
                 `entities_id` int unsigned NOT NULL DEFAULT 0,
@@ -643,7 +629,7 @@ class Install
             // Fotos da entrega (deliveryreceipts_id = 0) e de cada recebimento. Enviadas uma a uma
             // pelo aparelho; o índice único evita duplicar a mesma foto num reenvio. Nunca são
             // apagadas pelo plugin depois de a entrega ou o recebimento ser concluído.
-            self::TABLE_DELIVERYPHOTOS => "
+            DeliveryPhoto::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
                 `plugin_checklistitens_deliveryreceipts_id` int unsigned NOT NULL DEFAULT 0,
@@ -661,7 +647,7 @@ class Install
             // Bateria ou capa que voltou com defeito num recebimento: uma linha por peça, com a cópia
             // dos nomes dos problemas marcados (o catálogo pode mudar depois). As fotos ficam nas fotos
             // da entrega, com defect_ref = "battery:N" ou "cover:N".
-            self::TABLE_ACCESSORYDEFECTS => "
+            AccessoryDefect::getTable() => "
                 `id` int unsigned NOT NULL AUTO_INCREMENT,
                 `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
                 `plugin_checklistitens_deliveryreceipts_id` int unsigned NOT NULL DEFAULT 0,

@@ -496,16 +496,16 @@ class DeliveryPhoto extends CommonDBTM
             return false;
         }
 
-        if (countElementsInTable(Install::TABLE_DELIVERIES, ['id' => $deliveries_id, 'users_id' => $users_id]) > 0) {
+        if (countElementsInTable(Delivery::getTable(), ['id' => $deliveries_id, 'users_id' => $users_id]) > 0) {
             return true;
         }
-        if ($receipts_id > 0 && countElementsInTable(Install::TABLE_DELIVERYRECEIPTS, ['id' => $receipts_id, 'users_id' => $users_id]) > 0) {
+        if ($receipts_id > 0 && countElementsInTable(DeliveryReceipt::getTable(), ['id' => $receipts_id, 'users_id' => $users_id]) > 0) {
             return true;
         }
 
         $groups = Sector::forCurrentUser();
 
-        return Profile::isManager() && count($groups) > 0 && countElementsInTable(Install::TABLE_USAGES, [
+        return Profile::isManager() && count($groups) > 0 && countElementsInTable(Usage::getTable(), [
             'plugin_checklistitens_deliveries_id' => $deliveries_id,
             'groups_id'                           => $groups,
         ]) > 0;

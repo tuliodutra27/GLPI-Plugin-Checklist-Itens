@@ -1583,7 +1583,7 @@ class Delivery extends CommonDBTM
         $names = [];
         $iterator = $DB->request([
             'SELECT' => ['plugin_checklistitens_usages_id', 'problem_name'],
-            'FROM'   => Install::TABLE_USAGEPROBLEMS,
+            'FROM'   => UsageProblem::getTable(),
             'WHERE'  => ['plugin_checklistitens_usages_id' => array_values($usage_ids), 'phase' => $phase],
             'ORDER'  => 'id',
         ]);

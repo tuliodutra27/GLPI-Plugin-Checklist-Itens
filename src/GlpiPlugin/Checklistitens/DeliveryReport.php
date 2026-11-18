@@ -49,14 +49,14 @@ class DeliveryReport
             $iterator = $DB->request([
                 'SELECT'   => 'plugin_checklistitens_deliveries_id',
                 'DISTINCT' => true,
-                'FROM'     => Install::TABLE_USAGES,
+                'FROM'     => Usage::getTable(),
                 'WHERE'    => ['plugin_checklistitens_deliveries_id' => ['>', 0], 'groups_id' => $groups],
             ]);
             foreach ($iterator as $row) {
                 $ids[(int) $row['plugin_checklistitens_deliveries_id']] = true;
             }
         }
-        foreach ($DB->request(['SELECT' => 'id', 'FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['users_id' => (int) Session::getLoginUserID()]]) as $row) {
+        foreach ($DB->request(['SELECT' => 'id', 'FROM' => Delivery::getTable(), 'WHERE' => ['users_id' => (int) Session::getLoginUserID()]]) as $row) {
             $ids[(int) $row['id']] = true;
         }
 
@@ -91,7 +91,7 @@ class DeliveryReport
         $iterator = $DB->request([
             'SELECT'  => ['plugin_checklistitens_deliveries_id', 'status'],
             'COUNT'   => 'total',
-            'FROM'    => Install::TABLE_USAGES,
+            'FROM'    => Usage::getTable(),
             'WHERE'   => ['plugin_checklistitens_deliveries_id' => $ids],
             'GROUPBY' => ['plugin_checklistitens_deliveries_id', 'status'],
         ]);
@@ -141,7 +141,7 @@ class DeliveryReport
             $where['groups_id'] = array_values(array_map('intval', $groups));
         }
         $ids = [];
-        foreach ($DB->request(['SELECT' => 'plugin_checklistitens_deliveries_id', 'DISTINCT' => true, 'FROM' => Install::TABLE_USAGES, 'WHERE' => $where]) as $row) {
+        foreach ($DB->request(['SELECT' => 'plugin_checklistitens_deliveries_id', 'DISTINCT' => true, 'FROM' => Usage::getTable(), 'WHERE' => $where]) as $row) {
             $ids[] = (int) $row['plugin_checklistitens_deliveries_id'];
         }
         if (!count($ids)) {
@@ -154,7 +154,7 @@ class DeliveryReport
 
         $list = [];
         $iterator = $DB->request([
-            'FROM'  => Install::TABLE_DELIVERIES,
+            'FROM'  => Delivery::getTable(),
             'WHERE' => ['id' => $ids, 'status' => Delivery::STATUS_DELIVERED],
             'ORDER' => 'date_delivery',
         ]);
@@ -205,7 +205,7 @@ class DeliveryReport
         $options = [];
         $iterator = $DB->request([
             'SELECT' => ['plugin_checklistitens_vessels_id', 'vessel_name'],
-            'FROM'   => Install::TABLE_DELIVERIES,
+            'FROM'   => Delivery::getTable(),
             'WHERE'  => $where,
             'ORDER'  => 'vessel_name',
         ]);
@@ -238,7 +238,7 @@ class DeliveryReport
         $iterator = $DB->request([
             'SELECT'   => 'groups_id',
             'DISTINCT' => true,
-            'FROM'     => Install::TABLE_DELIVERIES,
+            'FROM'     => Delivery::getTable(),
             'WHERE'    => $where,
         ]);
         foreach ($iterator as $row) {
@@ -284,7 +284,7 @@ class DeliveryReport
         }
 
         $rows = iterator_to_array($DB->request([
-            'FROM'  => Install::TABLE_DELIVERIES,
+            'FROM'  => Delivery::getTable(),
             'WHERE' => $where,
             'ORDER' => 'date_start DESC',
             'LIMIT' => 300,
@@ -321,7 +321,7 @@ class DeliveryReport
     {
         global $CFG_GLPI, $DB;
 
-        $row = $DB->request(['FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['id' => $id]])->current();
+        $row = $DB->request(['FROM' => Delivery::getTable(), 'WHERE' => ['id' => $id]])->current();
         if (!$row || !self::canViewDelivery($row)) {
             return null;
         }
@@ -329,7 +329,7 @@ class DeliveryReport
         $status   = (int) $row['status'];
         $vessel   = Ui::text($row['vessel_name']);
         $usages   = iterator_to_array($DB->request([
-            'FROM'  => Install::TABLE_USAGES,
+            'FROM'  => Usage::getTable(),
             'WHERE' => ['plugin_checklistitens_deliveries_id' => $id],
             'ORDER' => 'id',
         ]), false);
@@ -338,10 +338,10 @@ class DeliveryReport
         $problems = [];
         $blocks   = [];
         if (count($usage_ids)) {
-            foreach ($DB->request(['FROM' => Install::TABLE_USAGEPROBLEMS, 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $p) {
+            foreach ($DB->request(['FROM' => UsageProblem::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $p) {
                 $problems[(int) $p['plugin_checklistitens_usages_id']][(int) $p['phase']][] = Ui::text($p['problem_name']);
             }
-            foreach ($DB->request(['FROM' => Install::TABLE_ITEMBLOCKS, 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $b) {
+            foreach ($DB->request(['FROM' => ItemBlock::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $b) {
                 $blocks[(int) $b['plugin_checklistitens_usages_id']] = ItemBlock::present($b);
             }
         }
@@ -407,7 +407,7 @@ class DeliveryReport
 
         $receipts = [];
         $iterator = $DB->request([
-            'FROM'  => Install::TABLE_DELIVERYRECEIPTS,
+            'FROM'  => DeliveryReceipt::getTable(),
             'WHERE' => ['plugin_checklistitens_deliveries_id' => $id, 'status' => DeliveryReceipt::STATUS_DONE],
             'ORDER' => 'date_receipt',
         ]);

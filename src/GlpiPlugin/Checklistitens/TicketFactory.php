@@ -48,7 +48,7 @@ class TicketFactory
         if ($delivery_id > 0) {
             global $DB;
 
-            $delivery = $DB->request(['SELECT' => 'vessel_name', 'FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['id' => $delivery_id]])->current();
+            $delivery = $DB->request(['SELECT' => 'vessel_name', 'FROM' => Delivery::getTable(), 'WHERE' => ['id' => $delivery_id]])->current();
             $vessel   = $delivery ? Ui::text($delivery['vessel_name']) : '';
             $when     = $phase === Usage::PHASE_CHECKIN
                 ? sprintf(__('Recebimento da embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkin']), Shift::label($usage->fields['checkin_shift_start']))
@@ -144,7 +144,7 @@ class TicketFactory
     {
         global $DB;
 
-        $receipt = $DB->request(['FROM' => Install::TABLE_DELIVERYRECEIPTS, 'WHERE' => ['id' => $receipts_id]])->current();
+        $receipt = $DB->request(['FROM' => DeliveryReceipt::getTable(), 'WHERE' => ['id' => $receipts_id]])->current();
         if (!$receipt) {
             return 0;
         }
@@ -157,7 +157,7 @@ class TicketFactory
         }
 
         $deliveries_id = (int) $receipt['plugin_checklistitens_deliveries_id'];
-        $delivery      = $DB->request(['FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['id' => $deliveries_id]])->current();
+        $delivery      = $DB->request(['FROM' => Delivery::getTable(), 'WHERE' => ['id' => $deliveries_id]])->current();
         $vessel        = $delivery ? Ui::text($delivery['vessel_name']) : '';
         $batteries     = array_values(array_filter($pieces, static fn ($p) => $p['kind'] === AccessoryDefect::KIND_BATTERY));
         $covers        = array_values(array_filter($pieces, static fn ($p) => $p['kind'] === AccessoryDefect::KIND_COVER));
@@ -223,7 +223,7 @@ class TicketFactory
         }
 
         // Primeiro liga o chamado ao recebimento: se o anexo das fotos falhar, não abre outro
-        $DB->update(Install::TABLE_DELIVERYRECEIPTS, ['tickets_id' => (int) $tickets_id], ['id' => $receipts_id]);
+        $DB->update(DeliveryReceipt::getTable(), ['tickets_id' => (int) $tickets_id], ['id' => $receipts_id]);
 
         $files = [];
         foreach (DeliveryPhoto::getDefectFiles($deliveries_id, $receipts_id) as $ref => $paths) {

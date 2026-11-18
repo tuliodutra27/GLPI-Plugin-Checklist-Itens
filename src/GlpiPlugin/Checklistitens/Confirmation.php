@@ -63,7 +63,7 @@ class Confirmation extends CommonDBTM
 
         $groups = Sector::forCurrentUser();
         if (Profile::isAdmin()) {
-            foreach ([Install::TABLE_USAGES, Install::TABLE_ITEMBLOCKS] as $table) {
+            foreach ([Usage::getTable(), ItemBlock::getTable()] as $table) {
                 foreach ($DB->request(['SELECT' => 'groups_id', 'DISTINCT' => true, 'FROM' => $table]) as $row) {
                     $groups[] = (int) $row['groups_id'];
                 }

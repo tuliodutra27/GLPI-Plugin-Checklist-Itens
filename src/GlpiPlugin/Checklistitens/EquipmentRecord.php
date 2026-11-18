@@ -215,7 +215,7 @@ class EquipmentRecord extends CommonGLPI
     private static function getVesselNames(array $delivery_ids): array
     {
         $names = [];
-        foreach (self::loadById(Install::TABLE_DELIVERIES, array_filter($delivery_ids)) as $id => $row) {
+        foreach (self::loadById(Delivery::getTable(), array_filter($delivery_ids)) as $id => $row) {
             $names[$id] = Ui::text($row['vessel_name']);
         }
 
@@ -355,8 +355,8 @@ class EquipmentRecord extends CommonGLPI
         $laudos = UsageLaudo::getForUsages($ids);
 
         // Entregas para embarcação e recebimentos ligados aos usos (selfie e localização vêm deles)
-        $deliveries = self::loadById(Install::TABLE_DELIVERIES, array_filter(array_column($usages, 'plugin_checklistitens_deliveries_id')));
-        $receipts   = self::loadById(Install::TABLE_DELIVERYRECEIPTS, array_filter(array_column($usages, 'plugin_checklistitens_deliveryreceipts_id')));
+        $deliveries = self::loadById(Delivery::getTable(), array_filter(array_column($usages, 'plugin_checklistitens_deliveries_id')));
+        $receipts   = self::loadById(DeliveryReceipt::getTable(), array_filter(array_column($usages, 'plugin_checklistitens_deliveryreceipts_id')));
 
         $timeline = [];
         $stats    = ['uses' => 0, 'refusals' => 0, 'with_problem' => 0, 'known_issue' => 0, 'blocks' => 0, 'tickets' => [], 'repair_seconds' => 0, 'last_use' => ''];
