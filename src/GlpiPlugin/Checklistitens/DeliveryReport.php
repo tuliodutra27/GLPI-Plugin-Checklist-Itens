@@ -452,8 +452,8 @@ class DeliveryReport
                 'ticket_url'          => (int) $r['tickets_id'] > 0 ? Ticket::getFormURLWithID((int) $r['tickets_id']) : '',
                 'can_open_ticket'     => isset($defects[$rid]) && (int) $r['tickets_id'] === 0 && (Delivery::canDeliver() || Profile::canAdministrate()),
                 'comment'             => Ui::text($r['comment'] ?? ''),
-                'selfie'              => self::selfieInfo((string) $r['selfie'], Selfie::KIND_RECEIPT, $rid, $r['date_receipt']),
-                'location'            => Location::present($r, '', __('Recebimento', 'checklistitens') . ' — ' . $vessel),
+                'selfie'              => Selfie::info(Selfie::KIND_RECEIPT, $r),
+                'location'            => Selfie::location(Selfie::KIND_RECEIPT, $r, __('Recebimento', 'checklistitens') . ' — ' . $vessel),
                 'photos'              => DeliveryPhoto::getFor($id, $rid),
                 'items'               => count(array_filter($items, static fn ($i) => $i['receipt_id'] === $rid)),
             ];
@@ -475,8 +475,8 @@ class DeliveryReport
             'spare_batteries' => (int) $row['spare_batteries'],
             'spare_covers'    => (int) $row['spare_covers'],
             'comment'         => Ui::text($row['comment'] ?? ''),
-            'selfie'          => self::selfieInfo((string) $row['selfie'], Selfie::KIND_DELIVERY, $id, $row['date_delivery']),
-            'location'        => Location::present($row, '', __('Entrega', 'checklistitens') . ' — ' . $vessel),
+            'selfie'          => Selfie::info(Selfie::KIND_DELIVERY, $row),
+            'location'        => Selfie::location(Selfie::KIND_DELIVERY, $row, __('Entrega', 'checklistitens') . ' — ' . $vessel),
             'photos'          => DeliveryPhoto::getFor($id, 0),
             'items'           => $items,
             'receipts'        => $receipts,
@@ -552,17 +552,5 @@ class DeliveryReport
         }
         fclose($out);
         exit;
-    }
-
-    /**
-     * @return array{url: string, removed: string}
-     */
-    private static function selfieInfo(string $path, string $kind, int $id, ?string $date): array
-    {
-        if ($path !== '') {
-            return ['url' => Selfie::getUrl($kind, $id), 'removed' => ''];
-        }
-
-        return ['url' => '', 'removed' => SelfiePurge::getRemovedLabel($date)];
     }
 }

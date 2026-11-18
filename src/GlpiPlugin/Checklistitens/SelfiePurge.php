@@ -50,17 +50,10 @@ class SelfiePurge extends CommonDBTM
         global $DB;
 
         $limit = $limit_date . ' 23:59:59';
-        $sources = [
-            [Usage::getTable(), 'checkout_selfie', 'date_checkout'],
-            [Usage::getTable(), 'checkin_selfie', 'date_checkin'],
-            [Confirmation::getTable(), 'selfie', 'date_confirmation'],
-            // Selfies do gestor na entrega para embarcação e no recebimento de volta
-            [Delivery::getTable(), 'selfie', 'date_delivery'],
-            [DeliveryReceipt::getTable(), 'selfie', 'date_receipt'],
-        ];
 
         $files = [];
-        foreach ($sources as [$table, $field, $date_field]) {
+        foreach (Selfie::sources() as [$class, $field, $date_field]) {
+            $table    = $class::getTable();
             $iterator = $DB->request([
                 'SELECT' => ['id', $field],
                 'FROM'   => $table,
@@ -154,16 +147,10 @@ class SelfiePurge extends CommonDBTM
         global $DB;
 
         $limit = $limit_date . ' 23:59:59';
-        $sources = [
-            [Usage::getTable(), 'checkout_', 'date_checkout'],
-            [Usage::getTable(), 'checkin_', 'date_checkin'],
-            [Confirmation::getTable(), '', 'date_confirmation'],
-            [Delivery::getTable(), '', 'date_delivery'],
-            [DeliveryReceipt::getTable(), '', 'date_receipt'],
-        ];
 
         $rows = [];
-        foreach ($sources as [$table, $prefix, $date_field]) {
+        foreach (Selfie::sources() as [$class, , $date_field, $prefix]) {
+            $table    = $class::getTable();
             $iterator = $DB->request([
                 'SELECT' => ['id'],
                 'FROM'   => $table,

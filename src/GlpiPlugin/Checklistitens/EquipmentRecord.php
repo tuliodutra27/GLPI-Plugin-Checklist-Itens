@@ -407,17 +407,17 @@ class EquipmentRecord extends CommonGLPI
             $delivery = $deliveries[(int) $u['plugin_checklistitens_deliveries_id']] ?? null;
             $receipt  = $receipts[(int) $u['plugin_checklistitens_deliveryreceipts_id']] ?? null;
 
-            $checkout_selfie   = self::selfieInfo((string) $u['checkout_selfie'], Selfie::KIND_CHECKOUT, $id, $u['date_checkout']);
-            $checkout_location = Location::present($u, 'checkout_', __('Retirada', 'checklistitens') . ' — ' . $item['label']);
+            $checkout_selfie   = Selfie::info(Selfie::KIND_CHECKOUT, $u);
+            $checkout_location = Selfie::location(Selfie::KIND_CHECKOUT, $u, __('Retirada', 'checklistitens') . ' — ' . $item['label']);
             if ($delivery !== null) {
-                $checkout_selfie   = self::selfieInfo((string) $delivery['selfie'], Selfie::KIND_DELIVERY, (int) $delivery['id'], $delivery['date_delivery']);
-                $checkout_location = Location::present($delivery, '', __('Entrega', 'checklistitens') . ' — ' . Ui::text($delivery['vessel_name']));
+                $checkout_selfie   = Selfie::info(Selfie::KIND_DELIVERY, $delivery);
+                $checkout_location = Selfie::location(Selfie::KIND_DELIVERY, $delivery, __('Entrega', 'checklistitens') . ' — ' . Ui::text($delivery['vessel_name']));
             }
-            $checkin_selfie   = self::selfieInfo((string) $u['checkin_selfie'], Selfie::KIND_CHECKIN, $id, $u['date_checkin']);
-            $checkin_location = Location::present($u, 'checkin_', __('Devolução', 'checklistitens') . ' — ' . $item['label']);
+            $checkin_selfie   = Selfie::info(Selfie::KIND_CHECKIN, $u);
+            $checkin_location = Selfie::location(Selfie::KIND_CHECKIN, $u, __('Devolução', 'checklistitens') . ' — ' . $item['label']);
             if ($receipt !== null) {
-                $checkin_selfie   = self::selfieInfo((string) $receipt['selfie'], Selfie::KIND_RECEIPT, (int) $receipt['id'], $receipt['date_receipt']);
-                $checkin_location = Location::present($receipt, '', __('Recebimento', 'checklistitens') . ' — ' . $item['label']);
+                $checkin_selfie   = Selfie::info(Selfie::KIND_RECEIPT, $receipt);
+                $checkin_location = Selfie::location(Selfie::KIND_RECEIPT, $receipt, __('Recebimento', 'checklistitens') . ' — ' . $item['label']);
             }
 
             $timeline[] = [
@@ -601,20 +601,8 @@ class EquipmentRecord extends CommonGLPI
         return [
             'user'   => Ui::text(getUserName((int) $row['users_id'])),
             'when'   => Ui::datetime($row['date_confirmation']),
-            'selfie' => self::selfieInfo((string) $row['selfie'], Selfie::KIND_CONFIRMATION, (int) $row['id'], $row['date_confirmation']),
-            'location' => Location::present($row, '', __('Conferência do gestor', 'checklistitens')),
+            'selfie' => Selfie::info(Selfie::KIND_CONFIRMATION, $row),
+            'location' => Selfie::location(Selfie::KIND_CONFIRMATION, $row, __('Conferência do gestor', 'checklistitens')),
         ];
-    }
-
-    /**
-     * @return array{url: string, removed: string}
-     */
-    private static function selfieInfo(string $path, string $kind, int $id, ?string $date): array
-    {
-        if ($path !== '') {
-            return ['url' => Selfie::getUrl($kind, $id), 'removed' => ''];
-        }
-
-        return ['url' => '', 'removed' => SelfiePurge::getRemovedLabel($date)];
     }
 }

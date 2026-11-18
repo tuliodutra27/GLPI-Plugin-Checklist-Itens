@@ -234,6 +234,7 @@ class Confirmation extends CommonDBTM
     {
         $usage    = Usage::present($row);
         $is_checkin = $phase === Usage::PHASE_CHECKIN;
+        $kind     = $is_checkin ? Selfie::KIND_CHECKIN : Selfie::KIND_CHECKOUT;
         $shift    = $is_checkin ? $row['checkin_shift_start'] : $row['checkout_shift_start'];
         $id       = (int) $row['id'];
 
@@ -248,12 +249,8 @@ class Confirmation extends CommonDBTM
             'laudos'         => UsageLaudo::getForUsages([$id])[$id][$phase] ?? [],
             'photos'         => DefectPhoto::getForUsages([$id])[$id][$phase] ?? [],
             'problems'       => array_column(UsageProblem::getFor($id, $phase), 'name'),
-            'selfie_url'     => ($is_checkin ? $row['checkin_selfie'] : $row['checkout_selfie']) !== ''
-                ? Selfie::getUrl($is_checkin ? Selfie::KIND_CHECKIN : Selfie::KIND_CHECKOUT, (int) $row['id'])
-                : '',
-            'location'       => $is_checkin
-                ? Location::present($row, 'checkin_', __('Devolução', 'checklistitens') . ' — ' . $usage['label'])
-                : Location::present($row, 'checkout_', __('Retirada', 'checklistitens') . ' — ' . $usage['label']),
+            'selfie_url'     => Selfie::info($kind, $row)['url'],
+            'location'       => Selfie::location($kind, $row, ($is_checkin ? __('Devolução', 'checklistitens') : __('Retirada', 'checklistitens')) . ' — ' . $usage['label']),
         ];
     }
 
