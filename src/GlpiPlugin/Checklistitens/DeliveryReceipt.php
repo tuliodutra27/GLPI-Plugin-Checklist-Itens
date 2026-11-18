@@ -200,7 +200,6 @@ class DeliveryReceipt extends DeliveryProcess
         $delivery      = Delivery::getRow($deliveries_id) ?? [];
         $usages        = Delivery::getUsages($deliveries_id, Usage::STATUS_ON_VESSEL);
 
-        $defects = DefectPhoto::getForUsages(array_map(static fn ($u) => (int) $u['id'], $usages));
         // Laudos em aberto agora (uma consulta só): é o que decide o "problema conhecido"
         $laudos  = LaudoProvider::getOpenFor(ItemProvider::RADIO, array_map(static fn ($u) => (int) $u['items_id'], $usages));
 
@@ -212,8 +211,7 @@ class DeliveryReceipt extends DeliveryProcess
                 'usage_id' => $usage_id,
                 'items_id' => $items_id,
             ] + ItemProvider::labelOf(ItemProvider::RADIO, $items_id) + [
-                'laudos'        => $laudos[$items_id] ?? [],
-                'defect_photos' => count($defects[$usage_id][Usage::PHASE_CHECKIN] ?? []),
+                'laudos' => $laudos[$items_id] ?? [],
             ];
         }
 
@@ -231,8 +229,6 @@ class DeliveryReceipt extends DeliveryProcess
                 'spare_covers'        => (int) ($delivery['spare_covers'] ?? 0),
                 'covers_left'         => self::coversLeft($deliveries_id),
             ],
-            'date_start'  => (string) $row['date_start'],
-            'expires_at'  => self::expiresAt($row),
             'items'       => $items,
             'photos'      => DeliveryPhoto::forState($deliveries_id, $id),
             'limits'      => self::limits(),
@@ -301,7 +297,7 @@ class DeliveryReceipt extends DeliveryProcess
             return Reply::retry(__('Não foi possível iniciar o recebimento. Tente de novo.', 'checklistitens'));
         }
 
-        return ['ok' => true, 'message' => '', 'receipt' => self::getState($receipt->fields)];
+        return Reply::ok(['receipt' => self::getState($receipt->fields)]);
     }
 
     /**
@@ -312,7 +308,7 @@ class DeliveryReceipt extends DeliveryProcess
      * @param array<int, int[]> $problems  usages_id => problemas do catálogo marcados
      * @param array<int, mixed> $known     usages_id => 1 quando "é o problema do laudo"
      * @param array             $accessory "battery"|"cover" => número da peça => problemas do catálogo
-     * @return array{ok: bool, message: string, redirect?: string, blocked?: int, laudo_closed?: bool, receipt?: array, code?: string, retry?: bool}
+     * @return array{ok: bool, message: string, redirect?: string, code?: string, retry?: bool}
      */
     public static function finish(int $id, array $usage_ids, array $problems, array $known, array $accessory = []): array
     {
@@ -343,7 +339,7 @@ class DeliveryReceipt extends DeliveryProcess
         $row = self::getRow($id);
         // Sem o recebimento não há o que descartar: o resultado pedido já vale
         if ($row === null) {
-            return ['ok' => true, 'message' => ''];
+            return Reply::ok();
         }
 
         return Delivery::locked(
@@ -353,6 +349,15 @@ class DeliveryReceipt extends DeliveryProcess
     }
 
     // ------------------------------------------------------------------ apoio
+
+    /**
+     * Chamado das baterias e capas com defeito, quando não abriu sozinho na conclusão: quem
+     * entrega e recebe, ou o TI.
+     */
+    public static function canOpenAccessoryTicket(): bool
+    {
+        return Delivery::canDeliver() || Profile::canAdministrate();
+    }
 
     /**
      * Baterias reserva da entrega que ainda não voltaram: as entregues menos as devolvidas nos
@@ -403,16 +408,10 @@ class DeliveryReceipt extends DeliveryProcess
     private static function startOnDraft(array $draft, int $deliveries_id): array
     {
         if ((int) $draft['plugin_checklistitens_deliveries_id'] === $deliveries_id) {
-            return ['ok' => true, 'message' => '', 'receipt' => self::getState($draft)];
+            return Reply::ok(['receipt' => self::getState($draft)]);
         }
 
-        return [
-            'ok'      => false,
-            'code'    => 'draft',
-            'message' => __('Você já tem um recebimento em andamento.', 'checklistitens'),
-            'retry'   => false,
-            'receipt' => self::getState($draft),
-        ];
+        return Reply::fail(__('Você já tem um recebimento em andamento.', 'checklistitens'), ['receipt' => self::getState($draft)]);
     }
 
     /**
@@ -430,7 +429,7 @@ class DeliveryReceipt extends DeliveryProcess
         $status        = (int) $row['status'];
         if ($status === self::STATUS_DONE) {
             // Pedido reenviado: o recebimento já está concluído
-            return self::doneResult($row, $known);
+            return Reply::ok(['redirect' => self::doneUrl($deliveries_id)]);
         }
         if ($status !== self::STATUS_DRAFT) {
             return self::gone($row);
@@ -571,9 +570,6 @@ class DeliveryReceipt extends DeliveryProcess
             'selfie'              => $selfie,
         ] + Location::toFields('', Location::fromRequest());
 
-        $blocked      = 0;
-        $laudo_closed = false;
-
         $done = Db::atomically(static function () use (
             $id,
             $deliveries_id,
@@ -586,9 +582,7 @@ class DeliveryReceipt extends DeliveryProcess
             $known,
             $laudos,
             $now,
-            $shift,
-            &$blocked,
-            &$laudo_closed
+            $shift
         ): bool {
             if (!(new self())->update($fields)) {
                 return false;
@@ -618,8 +612,6 @@ class DeliveryReceipt extends DeliveryProcess
                         if (!ItemBlock::ensureFor(['users_id' => $users_id] + $row, Usage::PHASE_CHECKIN)) {
                             return false;
                         }
-                        $blocked++;
-                        $laudo_closed = $laudo_closed || $said_known;
                     }
                 }
 
@@ -671,60 +663,12 @@ class DeliveryReceipt extends DeliveryProcess
 
         // Bateria ou capa com defeito: chamado para o TI na hora, com os problemas e as fotos. Uma
         // falha aqui não desfaz o recebimento (o TI abre pelo detalhe da entrega)
-        $tickets_id = count($pieces) ? TicketFactory::openForAccessories($id) : 0;
-
-        return [
-            'ok'           => true,
-            'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
-            'redirect'     => self::doneUrl($deliveries_id),
-            'blocked'      => $blocked,
-            'laudo_closed' => $laudo_closed,
-            'ticket'       => $tickets_id,
-        ];
-    }
-
-    /**
-     * Resposta do recebimento já concluído (pedido reenviado), refeita a partir do que ficou gravado.
-     *
-     * @param array $row   linha do recebimento
-     * @param array $known usages_id => 1, como veio no pedido
-     */
-    private static function doneResult(array $row, array $known): array
-    {
-        global $DB;
-
-        $blocked      = 0;
-        $laudo_closed = false;
-
-        // Problema novo neste recebimento: rádio recebido com problema e sem o aceite do laudo
-        $new_problem = [];
-        $iterator = $DB->request([
-            'SELECT' => ['id', 'checkin_is_ok', 'checkin_known_issue'],
-            'FROM'   => Usage::getTable(),
-            'WHERE'  => ['plugin_checklistitens_deliveryreceipts_id' => (int) $row['id']],
-        ]);
-        foreach ($iterator as $usage) {
-            if ($usage['checkin_is_ok'] !== null && (int) $usage['checkin_is_ok'] === 0 && (int) $usage['checkin_known_issue'] === 0) {
-                $new_problem[] = (int) $usage['id'];
-            }
-        }
-        if (count($new_problem)) {
-            $blocked = countElementsInTable(ItemBlock::getTable(), [
-                'plugin_checklistitens_usages_id' => $new_problem,
-                'reason'                          => ItemBlock::REASON_CHECKIN,
-            ]);
-            foreach ($new_problem as $usage_id) {
-                $laudo_closed = $laudo_closed || !empty($known[$usage_id]);
-            }
+        if (count($pieces)) {
+            TicketFactory::openForAccessories($id);
         }
 
-        return [
-            'ok'           => true,
-            'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
-            'redirect'     => self::doneUrl((int) $row['plugin_checklistitens_deliveries_id']),
-            'blocked'      => $blocked,
-            'laudo_closed' => $laudo_closed,
-        ];
+        // A tela final mostra o resultado (rádios devolvidos e bloqueados) a partir do banco
+        return Reply::ok(['redirect' => self::doneUrl($deliveries_id)]);
     }
 
     /**
@@ -734,7 +678,7 @@ class DeliveryReceipt extends DeliveryProcess
     {
         $row = self::getRow($id);
         if ($row === null || (int) $row['status'] === self::STATUS_DISCARDED) {
-            return ['ok' => true, 'message' => ''];
+            return Reply::ok();
         }
         if (!$expired && (int) $row['users_id'] !== (int) Session::getLoginUserID()) {
             return Reply::fail(__('Só quem iniciou o recebimento pode descartá-lo.', 'checklistitens'));
@@ -760,7 +704,7 @@ class DeliveryReceipt extends DeliveryProcess
             DefectPhoto::deleteFor((int) $usage['id'], Usage::PHASE_CHECKIN);
         }
 
-        return ['ok' => true, 'message' => __('Recebimento descartado. Os rádios continuam com a embarcação.', 'checklistitens')];
+        return Reply::ok(['message' => __('Recebimento descartado. Os rádios continuam com a embarcação.', 'checklistitens')]);
     }
 
     private static function doneUrl(int $deliveries_id): string

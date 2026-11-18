@@ -22,7 +22,7 @@ class DeliveryReport
 
     public static function canView(): bool
     {
-        return self::isFeatureAvailable() && (Profile::isManager() || Profile::isAdmin());
+        return self::isFeatureAvailable() && Profile::canViewRecords();
     }
 
     public static function getUrl(int $id): string
@@ -348,7 +348,7 @@ class DeliveryReport
     {
         global $DB;
 
-        $row = $DB->request(['FROM' => Delivery::getTable(), 'WHERE' => ['id' => $id]])->current();
+        $row = Delivery::getRow($id);
         if (!$row || !self::canView() || !self::canViewDelivery((int) $row['id'])) {
             return null;
         }
@@ -414,7 +414,7 @@ class DeliveryReport
                 'defects'             => $defects[$rid] ?? [],
                 'tickets_id'          => (int) $r['tickets_id'],
                 'ticket_url'          => (int) $r['tickets_id'] > 0 ? Ticket::getFormURLWithID((int) $r['tickets_id']) : '',
-                'can_open_ticket'     => isset($defects[$rid]) && (int) $r['tickets_id'] === 0 && (Delivery::canDeliver() || Profile::canAdministrate()),
+                'can_open_ticket'     => isset($defects[$rid]) && (int) $r['tickets_id'] === 0 && DeliveryReceipt::canOpenAccessoryTicket(),
                 'comment'             => Ui::text($r['comment'] ?? ''),
                 'selfie'              => Selfie::info(Selfie::KIND_RECEIPT, $r),
                 'location'            => Selfie::location(Selfie::KIND_RECEIPT, $r, __('Recebimento', 'checklistitens') . ' — ' . $vessel),

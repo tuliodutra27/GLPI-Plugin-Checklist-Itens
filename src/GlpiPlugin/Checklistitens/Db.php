@@ -14,6 +14,21 @@ use Toolbox;
 class Db
 {
     /**
+     * Linha da tabela pelo id, ou null.
+     */
+    public static function row(string $table, int $id): ?array
+    {
+        global $DB;
+
+        if ($id <= 0) {
+            return null;
+        }
+        $row = $DB->request(['FROM' => $table, 'WHERE' => ['id' => $id]])->current();
+
+        return $row ? $row : null;
+    }
+
+    /**
      * add() que devolve 0 em vez de deixar o erro de banco chegar à tela.
      */
     public static function add(CommonDBTM $item, array $input): int

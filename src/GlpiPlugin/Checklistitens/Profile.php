@@ -363,6 +363,12 @@ class Profile extends GlpiProfile
         return Session::haveRight(self::RIGHT_CONFIG, READ);
     }
 
+    /** Gestor ou TI: vê os registros e as telas de gestão do plugin. */
+    public static function canViewRecords(): bool
+    {
+        return self::isManager() || self::isAdmin();
+    }
+
     /** TI: configura, libera itens bloqueados e limpa selfies. */
     public static function canAdministrate(): bool
     {

@@ -326,7 +326,6 @@ class Delivery extends DeliveryProcess
             static fn ($phases) => $phases[Usage::PHASE_CHECKOUT] ?? [],
             UsageProblem::namesFor(array_merge($draft_ids, array_map(static fn ($u) => (int) $u['id'], $refused)))
         );
-        $defects   = DefectPhoto::getForUsages($draft_ids);
         // Laudos em aberto agora (uma consulta só): é o que decide o "problema conhecido"
         $laudos    = LaudoProvider::getOpenFor(ItemProvider::RADIO, array_map(static fn ($u) => (int) $u['items_id'], $drafts));
 
@@ -338,10 +337,9 @@ class Delivery extends DeliveryProcess
                 'usage_id' => $usage_id,
                 'items_id' => $items_id,
             ] + ItemProvider::labelOf(ItemProvider::RADIO, $items_id) + [
-                'laudos'        => $laudos[$items_id] ?? [],
-                'known_issue'   => (int) $usage['checkout_known_issue'] === 1,
-                'problems'      => $problems[$usage_id] ?? [],
-                'defect_photos' => count($defects[$usage_id][Usage::PHASE_CHECKOUT] ?? []),
+                'laudos'      => $laudos[$items_id] ?? [],
+                'known_issue' => (int) $usage['checkout_known_issue'] === 1,
+                'problems'    => $problems[$usage_id] ?? [],
             ];
         }
 
@@ -365,9 +363,6 @@ class Delivery extends DeliveryProcess
                 'id'   => (int) $row['plugin_checklistitens_vessels_id'],
                 'name' => Ui::text($row['vessel_name']),
             ],
-            'date_start'       => (string) $row['date_start'],
-            'date_start_label' => Ui::datetime($row['date_start']),
-            'expires_at'       => self::expiresAt($row),
             'items'            => $items,
             'removed'          => $removed,
             'photos'           => DeliveryPhoto::forState($id, 0),
@@ -493,7 +488,7 @@ class Delivery extends DeliveryProcess
                 ], false);
             }
 
-            return ['ok' => true, 'message' => '', 'delivery' => self::stateOf($id), 'failed' => $result['failed']];
+            return Reply::ok(['delivery' => self::stateOf($id), 'failed' => $result['failed']]);
         });
     }
 
@@ -532,7 +527,7 @@ class Delivery extends DeliveryProcess
                 return Reply::fail($result['failed'][0]['message'], ['delivery' => $state, 'failed' => $result['failed']]);
             }
 
-            return ['ok' => true, 'message' => '', 'delivery' => $state, 'failed' => $result['failed']];
+            return Reply::ok(['delivery' => $state, 'failed' => $result['failed']]);
         });
     }
 
@@ -568,7 +563,7 @@ class Delivery extends DeliveryProcess
                 self::touch($id);
             }
 
-            return ['ok' => true, 'message' => '', 'delivery' => self::stateOf($id)];
+            return Reply::ok(['delivery' => self::stateOf($id)]);
         });
     }
 
@@ -606,7 +601,7 @@ class Delivery extends DeliveryProcess
             }
             self::touch($id);
 
-            return ['ok' => true, 'message' => '', 'delivery' => self::stateOf($id)];
+            return Reply::ok(['delivery' => self::stateOf($id)]);
         });
     }
 
@@ -635,20 +630,14 @@ class Delivery extends DeliveryProcess
             if ($row === null) {
                 // Pedido reenviado: o rádio já saiu da entrega por este problema
                 if (self::findUsage($id, $items_id, Usage::STATUS_REFUSED) !== null) {
-                    return [
-                        'ok'           => true,
-                        'message'      => $known ? LaudoProvider::closedMessage() : '',
-                        'delivery'     => self::stateOf($id),
-                        'blocked'      => true,
-                        'laudo_closed' => $known,
-                    ];
+                    return self::problemReply($id, true, $known);
                 }
 
                 return Reply::fail(__('Este rádio não está mais na separação.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
             }
             if ((int) $row['checkout_known_issue'] === 1) {
                 // Pedido reenviado: o problema conhecido já está registrado
-                return ['ok' => true, 'message' => '', 'delivery' => self::stateOf($id), 'blocked' => false, 'laudo_closed' => false];
+                return self::problemReply($id, false, false);
             }
 
             $usage_id = (int) $row['id'];
@@ -684,23 +673,29 @@ class Delivery extends DeliveryProcess
             }
             self::touch($id);
 
-            $laudo_closed = $known && !$accepted;
-
-            return [
-                'ok'           => true,
-                'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
-                'delivery'     => self::stateOf($id),
-                'blocked'      => !$accepted,
-                'laudo_closed' => $laudo_closed,
-            ];
+            return self::problemReply($id, !$accepted, $known && !$accepted);
         });
+    }
+
+    /**
+     * Resposta do problema registrado num rádio, igual no pedido reenviado: se ele saiu da entrega
+     * bloqueado e se foi porque o laudo dito em aberto já tinha sido concluído.
+     */
+    private static function problemReply(int $id, bool $blocked, bool $laudo_closed): array
+    {
+        return Reply::ok([
+            'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
+            'delivery'     => self::stateOf($id),
+            'blocked'      => $blocked,
+            'laudo_closed' => $laudo_closed,
+        ]);
     }
 
     /**
      * Conclui a entrega: confere tudo de novo e os rádios passam a "Com a embarcação". Lê de
      * $_POST/$_FILES: is_ok, spare_batteries, comment, a selfie e a localização.
      *
-     * @return array{ok: bool, message: string, redirect?: string, delivery?: array, blocked?: int, laudo_closed?: bool, code?: string, retry?: bool}
+     * @return array{ok: bool, message: string, redirect?: string, delivery?: array, code?: string, retry?: bool}
      */
     public static function finish(int $id): array
     {
@@ -723,7 +718,7 @@ class Delivery extends DeliveryProcess
             $row = self::getRow($id);
             // Sem a entrega não há o que cancelar: o resultado pedido já vale
             if ($row === null || (int) $row['status'] === self::STATUS_CANCELLED) {
-                return ['ok' => true, 'message' => ''];
+                return Reply::ok();
             }
             if (
                 !$expired
@@ -766,7 +761,7 @@ class Delivery extends DeliveryProcess
                 self::discardDefectDraft($row);
             }
 
-            return ['ok' => true, 'message' => __('Separação cancelada. Os rádios foram liberados.', 'checklistitens')];
+            return Reply::ok(['message' => __('Separação cancelada. Os rádios foram liberados.', 'checklistitens')]);
         });
     }
 
@@ -854,13 +849,7 @@ class Delivery extends DeliveryProcess
     private static function reserveOnDraft(array $draft, string $client_uuid, array $items_ids): array
     {
         if (strcasecmp((string) $draft['client_uuid'], $client_uuid) !== 0) {
-            return [
-                'ok'       => false,
-                'code'     => 'draft',
-                'message'  => __('Você já tem uma separação em andamento.', 'checklistitens'),
-                'retry'    => false,
-                'delivery' => self::getState($draft),
-            ];
+            return Reply::fail(__('Você já tem uma separação em andamento.', 'checklistitens'), ['delivery' => self::getState($draft)]);
         }
 
         return self::addItems((int) $draft['id'], $items_ids);
@@ -958,7 +947,7 @@ class Delivery extends DeliveryProcess
         $status   = (int) $row['status'];
         if (in_array($status, [self::STATUS_DELIVERED, self::STATUS_RETURNED], true)) {
             // Pedido reenviado: a entrega já está concluída
-            return ['ok' => true, 'message' => '', 'redirect' => $redirect];
+            return Reply::ok(['redirect' => $redirect]);
         }
         if ($status !== self::STATUS_DRAFT) {
             return self::gone($row);
@@ -972,18 +961,15 @@ class Delivery extends DeliveryProcess
         }
 
         // "É o problema do laudo" é conferido de novo: laudo concluído nesse meio-tempo bloqueia o rádio
-        $closed = self::refuseClosedLaudos($id);
-        if ($closed === null) {
+        if (!self::refuseClosedLaudos($id)) {
             return Reply::retry(__('Não foi possível concluir a entrega. Tente de novo.', 'checklistitens'));
         }
-        $closed_message = $closed > 0
-            ? __('O laudo de um rádio foi concluído: o problema bloqueia o item, e ele saiu da entrega.', 'checklistitens')
-            : '';
 
         $usages = self::getUsages($id, Usage::STATUS_DELIVERY_DRAFT);
         if (!count($usages)) {
+            // havia rádio: os que sobravam saíram agora, com o laudo concluído
             return Reply::fail(
-                $closed_message . ' ' . __('Não sobrou rádio na entrega: acrescente outro ou cancele.', 'checklistitens'),
+                __('O laudo de um rádio foi concluído: o problema bloqueia o item, e ele saiu da entrega.', 'checklistitens') . ' ' . __('Não sobrou rádio na entrega: acrescente outro ou cancele.', 'checklistitens'),
                 ['delivery' => self::stateOf($id)]
             );
         }
@@ -1072,43 +1058,37 @@ class Delivery extends DeliveryProcess
             self::discardDefectDraft($usage);
         }
 
-        $result = ['ok' => true, 'message' => $closed_message, 'redirect' => $redirect];
-        if ($closed > 0) {
-            $result += ['blocked' => $closed, 'laudo_closed' => true];
-        }
-
-        return $result;
+        // A tela final mostra o resultado (rádios com a embarcação e os que saíram bloqueados) a partir do banco
+        return Reply::ok(['redirect' => $redirect]);
     }
 
     /**
      * Rádios que seguiam na separação como "problema do laudo" e cujo laudo já não está em aberto:
      * viram problema novo (bloqueio) e saem da entrega.
      *
-     * @return int|null quantos saíram, ou null se a gravação falhou
+     * @return bool false se a gravação falhou
      */
-    private static function refuseClosedLaudos(int $id): ?int
+    private static function refuseClosedLaudos(int $id): bool
     {
         $known = array_filter(
             self::getUsages($id, Usage::STATUS_DELIVERY_DRAFT),
             static fn ($usage) => (int) $usage['checkout_known_issue'] === 1
         );
         if (!count($known)) {
-            return 0;
+            return true;
         }
 
-        $open   = LaudoProvider::getOpenFor(ItemProvider::RADIO, array_map(static fn ($usage) => (int) $usage['items_id'], $known));
-        $closed = 0;
+        $open = LaudoProvider::getOpenFor(ItemProvider::RADIO, array_map(static fn ($usage) => (int) $usage['items_id'], $known));
         foreach ($known as $usage) {
             if (count($open[(int) $usage['items_id']] ?? [])) {
                 continue;
             }
             if (!Db::atomically(static fn (): bool => self::refuseUsage($usage))) {
-                return null;
+                return false;
             }
-            $closed++;
         }
 
-        return $closed;
+        return true;
     }
 
     /**

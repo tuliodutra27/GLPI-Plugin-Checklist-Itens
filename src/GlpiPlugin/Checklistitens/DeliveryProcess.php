@@ -69,7 +69,7 @@ abstract class DeliveryProcess extends CommonDBTM
 
     public static function canView()
     {
-        return Profile::isManager() || Profile::isAdmin();
+        return Profile::canViewRecords();
     }
 
     public function canViewItem()
@@ -104,14 +104,7 @@ abstract class DeliveryProcess extends CommonDBTM
 
     public static function getRow(int $id): ?array
     {
-        global $DB;
-
-        if ($id <= 0) {
-            return null;
-        }
-        $row = $DB->request(['FROM' => static::getTable(), 'WHERE' => ['id' => $id]])->current();
-
-        return $row ? $row : null;
+        return Db::row(static::getTable(), $id);
     }
 
     /**
@@ -182,20 +175,6 @@ abstract class DeliveryProcess extends CommonDBTM
         if ($id > 0) {
             $DB->update(static::getTable(), ['date_mod' => Shift::now()], ['id' => $id]);
         }
-    }
-
-    /**
-     * Quando o que está parado é cancelado sozinho (ação automática expiredeliveries).
-     */
-    protected static function expiresAt(array $row): string
-    {
-        $last = $row['date_mod'] ?: $row['date_start'];
-        $base = $last ? strtotime($last) : false;
-        if ($base === false) {
-            $base = strtotime(Shift::now());
-        }
-
-        return date('Y-m-d H:i:s', $base + Config::getDeliveryDraftHours() * HOUR_TIMESTAMP);
     }
 
     /**

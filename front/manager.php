@@ -9,7 +9,7 @@ use GlpiPlugin\Checklistitens\Ui;
 
 include('../../../inc/includes.php');
 
-if (!Profile::isManager() && !Profile::isAdmin()) {
+if (!Profile::canViewRecords()) {
     Html::displayRightError();
 }
 

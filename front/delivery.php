@@ -33,7 +33,7 @@ if (isset($_POST['cancel_delivery'])) {
 
 // Chamado das baterias e capas com defeito que não abriu sozinho na conclusão do recebimento
 if (isset($_POST['open_receipt_ticket'])) {
-    if (!Delivery::canDeliver() && !Profile::canAdministrate()) {
+    if (!DeliveryReceipt::canOpenAccessoryTicket()) {
         Html::displayRightError();
     }
     $receipt_id = (int) $_POST['open_receipt_ticket'];

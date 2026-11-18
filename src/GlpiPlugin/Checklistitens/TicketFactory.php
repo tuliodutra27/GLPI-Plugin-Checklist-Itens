@@ -25,8 +25,6 @@ class TicketFactory
      */
     public static function openForBlock(ItemBlock $block): int
     {
-        global $DB;
-
         if ((int) $block->fields['tickets_id'] > 0) {
             return (int) $block->fields['tickets_id'];
         }
@@ -52,7 +50,7 @@ class TicketFactory
         $vessel      = '';
         $delivery_id = (int) ($usage->fields['plugin_checklistitens_deliveries_id'] ?? 0);
         if ($delivery_id > 0) {
-            $delivery = $DB->request(['SELECT' => 'vessel_name', 'FROM' => Delivery::getTable(), 'WHERE' => ['id' => $delivery_id]])->current();
+            $delivery = Delivery::getRow($delivery_id);
             $vessel   = $delivery ? Ui::text($delivery['vessel_name']) : '';
             $when     = $phase === Usage::PHASE_CHECKIN
                 ? sprintf(__('Recebimento da embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkin']), Shift::label($usage->fields['checkin_shift_start']))

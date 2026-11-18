@@ -182,28 +182,6 @@ class Vessel extends CommonDropdown
         return $row ? $row : null;
     }
 
-    /**
-     * Nome para exibição, ativa ou não (sem checar entidade).
-     *
-     * @return string texto puro, ou '' se a embarcação não existe
-     */
-    public static function getNameById(int $id): string
-    {
-        global $DB;
-
-        if ($id <= 0) {
-            return '';
-        }
-
-        $row = $DB->request([
-            'SELECT' => 'name',
-            'FROM'   => self::getTable(),
-            'WHERE'  => ['id' => $id],
-        ])->current();
-
-        return $row ? Ui::text($row['name']) : '';
-    }
-
     private static function getActiveCriteria(): array
     {
         $table = self::getTable();

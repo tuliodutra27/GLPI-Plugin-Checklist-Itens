@@ -1,5 +1,6 @@
 <?php
 
+use GlpiPlugin\Checklistitens\Db;
 use GlpiPlugin\Checklistitens\DefectPhoto;
 use GlpiPlugin\Checklistitens\Delivery;
 use GlpiPlugin\Checklistitens\DeliveryPhoto;
@@ -26,19 +27,12 @@ header('Content-Type: application/json; charset=UTF-8');
 $AJAX_INCLUDE = 1;
 include('../../../inc/includes.php');
 
-global $DB;
-
 /**
  * Envia a resposta e encerra.
  */
 $respond = static function (array $data, int $http = 200): void {
     while (ob_get_level() > 0 && @ob_end_clean()) {
         // descarta tudo o que foi escrito até aqui
-    }
-
-    // Erro de regra sempre diz se vale reenviar o mesmo pedido
-    if ($http === 200 && ($data['ok'] ?? null) === false) {
-        $data += ['message' => '', 'retry' => false];
     }
 
     http_response_code($http);
@@ -149,7 +143,6 @@ try {
                     $result = DeliveryPhoto::remove($deliveries_id, $receipts_id, Input::text('uuid'))
                         ? Reply::ok()
                         : Reply::retry(__('Não foi possível apagar a foto. Tente de novo.', 'checklistitens'));
-                    $result['count'] = DeliveryPhoto::countFor($deliveries_id, $receipts_id);
                 }
                 // a foto conta como atividade: o que expira é o processo parado
                 if ($result['ok']) {
@@ -170,7 +163,7 @@ try {
                     break;
                 }
                 $usage_id = Input::int('usage_id');
-                $usage    = $usage_id > 0 ? $DB->request(['FROM' => Usage::getTable(), 'WHERE' => ['id' => $usage_id]])->current() : null;
+                $usage    = Db::row(Usage::getTable(), $usage_id);
                 if (!$usage || !$process::holdsItem($draft, $usage)) {
                     $result = Reply::fail(__('Este rádio não está mais na lista. Atualize a tela.', 'checklistitens'));
                     break;

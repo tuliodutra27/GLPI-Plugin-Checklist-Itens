@@ -36,7 +36,7 @@ class DeliveryPhoto extends CommonDBTM
 
     public static function canView()
     {
-        return Profile::isManager() || Profile::isAdmin();
+        return Profile::canViewRecords();
     }
 
     public static function isValidUuid(string $uuid): bool
@@ -107,37 +107,34 @@ class DeliveryPhoto extends CommonDBTM
      * recebimento. Quem chama já conferiu que a separação ou o recebimento é do usuário e está em
      * andamento.
      *
-     * @return array{ok: bool, message: string, count: int, retry?: bool, photo?: array{uuid: string, url: string}}
+     * @return array{ok: bool, message: string, retry?: bool, photo?: array{uuid: string, url: string}}
      */
     public static function storeUploaded(int $deliveries_id, int $receipts_id, string $uuid, string $ref = ''): array
     {
-        $fail = static fn (string $message, bool $retry = false): array => ($retry ? Reply::retry($message) : Reply::fail($message))
-            + ['count' => self::countFor($deliveries_id, $receipts_id, $ref)];
-
         if ($deliveries_id <= 0 || $receipts_id < 0 || !self::isValidUuid($uuid) || !self::isValidRef($ref)) {
-            return $fail(__('Foto sem identificação. Tire a foto de novo.', 'checklistitens'));
+            return Reply::fail(__('Foto sem identificação. Tire a foto de novo.', 'checklistitens'));
         }
 
         // Reenvio da mesma foto (a resposta anterior se perdeu no caminho): já está gravada
         $existing = self::findByUuid($deliveries_id, $uuid);
         if ($existing !== null) {
-            return self::existingResult($existing, $receipts_id, $uuid, $fail);
+            return self::existingResult($existing, $receipts_id, $uuid);
         }
 
         // Foto de peça com defeito: até 5 por peça, como as fotos do defeito do rádio
         $max = $ref === '' ? Config::getDeliveryMaxPhotos() : DefectPhoto::MAX_PHOTOS;
         if (self::countFor($deliveries_id, $receipts_id, $ref) >= $max) {
-            return $fail(sprintf(__('O limite é de %d fotos.', 'checklistitens'), $max));
+            return Reply::fail(sprintf(__('O limite é de %d fotos.', 'checklistitens'), $max));
         }
 
         $image = UploadedImage::fromUpload($_FILES['image'] ?? null);
         if (!$image['ok']) {
-            return $fail($image['message'], $image['retry']);
+            return $image['retry'] ? Reply::retry($image['message']) : Reply::fail($image['message']);
         }
 
         $relative = self::folder()->store($deliveries_id . '_' . $receipts_id, $image['data'], $image['type']);
         if ($relative === null) {
-            return $fail(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'), true);
+            return Reply::retry(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'));
         }
 
         $id = Db::insert(self::getTable(), [
@@ -156,19 +153,14 @@ class DeliveryPhoto extends CommonDBTM
             // O índice único (entrega, identificador) recusou: a mesma foto chegou duas vezes ao mesmo tempo
             $existing = self::findByUuid($deliveries_id, $uuid);
             if ($existing !== null) {
-                return self::existingResult($existing, $receipts_id, $uuid, $fail);
+                return self::existingResult($existing, $receipts_id, $uuid);
             }
 
             Toolbox::logError(sprintf('checklistitens: não foi possível registrar a foto da entrega %d', $deliveries_id));
-            return $fail(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'), true);
+            return Reply::retry(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'));
         }
 
-        return [
-            'ok'      => true,
-            'message' => '',
-            'photo'   => ['uuid' => $uuid, 'url' => self::getUrl($id)],
-            'count'   => self::countFor($deliveries_id, $receipts_id, $ref),
-        ];
+        return Reply::ok(['photo' => ['uuid' => $uuid, 'url' => self::getUrl($id)]]);
     }
 
     /**
@@ -370,21 +362,14 @@ class DeliveryPhoto extends CommonDBTM
 
     /**
      * Resposta para a foto que já estava gravada com o mesmo identificador.
-     *
-     * @param callable(string, bool=): array $fail
      */
-    private static function existingResult(array $existing, int $receipts_id, string $uuid, callable $fail): array
+    private static function existingResult(array $existing, int $receipts_id, string $uuid): array
     {
         if ((int) $existing['plugin_checklistitens_deliveryreceipts_id'] !== $receipts_id) {
             // mesmo identificador na entrega e num recebimento dela: não é a mesma foto
-            return $fail(__('Não foi possível guardar a foto. Tire a foto de novo.', 'checklistitens'));
+            return Reply::fail(__('Não foi possível guardar a foto. Tire a foto de novo.', 'checklistitens'));
         }
 
-        return [
-            'ok'      => true,
-            'message' => '',
-            'photo'   => ['uuid' => $uuid, 'url' => self::getUrl((int) $existing['id'])],
-            'count'   => self::countFor((int) $existing['plugin_checklistitens_deliveries_id'], $receipts_id),
-        ];
+        return Reply::ok(['photo' => ['uuid' => $uuid, 'url' => self::getUrl((int) $existing['id'])]]);
     }
 }

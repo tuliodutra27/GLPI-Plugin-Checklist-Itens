@@ -90,7 +90,6 @@ Ui::render('delivery_form.html.twig', [
     'title'      => $title,
     'data_json'  => $json !== false ? $json : '{}',
     'vessels'    => $vessels,
-    'has_draft'  => $state !== null,
     'problems'   => ProblemType::getGroupedForType(ItemProvider::RADIO),
     'limits'     => $data['limits'],
     'home_url'   => Ui::url('front/home.php'),

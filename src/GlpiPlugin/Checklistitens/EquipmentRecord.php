@@ -38,7 +38,7 @@ class EquipmentRecord extends CommonGLPI
 
     public static function canView()
     {
-        return Profile::isManager() || Profile::isAdmin();
+        return Profile::canViewRecords();
     }
 
     /** @return array<string, array{label: string, color: string}> */

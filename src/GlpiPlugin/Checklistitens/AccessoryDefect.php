@@ -3,8 +3,6 @@
 namespace GlpiPlugin\Checklistitens;
 
 use CommonDBTM;
-use Throwable;
-use Toolbox;
 
 /**
  * Bateria ou capa que voltou com defeito da embarcação. As peças não são ativos do GLPI nem são
@@ -94,26 +92,19 @@ class AccessoryDefect extends CommonDBTM
      */
     public static function saveAll(int $deliveries_id, int $receipts_id, array $pieces): bool
     {
-        global $DB;
-
         foreach ($pieces as $piece) {
             $names = array_map(static fn ($row) => Ui::text($row['name']), array_values($piece['problems']));
-            try {
-                $ok = $DB->insert(AccessoryDefect::getTable(), [
-                    'plugin_checklistitens_deliveries_id'       => $deliveries_id,
-                    'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
-                    'kind'                                      => (int) $piece['kind'],
-                    'number'                                    => (int) $piece['number'],
-                    'problemtypes_ids'                          => implode(',', array_keys($piece['problems'])),
-                    // cópia dos nomes: o catálogo pode mudar depois
-                    'problems'                                  => json_encode($names, JSON_UNESCAPED_UNICODE),
-                    'date_creation'                             => Shift::now(),
-                ]);
-            } catch (Throwable $e) {
-                Toolbox::logError('checklistitens: ' . $e->getMessage());
-                $ok = false;
-            }
-            if (!$ok) {
+            $id    = Db::insert(self::getTable(), [
+                'plugin_checklistitens_deliveries_id'       => $deliveries_id,
+                'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
+                'kind'                                      => (int) $piece['kind'],
+                'number'                                    => (int) $piece['number'],
+                'problemtypes_ids'                          => implode(',', array_keys($piece['problems'])),
+                // cópia dos nomes: o catálogo pode mudar depois
+                'problems'                                  => json_encode($names, JSON_UNESCAPED_UNICODE),
+                'date_creation'                             => Shift::now(),
+            ]);
+            if ($id <= 0) {
                 return false;
             }
         }

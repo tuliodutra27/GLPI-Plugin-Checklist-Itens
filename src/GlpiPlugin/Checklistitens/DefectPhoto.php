@@ -117,19 +117,16 @@ class DefectPhoto extends CommonDBChild
      * recebimento de volta, em que o aparelho envia uma foto por vez). Reenviar a mesma foto, com o
      * mesmo identificador, não grava outra. Quem chama já conferiu que o uso é do usuário.
      *
-     * @return array{ok: bool, message: string, count: int, retry?: bool}
+     * @return array{ok: bool, message: string, retry?: bool}
      */
     public static function storeUploaded(int $usages_id, int $phase, string $uuid): array
     {
-        $fail = static fn (string $message, bool $retry = false): array => ($retry ? Reply::retry($message) : Reply::fail($message))
-            + ['count' => self::countFor($usages_id, $phase)];
-
         if (
             $usages_id <= 0
             || !in_array($phase, [Usage::PHASE_CHECKOUT, Usage::PHASE_CHECKIN], true)
             || !DeliveryPhoto::isValidUuid($uuid)
         ) {
-            return $fail(__('Foto sem identificação. Tire a foto de novo.', 'checklistitens'));
+            return Reply::fail(__('Foto sem identificação. Tire a foto de novo.', 'checklistitens'));
         }
 
         // Reenvio da mesma foto (a resposta anterior se perdeu no caminho): já está gravada
@@ -139,23 +136,23 @@ class DefectPhoto extends CommonDBChild
             'client_uuid'                     => $uuid,
         ]);
         if ($already > 0) {
-            return Reply::ok(['count' => self::countFor($usages_id, $phase)]);
+            return Reply::ok();
         }
 
         if (self::countFor($usages_id, $phase) >= self::MAX_PHOTOS) {
-            return $fail(sprintf(__('O limite é de %d fotos do defeito por equipamento.', 'checklistitens'), self::MAX_PHOTOS));
+            return Reply::fail(sprintf(__('O limite é de %d fotos do defeito por equipamento.', 'checklistitens'), self::MAX_PHOTOS));
         }
 
         $image = UploadedImage::fromUpload($_FILES['image'] ?? null);
         if (!$image['ok']) {
-            return $fail($image['message'], $image['retry']);
+            return $image['retry'] ? Reply::retry($image['message']) : Reply::fail($image['message']);
         }
 
         if (!self::storeImage($usages_id, $phase, $image['data'], $image['type'], $uuid)) {
-            return $fail(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'), true);
+            return Reply::retry(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'));
         }
 
-        return Reply::ok(['count' => self::countFor($usages_id, $phase)]);
+        return Reply::ok();
     }
 
     public static function countFor(int $usages_id, int $phase): int

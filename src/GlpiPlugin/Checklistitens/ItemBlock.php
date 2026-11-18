@@ -45,7 +45,7 @@ class ItemBlock extends CommonDBTM
 
     public static function canView()
     {
-        return Profile::isManager() || Profile::isAdmin();
+        return Profile::canViewRecords();
     }
 
     /** @return array<int, string> */

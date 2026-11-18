@@ -13,7 +13,7 @@ class Home
 {
     public static function canSee(): bool
     {
-        return Profile::canUse() || Profile::isManager() || Profile::isAdmin();
+        return Profile::canUse() || Profile::canViewRecords();
     }
 
     /**
@@ -50,7 +50,7 @@ class Home
             ];
         }
 
-        if (Profile::isManager() || Profile::isAdmin()) {
+        if (Profile::canViewRecords()) {
             $pages['manager'] = [
                 'title'       => __('Conferência do setor', 'checklistitens'),
                 'description' => __('Conferir os checklists do turno, abrir chamados e liberar a devolução.', 'checklistitens'),
