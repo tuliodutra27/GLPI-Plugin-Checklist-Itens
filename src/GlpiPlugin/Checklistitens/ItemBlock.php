@@ -19,8 +19,9 @@ class ItemBlock extends CommonDBTM
     public const STATUS_REPAIR   = 2; // em reparo (chamado aberto)
     public const STATUS_RELEASED = 3;
 
-    public const REASON_CHECKOUT = 1;
-    public const REASON_CHECKIN  = 2;
+    // O motivo do bloqueio é a fase do uso em que o problema apareceu
+    public const REASON_CHECKOUT = Usage::PHASE_CHECKOUT;
+    public const REASON_CHECKIN  = Usage::PHASE_CHECKIN;
 
     public const RELEASE_TICKET = 1;
     public const RELEASE_MANUAL = 2;
@@ -176,12 +177,10 @@ class ItemBlock extends CommonDBTM
      */
     public static function present(array $row): array
     {
-        global $CFG_GLPI;
-
         $itemtype = (string) $row['itemtype'];
         $item_row = ItemProvider::getRow($itemtype, (int) $row['items_id']);
         $item     = $item_row !== null ? ItemProvider::present($itemtype, $item_row) : ['label' => '#' . $row['items_id'], 'detail' => ''];
-        $phase    = (int) $row['reason'] === self::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
+        $phase    = self::phaseOf($row);
         $ticket   = (int) $row['tickets_id'];
         $status   = (int) $row['status'];
 
@@ -216,11 +215,17 @@ class ItemBlock extends CommonDBTM
             'active'         => (int) $row['lock_active'] === 1,
             'problems'       => array_column(UsageProblem::getFor((int) $row['plugin_checklistitens_usages_id'], $phase), 'name'),
             'ticket_id'      => $ticket,
-            'ticket_url'     => $ticket > 0 ? $CFG_GLPI['root_doc'] . '/front/ticket.form.php?id=' . $ticket : '',
+            'ticket_url'     => $ticket > 0 ? Ticket::getFormURLWithID($ticket) : '',
             'ticket_status'  => $ticket_status,
             'conferred'      => (int) $row['plugin_checklistitens_confirmations_id'] > 0,
             'release_label'  => $release,
         ];
+    }
+
+    /** Fase do uso (retirada ou devolução) em que o problema do bloqueio apareceu. */
+    public static function phaseOf(array $row): int
+    {
+        return (int) $row['reason'] === self::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
     }
 
     public static function getActiveFor(string $itemtype, int $items_id): ?array

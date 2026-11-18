@@ -32,6 +32,12 @@ class ItemProvider
         return false;
     }
 
+    /** O ativo pode ser vinculado ao chamado (o rádio do plugin Radios não é um tipo de item de chamado). */
+    public static function linksToTicket(string $itemtype): bool
+    {
+        return $itemtype === self::PHONE;
+    }
+
     public static function getTypeLabel(string $itemtype): string
     {
         switch ($itemtype) {

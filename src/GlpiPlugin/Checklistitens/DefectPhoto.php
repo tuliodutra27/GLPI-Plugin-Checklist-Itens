@@ -3,10 +3,6 @@
 namespace GlpiPlugin\Checklistitens;
 
 use CommonDBChild;
-use Document;
-use Document_Item;
-use Glpi\Toolbox\Sanitizer;
-use Throwable;
 use Toolbox;
 
 /**
@@ -18,8 +14,8 @@ use Toolbox;
  * Como a selfie, chegam já reduzidas pelo navegador (campo defect_photos[], JPEG em base64) ou,
  * se o navegador não conseguir processar, como arquivo original (campo defect_photo_files[]).
  *
- * Ao abrir o chamado do item bloqueado, uma cópia de cada foto vira Documento do GLPI anexado
- * ao chamado; o arquivo do plugin continua no lugar.
+ * Ao abrir o chamado do item bloqueado (TicketFactory), uma cópia de cada foto vira Documento do
+ * GLPI anexado ao chamado; o arquivo do plugin continua no lugar.
  */
 class DefectPhoto extends CommonDBChild
 {
@@ -252,120 +248,38 @@ class DefectPhoto extends CommonDBChild
     }
 
     /**
-     * Anexa ao chamado as fotos do uso/fase que ainda não foram anexadas. Segue o mesmo caminho
-     * do GLPI para anexos (CommonDBTM::addFiles): cópia em GLPI_TMP_DIR, Document com _filename
-     * e _prefix_filename, e depois o vínculo Document_Item com o chamado.
+     * Fotos de um uso/fase para o chamado, na ordem em que chegaram: número, arquivo (null se
+     * sumiu) e o documento do GLPI, quando já foi anexada.
      *
-     * @return int quantas fotos ficaram anexadas
+     * @return array<int, array{id: int, number: int, path: ?string, documents_id: int}>
      */
-    public static function attachToTicket(int $usages_id, int $phase, int $tickets_id, int $entities_id): int
+    public static function forTicket(int $usages_id, int $phase): array
     {
-        global $CFG_GLPI, $DB;
+        global $DB;
 
-        if ($usages_id <= 0 || $tickets_id <= 0) {
-            return 0;
-        }
-        if (!is_dir(GLPI_TMP_DIR)) {
-            Toolbox::logError('checklistitens: diretório temporário do GLPI não existe; fotos não anexadas ao chamado ' . $tickets_id);
-            return 0;
-        }
-
-        $rows = iterator_to_array($DB->request([
+        $list = [];
+        $iterator = $DB->request([
             'FROM'  => self::getTable(),
             'WHERE' => ['plugin_checklistitens_usages_id' => $usages_id, 'phase' => $phase],
             'ORDER' => 'id',
-        ]), false);
-
-        // O GLPI avisa "cópia do documento bem sucedida" a cada arquivo; quem está registrando o
-        // uso não precisa ver isso (erros vão para o log)
-        $had_messages = isset($_SESSION['MESSAGE_AFTER_REDIRECT']);
-        $messages     = $_SESSION['MESSAGE_AFTER_REDIRECT'] ?? [];
-
-        $attached = 0;
-        $linked   = [];
-        foreach ($rows as $index => $row) {
-            if ((int) $row['documents_id'] > 0) {
-                continue;
-            }
-            $number   = $index + 1;
-            $tmp_path = null;
-
-            try {
-                $source = self::folder()->fullPath((string) $row['filepath']);
-                if ($source === null) {
-                    Toolbox::logError(sprintf('checklistitens: arquivo da foto de defeito %d não encontrado', $row['id']));
-                    continue;
-                }
-
-                // Nome exibido no chamado = nome do arquivo sem o prefixo (Document::moveDocument)
-                $display  = sprintf('foto-defeito-%d-%d.%s', $usages_id, $number, pathinfo($source, PATHINFO_EXTENSION));
-                $prefix   = bin2hex(random_bytes(8)) . '_';
-                $tmp_path = GLPI_TMP_DIR . '/' . $prefix . $display;
-                if (!copy($source, $tmp_path)) {
-                    Toolbox::logError('checklistitens: não foi possível copiar a foto de defeito para ' . $tmp_path);
-                    continue;
-                }
-
-                $doc = new Document();
-                if ($doc->getDuplicateOf($entities_id, $tmp_path) && is_file(GLPI_DOC_DIR . '/' . $doc->fields['filepath'])) {
-                    // mesmo arquivo já existe como documento na entidade: reaproveita, como o GLPI faz
-                    $documents_id = (int) $doc->fields['id'];
-                } else {
-                    $documents_id = (int) $doc->add([
-                        'name'                    => Sanitizer::sanitize(sprintf(__('Foto do defeito %d - Checklist', 'checklistitens'), $number)),
-                        'entities_id'             => $entities_id,
-                        'is_recursive'            => 0,
-                        'tickets_id'              => $tickets_id,
-                        'documentcategories_id'   => (int) ($CFG_GLPI['documentcategories_id_forticket'] ?? 0),
-                        '_only_if_upload_succeed' => 1,
-                        '_filename'               => [$prefix . $display],
-                        '_prefix_filename'        => [$prefix],
-                    ]);
-                }
-                if ($documents_id <= 0) {
-                    Toolbox::logError(sprintf('checklistitens: não foi possível criar o documento da foto de defeito %d (tipo de arquivo permitido?)', $row['id']));
-                    continue;
-                }
-
-                $exists = isset($linked[$documents_id]) || countElementsInTable(Document_Item::getTable(), [
-                    'documents_id' => $documents_id,
-                    'itemtype'     => 'Ticket',
-                    'items_id'     => $tickets_id,
-                ]) > 0;
-                if (!$exists) {
-                    $link_id = (new Document_Item())->add([
-                        'documents_id'  => $documents_id,
-                        'itemtype'      => 'Ticket',
-                        'items_id'      => $tickets_id,
-                        'date'          => Shift::now(),
-                        // sem e-mail de "chamado atualizado" a cada foto
-                        '_do_notif'     => false,
-                        '_disablenotif' => true,
-                    ]);
-                    if (!$link_id) {
-                        Toolbox::logError(sprintf('checklistitens: não foi possível vincular o documento %d ao chamado %d', $documents_id, $tickets_id));
-                        continue;
-                    }
-                }
-                $linked[$documents_id] = true;
-
-                $DB->update(self::getTable(), ['documents_id' => $documents_id], ['id' => (int) $row['id']]);
-                $attached++;
-            } catch (Throwable $e) {
-                Toolbox::logError(sprintf('checklistitens: erro ao anexar a foto de defeito %d ao chamado %d: %s', $row['id'], $tickets_id, $e->getMessage()));
-            } finally {
-                if ($tmp_path !== null && is_file($tmp_path)) {
-                    @unlink($tmp_path);
-                }
-            }
+        ]);
+        foreach ($iterator as $row) {
+            $list[] = [
+                'id'           => (int) $row['id'],
+                'number'       => count($list) + 1,
+                'path'         => self::folder()->fullPath((string) $row['filepath']),
+                'documents_id' => (int) $row['documents_id'],
+            ];
         }
 
-        if ($had_messages) {
-            $_SESSION['MESSAGE_AFTER_REDIRECT'] = $messages;
-        } else {
-            unset($_SESSION['MESSAGE_AFTER_REDIRECT']);
-        }
+        return $list;
+    }
 
-        return $attached;
+    /** A foto virou o documento do GLPI anexado ao chamado. */
+    public static function setDocument(int $id, int $documents_id): void
+    {
+        global $DB;
+
+        $DB->update(self::getTable(), ['documents_id' => $documents_id], ['id' => $id]);
     }
 }

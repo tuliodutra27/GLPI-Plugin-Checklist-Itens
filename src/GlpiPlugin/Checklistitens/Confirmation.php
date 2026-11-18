@@ -261,7 +261,7 @@ class Confirmation extends CommonDBTM
     {
         $block    = ItemBlock::present($row);
         $usage_id = (int) $row['plugin_checklistitens_usages_id'];
-        $phase    = (int) $row['reason'] === ItemBlock::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
+        $phase    = ItemBlock::phaseOf($row);
 
         return $block + [
             'photos'          => DefectPhoto::getForUsages([$usage_id])[$usage_id][$phase] ?? [],

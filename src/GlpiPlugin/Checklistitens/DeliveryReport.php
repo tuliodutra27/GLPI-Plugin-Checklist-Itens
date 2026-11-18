@@ -340,7 +340,7 @@ class DeliveryReport
      */
     public static function getDetail(int $id): ?array
     {
-        global $CFG_GLPI, $DB;
+        global $DB;
 
         $row = $DB->request(['FROM' => Delivery::getTable(), 'WHERE' => ['id' => $id]])->current();
         if (!$row || !self::canView() || !self::canViewDelivery((int) $row['id'])) {
@@ -449,7 +449,7 @@ class DeliveryReport
                 // baterias e capas com defeito, e o chamado aberto para elas
                 'defects'             => $defects[$rid] ?? [],
                 'tickets_id'          => (int) $r['tickets_id'],
-                'ticket_url'          => (int) $r['tickets_id'] > 0 ? $CFG_GLPI['root_doc'] . '/front/ticket.form.php?id=' . (int) $r['tickets_id'] : '',
+                'ticket_url'          => (int) $r['tickets_id'] > 0 ? Ticket::getFormURLWithID((int) $r['tickets_id']) : '',
                 'can_open_ticket'     => isset($defects[$rid]) && (int) $r['tickets_id'] === 0 && (Delivery::canDeliver() || Profile::canAdministrate()),
                 'comment'             => Ui::text($r['comment'] ?? ''),
                 'selfie'              => self::selfieInfo((string) $r['selfie'], Selfie::KIND_RECEIPT, $rid, $r['date_receipt']),
