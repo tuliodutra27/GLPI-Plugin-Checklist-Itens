@@ -27,4 +27,4 @@ if (!Selfie::canView((int) $usage['users_id'], (int) $usage['groups_id'])) {
     Html::displayRightError();
 }
 
-DefectPhoto::send((string) $photo['filepath']);
+DefectPhoto::folder()->send((string) $photo['filepath']);

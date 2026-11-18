@@ -24,4 +24,4 @@ if (!DeliveryPhoto::canViewPhoto($photo)) {
     Html::displayRightError();
 }
 
-DeliveryPhoto::send((string) $photo['filepath']);
+DeliveryPhoto::folder()->send((string) $photo['filepath']);

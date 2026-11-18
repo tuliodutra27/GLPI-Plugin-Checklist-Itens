@@ -85,7 +85,7 @@ class SelfiePurge extends CommonDBTM
         $bytes = 0;
         $files = self::getEligible($limit_date);
         foreach ($files as $file) {
-            $path = Selfie::getFullPath($file['path']);
+            $path = Selfie::folder()->fullPath($file['path']);
             if ($path !== null) {
                 $bytes += (int) filesize($path);
             }
@@ -114,7 +114,7 @@ class SelfiePurge extends CommonDBTM
         $count = 0;
         $bytes = 0;
         foreach (self::getEligible($limit_date) as $file) {
-            $bytes += Selfie::deleteFile($file['path']);
+            $bytes += Selfie::folder()->delete($file['path']);
             $DB->update($file['table'], [$file['field'] => ''], ['id' => $file['id']]);
             $count++;
         }

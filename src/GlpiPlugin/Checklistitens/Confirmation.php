@@ -161,7 +161,7 @@ class Confirmation extends CommonDBTM
             'selfie'            => $selfie,
         ] + Location::toFields('', Location::fromRequest()));
         if (!$id) {
-            Selfie::deleteFile($selfie);
+            Selfie::folder()->delete($selfie);
             return ['ok' => false, 'message' => __('Não foi possível registrar a conferência. Tente de novo.', 'checklistitens')];
         }
 

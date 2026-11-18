@@ -1133,7 +1133,7 @@ class Delivery extends DeliveryProcess
             return true;
         });
         if (!$done) {
-            Selfie::deleteFile($selfie);
+            Selfie::folder()->delete($selfie);
 
             return Reply::retry(__('Não foi possível concluir a entrega. Tente de novo.', 'checklistitens'));
         }

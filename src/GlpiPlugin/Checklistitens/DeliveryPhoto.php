@@ -3,7 +3,6 @@
 namespace GlpiPlugin\Checklistitens;
 
 use CommonDBTM;
-use Throwable;
 use Toolbox;
 
 /**
@@ -22,8 +21,6 @@ class DeliveryPhoto extends CommonDBTM
 
     public static $rightname = Profile::RIGHT_MANAGER;
 
-    public const MAX_BYTES = 5 * 1024 * 1024;
-
     /** Identificador gerado no aparelho (UUID ou parte dele): só hexadecimal e hífen. */
     public const UUID_PATTERN = '/^[0-9a-fA-F-]{8,36}$/';
 
@@ -32,22 +29,14 @@ class DeliveryPhoto extends CommonDBTM
         return _n('Foto da entrega', 'Fotos da entrega', $nb, 'checklistitens');
     }
 
+    public static function folder(): ImageFolder
+    {
+        return new ImageFolder('deliveries');
+    }
+
     public static function canView()
     {
         return Profile::isManager() || Profile::isAdmin();
-    }
-
-    public static function getBaseDir(): string
-    {
-        return GLPI_PLUGIN_DOC_DIR . '/checklistitens/deliveries';
-    }
-
-    public static function createBaseDir(): void
-    {
-        $dir = self::getBaseDir();
-        if (!is_dir($dir) && !@mkdir($dir, 0770, true)) {
-            Toolbox::logError('checklistitens: não foi possível criar o diretório de fotos de entrega ' . $dir);
-        }
     }
 
     public static function isValidUuid(string $uuid): bool
@@ -114,57 +103,6 @@ class DeliveryPhoto extends CommonDBTM
     }
 
     /**
-     * Imagem enviada num campo de arquivo, já validada (JPEG ou PNG, até MAX_BYTES). Também serve
-     * às fotos do defeito enviadas uma a uma.
-     *
-     * "retry" diz ao aparelho se vale reenviar a mesma foto: sim quando ela não chegou inteira ou o
-     * servidor não conseguiu ler; não quando a própria foto é o problema.
-     *
-     * @return array{ok: bool, message: string, retry: bool, data?: string, type?: int}
-     */
-    public static function readUploadedImage(string $field = 'image'): array
-    {
-        $fail = static fn (string $message, bool $retry = false): array => ['ok' => false, 'message' => $message, 'retry' => $retry];
-
-        $file = $_FILES[$field] ?? null;
-        if (!is_array($file) || !isset($file['tmp_name']) || !is_string($file['tmp_name'])) {
-            return $fail(__('Nenhuma foto foi recebida.', 'checklistitens'));
-        }
-
-        $error    = (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE);
-        $too_big  = sprintf(__('A foto é grande demais (máximo %d MB).', 'checklistitens'), (int) (self::MAX_BYTES / 1048576));
-        if (in_array($error, [UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE], true) || (int) ($file['size'] ?? 0) > self::MAX_BYTES) {
-            return $fail($too_big);
-        }
-        if ($error === UPLOAD_ERR_NO_FILE) {
-            return $fail(__('Nenhuma foto foi recebida.', 'checklistitens'));
-        }
-        if ($error !== UPLOAD_ERR_OK || !is_uploaded_file($file['tmp_name'])) {
-            // envio cortado no meio ou falha do servidor ao receber: a foto em si pode estar boa
-            if ($error !== UPLOAD_ERR_PARTIAL) {
-                Toolbox::logError('checklistitens: falha ao receber foto (código de upload ' . $error . ')');
-            }
-            return $fail(__('A foto não chegou inteira. Tente de novo.', 'checklistitens'), true);
-        }
-
-        $data = file_get_contents($file['tmp_name']);
-        if (!is_string($data)) {
-            Toolbox::logError('checklistitens: não foi possível ler a foto recebida');
-            return $fail(__('A foto não chegou inteira. Tente de novo.', 'checklistitens'), true);
-        }
-        if (strlen($data) > self::MAX_BYTES) {
-            return $fail($too_big);
-        }
-
-        $info = $data !== '' ? @getimagesizefromstring($data) : false;
-        if ($info === false || !in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG], true)) {
-            return $fail(__('O arquivo enviado não é uma foto válida (JPEG ou PNG).', 'checklistitens'));
-        }
-
-        return ['ok' => true, 'message' => '', 'retry' => false, 'data' => $data, 'type' => $info[2]];
-    }
-
-    /**
      * Grava a foto enviada em $_FILES['image'] para a entrega (recebimento 0) ou para um
      * recebimento. Quem chama já conferiu que a separação ou o recebimento é do usuário e está em
      * andamento.
@@ -173,14 +111,8 @@ class DeliveryPhoto extends CommonDBTM
      */
     public static function storeUploaded(int $deliveries_id, int $receipts_id, string $uuid, string $ref = ''): array
     {
-        global $DB;
-
-        $fail = static fn (string $message, bool $retry = false): array => [
-            'ok'      => false,
-            'message' => $message,
-            'retry'   => $retry,
-            'count'   => self::countFor($deliveries_id, $receipts_id, $ref),
-        ];
+        $fail = static fn (string $message, bool $retry = false): array => ($retry ? Reply::retry($message) : Reply::fail($message))
+            + ['count' => self::countFor($deliveries_id, $receipts_id, $ref)];
 
         if ($deliveries_id <= 0 || $receipts_id < 0 || !self::isValidUuid($uuid) || !self::isValidRef($ref)) {
             return $fail(__('Foto sem identificação. Tire a foto de novo.', 'checklistitens'));
@@ -198,50 +130,28 @@ class DeliveryPhoto extends CommonDBTM
             return $fail(sprintf(__('O limite é de %d fotos.', 'checklistitens'), $max));
         }
 
-        $image = self::readUploadedImage();
+        $image = UploadedImage::fromUpload($_FILES['image'] ?? null);
         if (!$image['ok']) {
             return $fail($image['message'], $image['retry']);
         }
 
-        $relative = sprintf(
-            '%s/%s/%d_%d_%s.%s',
-            date('Y'),
-            date('m'),
-            $deliveries_id,
-            $receipts_id,
-            bin2hex(random_bytes(8)),
-            $image['type'] === IMAGETYPE_PNG ? 'png' : 'jpg'
-        );
-        $path = self::getBaseDir() . '/' . $relative;
-
-        if (!is_dir(dirname($path)) && !@mkdir(dirname($path), 0770, true) && !is_dir(dirname($path))) {
-            Toolbox::logError('checklistitens: não foi possível criar ' . dirname($path));
-            return $fail(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'), true);
-        }
-        if (file_put_contents($path, $image['data']) === false) {
-            Toolbox::logError('checklistitens: não foi possível gravar a foto de entrega ' . $path);
+        $relative = self::folder()->store($deliveries_id . '_' . $receipts_id, $image['data'], $image['type']);
+        if ($relative === null) {
             return $fail(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'), true);
         }
 
-        try {
-            $ok = $DB->insert(self::getTable(), [
-                'plugin_checklistitens_deliveries_id'       => $deliveries_id,
-                'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
-                'client_uuid'                               => $uuid,
-                'defect_ref'                                => $ref,
-                'filepath'                                  => $relative,
-                'size_bytes'                                => strlen($image['data']),
-                'date_creation'                             => Shift::now(),
-            ]);
-        } catch (Throwable $e) {
-            Toolbox::logError('checklistitens: ' . $e->getMessage());
-            $ok = false;
-        }
-        $id = $ok ? (int) $DB->insertId() : 0;
-
+        $id = Db::insert(self::getTable(), [
+            'plugin_checklistitens_deliveries_id'       => $deliveries_id,
+            'plugin_checklistitens_deliveryreceipts_id' => $receipts_id,
+            'client_uuid'                               => $uuid,
+            'defect_ref'                                => $ref,
+            'filepath'                                  => $relative,
+            'size_bytes'                                => strlen($image['data']),
+            'date_creation'                             => Shift::now(),
+        ]);
         if ($id <= 0) {
             // arquivo sem registro: ninguém chegaria até ele
-            @unlink($path);
+            self::folder()->delete($relative);
 
             // O índice único (entrega, identificador) recusou: a mesma foto chegou duas vezes ao mesmo tempo
             $existing = self::findByUuid($deliveries_id, $uuid);
@@ -284,7 +194,7 @@ class DeliveryPhoto extends CommonDBTM
         if (!$DB->delete(self::getTable(), ['id' => (int) $row['id']])) {
             return false;
         }
-        self::deleteFile((string) $row['filepath']);
+        self::folder()->delete((string) $row['filepath']);
 
         return true;
     }
@@ -369,7 +279,7 @@ class DeliveryPhoto extends CommonDBTM
         $deleted = 0;
         foreach ($rows as $row) {
             if ($DB->delete(self::getTable(), ['id' => (int) $row['id']])) {
-                self::deleteFile((string) $row['filepath']);
+                self::folder()->delete((string) $row['filepath']);
                 $deleted++;
             }
         }
@@ -398,7 +308,7 @@ class DeliveryPhoto extends CommonDBTM
             'ORDER'  => 'id',
         ]);
         foreach ($iterator as $row) {
-            $path = self::getFullPath((string) $row['filepath']);
+            $path = self::folder()->fullPath((string) $row['filepath']);
             if ($path !== null) {
                 $files[(string) $row['defect_ref']][] = $path;
             }
@@ -416,7 +326,7 @@ class DeliveryPhoto extends CommonDBTM
         if (!$row || !$DB->delete(self::getTable(), ['id' => $id])) {
             return false;
         }
-        self::deleteFile((string) $row['filepath']);
+        self::folder()->delete((string) $row['filepath']);
 
         return true;
     }
@@ -424,37 +334,6 @@ class DeliveryPhoto extends CommonDBTM
     public static function getUrl(int $id): string
     {
         return Ui::url(sprintf('front/deliveryphoto.php?id=%d', $id));
-    }
-
-    public static function isValidPath(string $relative): bool
-    {
-        return preg_match('#^\d{4}/\d{2}/\d+_\d+_[0-9a-f]{16}\.(jpg|png)$#', $relative) === 1;
-    }
-
-    public static function getFullPath(string $relative): ?string
-    {
-        if (!self::isValidPath($relative)) {
-            return null;
-        }
-        $path = self::getBaseDir() . '/' . $relative;
-
-        return is_file($path) ? $path : null;
-    }
-
-    public static function send(string $relative): void
-    {
-        $path = self::getFullPath($relative);
-        if ($path === null) {
-            http_response_code(404);
-            exit;
-        }
-
-        header('Content-Type: ' . (str_ends_with($path, '.png') ? 'image/png' : 'image/jpeg'));
-        header('Content-Length: ' . filesize($path));
-        header('Cache-Control: private, max-age=3600');
-        header('X-Content-Type-Options: nosniff');
-        readfile($path);
-        exit;
     }
 
     /**
@@ -507,13 +386,5 @@ class DeliveryPhoto extends CommonDBTM
             'photo'   => ['uuid' => $uuid, 'url' => self::getUrl((int) $existing['id'])],
             'count'   => self::countFor((int) $existing['plugin_checklistitens_deliveries_id'], $receipts_id),
         ];
-    }
-
-    private static function deleteFile(string $relative): void
-    {
-        $path = self::getFullPath($relative);
-        if ($path !== null && !@unlink($path)) {
-            Toolbox::logError('checklistitens: não foi possível apagar a foto de entrega ' . $path);
-        }
     }
 }

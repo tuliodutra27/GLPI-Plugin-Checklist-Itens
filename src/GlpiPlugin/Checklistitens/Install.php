@@ -39,9 +39,9 @@ class Install
         Profile::installRights($created);
 
         ProblemType::installDefaults();
-        Selfie::createBaseDir();
-        DefectPhoto::createBaseDir();
-        DeliveryPhoto::createBaseDir();
+        Selfie::folder()->create();
+        DefectPhoto::folder()->create();
+        DeliveryPhoto::folder()->create();
         self::registerCronTasks();
         self::installDisplayPreferences();
         self::installNotifications();
@@ -312,7 +312,9 @@ class Install
 
         Config::uninstall();
         Profile::uninstallRights();
-        Selfie::removeBaseDir();
+        // Sem as tabelas, as selfies ficariam sem vínculo nenhum (dado pessoal órfão): saem junto.
+        // As fotos do defeito e das entregas ficam: são o registro do estado dos equipamentos.
+        Selfie::folder()->remove();
         CronTask::unregister('checklistitens');
 
         // Vínculos de chamados com registros de uso que deixam de existir

@@ -402,7 +402,7 @@ class Usage extends CommonDBTM
 
         if (!$id) {
             // o índice único de uso aberto recusou: alguém retirou o mesmo item agora há pouco
-            Selfie::deleteFile($selfie);
+            Selfie::folder()->delete($selfie);
             return ['ok' => false, 'message' => __('Este item acabou de ser retirado por outra pessoa, escolha outro.', 'checklistitens')];
         }
 
@@ -538,7 +538,7 @@ class Usage extends CommonDBTM
             'checkin_selfie'      => $selfie,
         ] + Location::toFields('checkin_', Location::fromRequest()));
         if (!$updated) {
-            Selfie::deleteFile($selfie);
+            Selfie::folder()->delete($selfie);
             return ['ok' => false, 'message' => __('Não foi possível registrar a devolução. Tente de novo.', 'checklistitens')];
         }
 

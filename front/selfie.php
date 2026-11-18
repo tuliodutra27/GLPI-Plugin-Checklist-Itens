@@ -51,4 +51,4 @@ if (!Selfie::canView((int) $row['users_id'], (int) $row['groups_id'])) {
     Html::displayRightError();
 }
 
-Selfie::send((string) $row[$field]);
+Selfie::folder()->send((string) $row[$field]);

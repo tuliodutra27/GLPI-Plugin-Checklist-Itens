@@ -2,51 +2,26 @@
 
 namespace GlpiPlugin\Checklistitens;
 
-use Glpi\Toolbox\Sanitizer;
 use Session;
-use Toolbox;
 
 /**
- * Selfies: guardadas fora da raiz web (files/_plugins/checklistitens/selfies/AAAA/MM/...) e
- * servidas só por front/selfie.php, que confere quem pode ver.
+ * Selfies: guardadas fora da raiz web (pasta "selfies") e servidas só por front/selfie.php, que
+ * confere quem pode ver.
  *
- * A foto chega de duas formas: já redimensionada pelo navegador (campo selfie_data, JPEG em
- * base64) ou, se o navegador não conseguir processar, o arquivo original (campo selfie_file).
+ * A foto chega já redimensionada pelo navegador (campo selfie_data) ou, se o navegador não
+ * conseguir processar, o arquivo original (campo selfie_file).
  */
 class Selfie
 {
-    public const MAX_BYTES = 5 * 1024 * 1024;
-
     public const KIND_CHECKOUT     = 'checkout';
     public const KIND_CHECKIN      = 'checkin';
     public const KIND_CONFIRMATION = 'confirmation';
     public const KIND_DELIVERY     = 'delivery';     // selfie do gestor na entrega para embarcação
     public const KIND_RECEIPT      = 'receipt';      // selfie do gestor no recebimento de volta
 
-    public static function getBaseDir(): string
+    public static function folder(): ImageFolder
     {
-        return GLPI_PLUGIN_DOC_DIR . '/checklistitens/selfies';
-    }
-
-    public static function createBaseDir(): void
-    {
-        $dir = self::getBaseDir();
-        if (!is_dir($dir) && !@mkdir($dir, 0770, true)) {
-            Toolbox::logError('checklistitens: não foi possível criar o diretório de selfies ' . $dir);
-        }
-    }
-
-    /**
-     * Na desinstalação as tabelas são apagadas; as selfies ficariam sem vínculo nenhum (dado
-     * pessoal órfão), então são removidas junto. As fotos do defeito e das entregas ficam: são o
-     * registro do estado dos equipamentos e nunca são apagadas.
-     */
-    public static function removeBaseDir(): void
-    {
-        $dir = self::getBaseDir();
-        if (is_dir($dir)) {
-            Toolbox::deleteDir($dir);
-        }
+        return new ImageFolder('selfies');
     }
 
     /**
@@ -56,76 +31,16 @@ class Selfie
      */
     public static function storeFromRequest(string $kind, int $users_id): ?string
     {
-        $data = null;
-
         if (!empty($_POST['selfie_data'])) {
-            $raw = Sanitizer::unsanitize((string) $_POST['selfie_data']);
-            if (preg_match('#^data:image/(?:jpeg|png);base64,([A-Za-z0-9+/=\s]+)$#', $raw, $matches)) {
-                $data = base64_decode(preg_replace('/\s+/', '', $matches[1]), true);
-            }
-        } elseif (isset($_FILES['selfie_file']['tmp_name']) && is_uploaded_file($_FILES['selfie_file']['tmp_name'])) {
-            if ((int) $_FILES['selfie_file']['size'] <= self::MAX_BYTES) {
-                $data = file_get_contents($_FILES['selfie_file']['tmp_name']);
-            }
+            $image = UploadedImage::fromDataUrl($_POST['selfie_data']);
+        } elseif (isset($_FILES['selfie_file'])) {
+            $upload = UploadedImage::fromUpload($_FILES['selfie_file']);
+            $image  = $upload['ok'] ? $upload : null;
+        } else {
+            $image = null;
         }
 
-        if (!is_string($data) || $data === '' || strlen($data) > self::MAX_BYTES) {
-            return null;
-        }
-
-        $info = @getimagesizefromstring($data);
-        if ($info === false || !in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG], true)) {
-            return null;
-        }
-
-        $relative = sprintf(
-            '%s/%s/%s_%d_%s.%s',
-            date('Y'),
-            date('m'),
-            $kind,
-            $users_id,
-            bin2hex(random_bytes(8)),
-            $info[2] === IMAGETYPE_PNG ? 'png' : 'jpg'
-        );
-        $path = self::getBaseDir() . '/' . $relative;
-
-        if (!is_dir(dirname($path)) && !@mkdir(dirname($path), 0770, true)) {
-            Toolbox::logError('checklistitens: não foi possível criar ' . dirname($path));
-            return null;
-        }
-        if (file_put_contents($path, $data) === false) {
-            Toolbox::logError('checklistitens: não foi possível gravar a selfie ' . $path);
-            return null;
-        }
-
-        return $relative;
-    }
-
-    public static function isValidPath(string $relative): bool
-    {
-        return preg_match('#^\d{4}/\d{2}/(checkout|checkin|confirmation|delivery|receipt)_\d+_[0-9a-f]{16}\.(jpg|png)$#', $relative) === 1;
-    }
-
-    public static function getFullPath(string $relative): ?string
-    {
-        if (!self::isValidPath($relative)) {
-            return null;
-        }
-        $path = self::getBaseDir() . '/' . $relative;
-
-        return is_file($path) ? $path : null;
-    }
-
-    /** Apaga o arquivo e devolve quantos bytes foram liberados. */
-    public static function deleteFile(string $relative): int
-    {
-        $path = self::getFullPath($relative);
-        if ($path === null) {
-            return 0;
-        }
-        $size = (int) filesize($path);
-
-        return @unlink($path) ? $size : 0;
+        return $image !== null ? self::folder()->store($kind . '_' . $users_id, $image['data'], $image['type']) : null;
     }
 
     public static function getUrl(string $kind, int $id): string
@@ -144,21 +59,5 @@ class Selfie
         }
 
         return Profile::isManager() && in_array($groups_id, Sector::forCurrentUser(), true);
-    }
-
-    public static function send(string $relative): void
-    {
-        $path = self::getFullPath($relative);
-        if ($path === null) {
-            http_response_code(404);
-            exit;
-        }
-
-        header('Content-Type: ' . (str_ends_with($path, '.png') ? 'image/png' : 'image/jpeg'));
-        header('Content-Length: ' . filesize($path));
-        header('Cache-Control: private, max-age=3600');
-        header('X-Content-Type-Options: nosniff');
-        readfile($path);
-        exit;
     }
 }

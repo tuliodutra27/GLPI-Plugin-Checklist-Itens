@@ -653,7 +653,7 @@ class DeliveryReceipt extends DeliveryProcess
             return true;
         });
         if (!$done) {
-            Selfie::deleteFile($selfie);
+            Selfie::folder()->delete($selfie);
 
             return Reply::retry(__('Não foi possível concluir o recebimento. Tente de novo.', 'checklistitens'));
         }

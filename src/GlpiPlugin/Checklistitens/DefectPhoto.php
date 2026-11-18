@@ -30,108 +30,53 @@ class DefectPhoto extends CommonDBChild
 
     public const MIN_PHOTOS = 1;
     public const MAX_PHOTOS = 5;
-    public const MAX_BYTES  = 5 * 1024 * 1024;
-    public const MAX_SIDE   = 1600; // maior lado da foto reduzida no navegador, em pixels
 
     public static function getTypeName($nb = 0)
     {
         return _n('Foto do defeito', 'Fotos do defeito', $nb, 'checklistitens');
     }
 
-    public static function getBaseDir(): string
+    public static function folder(): ImageFolder
     {
-        return GLPI_PLUGIN_DOC_DIR . '/checklistitens/defects';
-    }
-
-    public static function createBaseDir(): void
-    {
-        $dir = self::getBaseDir();
-        if (!is_dir($dir) && !@mkdir($dir, 0770, true)) {
-            Toolbox::logError('checklistitens: não foi possível criar o diretório de fotos de defeito ' . $dir);
-        }
+        return new ImageFolder('defects');
     }
 
     /**
-     * Fotos enviadas no formulário, já validadas (JPEG ou PNG, até MAX_BYTES cada). Primeiro as
-     * reduzidas pelo navegador, depois os arquivos originais; o que passar de MAX_PHOTOS é ignorado.
+     * Fotos enviadas no formulário, já validadas. Primeiro as reduzidas pelo navegador, depois os
+     * arquivos originais; o que passar de MAX_PHOTOS é ignorado.
      *
-     * @return string[] conteúdo binário de cada imagem
+     * @return array<int, array{data: string, type: int}>
      */
     public static function collectFromRequest(): array
     {
         $images = [];
-
         foreach ((array) ($_POST['defect_photos'] ?? []) as $value) {
-            if (count($images) >= self::MAX_PHOTOS) {
-                break;
+            $image = UploadedImage::fromDataUrl($value);
+            if ($image !== null) {
+                $images[] = $image;
             }
-            if (!is_string($value) || $value === '') {
-                continue;
-            }
-            $raw = Sanitizer::unsanitize($value);
-            if (!preg_match('#^data:image/(?:jpeg|png);base64,#', $raw, $matches)) {
-                continue;
-            }
-            $data = base64_decode(preg_replace('/\s+/', '', substr($raw, strlen($matches[0]))), true);
-            if (is_string($data) && self::imageType($data) !== null) {
-                $images[] = $data;
+        }
+        foreach (UploadedImage::filesOf($_FILES['defect_photo_files'] ?? null) as $file) {
+            $image = UploadedImage::fromUpload($file);
+            if ($image['ok']) {
+                $images[] = $image;
             }
         }
 
-        $files = $_FILES['defect_photo_files'] ?? null;
-        if (is_array($files) && isset($files['tmp_name']) && is_array($files['tmp_name'])) {
-            foreach ($files['tmp_name'] as $key => $tmp) {
-                if (count($images) >= self::MAX_PHOTOS) {
-                    break;
-                }
-                if (
-                    !is_string($tmp)
-                    || (int) ($files['error'][$key] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK
-                    || (int) ($files['size'][$key] ?? 0) > self::MAX_BYTES
-                    || !is_uploaded_file($tmp)
-                ) {
-                    continue;
-                }
-                $data = file_get_contents($tmp);
-                if (is_string($data) && self::imageType($data) !== null) {
-                    $images[] = $data;
-                }
-            }
-        }
-
-        return $images;
-    }
-
-    /** Tipo da imagem (IMAGETYPE_JPEG ou IMAGETYPE_PNG), ou null se não for uma foto aceita. */
-    private static function imageType(string $data): ?int
-    {
-        if ($data === '' || strlen($data) > self::MAX_BYTES) {
-            return null;
-        }
-        $info = @getimagesizefromstring($data);
-        if ($info === false || !in_array($info[2], [IMAGETYPE_JPEG, IMAGETYPE_PNG], true)) {
-            return null;
-        }
-
-        return $info[2];
+        return array_slice($images, 0, self::MAX_PHOTOS);
     }
 
     /**
      * Grava as fotos de um uso/fase (no máximo MAX_PHOTOS).
      *
-     * @param string[] $images conteúdo binário (collectFromRequest)
-     *
+     * @param array<int, array{data: string, type: int}> $images de collectFromRequest()
      * @return int quantas foram gravadas
      */
     public static function storeAll(int $usages_id, int $phase, array $images): int
     {
         $stored = 0;
-        foreach (array_slice(array_values($images), 0, self::MAX_PHOTOS) as $data) {
-            $type = is_string($data) ? self::imageType($data) : null;
-            if ($type === null) {
-                continue;
-            }
-            if (self::storeImage($usages_id, $phase, $data, $type)) {
+        foreach (array_slice($images, 0, self::MAX_PHOTOS) as $image) {
+            if (self::storeImage($usages_id, $phase, $image['data'], $image['type'])) {
                 $stored++;
             }
         }
@@ -147,45 +92,23 @@ class DefectPhoto extends CommonDBChild
      */
     private static function storeImage(int $usages_id, int $phase, string $data, int $type, string $uuid = ''): bool
     {
-        global $DB;
-
-        $relative = sprintf(
-            '%s/%s/%d_%d_%s.%s',
-            date('Y'),
-            date('m'),
-            $usages_id,
-            $phase,
-            bin2hex(random_bytes(8)),
-            $type === IMAGETYPE_PNG ? 'png' : 'jpg'
-        );
-        $path = self::getBaseDir() . '/' . $relative;
-
-        if (!is_dir(dirname($path)) && !@mkdir(dirname($path), 0770, true)) {
-            Toolbox::logError('checklistitens: não foi possível criar ' . dirname($path));
-            return false;
-        }
-        if (file_put_contents($path, $data) === false) {
-            Toolbox::logError('checklistitens: não foi possível gravar a foto de defeito ' . $path);
+        $relative = self::folder()->store($usages_id . '_' . $phase, $data, $type);
+        if ($relative === null) {
             return false;
         }
 
-        $fields = [
+        $id = Db::insert(self::getTable(), [
             'plugin_checklistitens_usages_id' => $usages_id,
             'phase'                           => $phase,
             'filepath'                        => $relative,
             'size_bytes'                      => strlen($data),
             'documents_id'                    => 0,
+            'client_uuid'                     => $uuid,
             'date_creation'                   => Shift::now(),
-        ];
-        // A coluna só entra quando há identificador: a retirada comum grava como sempre gravou
-        if ($uuid !== '') {
-            $fields['client_uuid'] = $uuid;
-        }
-
-        $ok = $DB->insert(self::getTable(), $fields);
-        if (!$ok) {
+        ]);
+        if (!$id) {
             // arquivo sem registro: ninguém chegaria até ele
-            @unlink($path);
+            self::folder()->delete($relative);
             Toolbox::logError(sprintf('checklistitens: não foi possível registrar a foto de defeito do uso %d', $usages_id));
             return false;
         }
@@ -202,12 +125,8 @@ class DefectPhoto extends CommonDBChild
      */
     public static function storeUploaded(int $usages_id, int $phase, string $uuid): array
     {
-        $fail = static fn (string $message, bool $retry = false): array => [
-            'ok'      => false,
-            'message' => $message,
-            'retry'   => $retry,
-            'count'   => self::countFor($usages_id, $phase),
-        ];
+        $fail = static fn (string $message, bool $retry = false): array => ($retry ? Reply::retry($message) : Reply::fail($message))
+            + ['count' => self::countFor($usages_id, $phase)];
 
         if (
             $usages_id <= 0
@@ -224,14 +143,14 @@ class DefectPhoto extends CommonDBChild
             'client_uuid'                     => $uuid,
         ]);
         if ($already > 0) {
-            return ['ok' => true, 'message' => '', 'count' => self::countFor($usages_id, $phase)];
+            return Reply::ok(['count' => self::countFor($usages_id, $phase)]);
         }
 
         if (self::countFor($usages_id, $phase) >= self::MAX_PHOTOS) {
             return $fail(sprintf(__('O limite é de %d fotos do defeito por equipamento.', 'checklistitens'), self::MAX_PHOTOS));
         }
 
-        $image = DeliveryPhoto::readUploadedImage();
+        $image = UploadedImage::fromUpload($_FILES['image'] ?? null);
         if (!$image['ok']) {
             return $fail($image['message'], $image['retry']);
         }
@@ -240,7 +159,7 @@ class DefectPhoto extends CommonDBChild
             return $fail(__('Não foi possível guardar a foto. Tente de novo.', 'checklistitens'), true);
         }
 
-        return ['ok' => true, 'message' => '', 'count' => self::countFor($usages_id, $phase)];
+        return Reply::ok(['count' => self::countFor($usages_id, $phase)]);
     }
 
     public static function countFor(int $usages_id, int $phase): int
@@ -287,10 +206,7 @@ class DefectPhoto extends CommonDBChild
             if (!$DB->delete(self::getTable(), ['id' => (int) $row['id']])) {
                 continue;
             }
-            $path = self::getFullPath((string) $row['filepath']);
-            if ($path !== null && !@unlink($path)) {
-                Toolbox::logError('checklistitens: não foi possível apagar a foto de defeito ' . $path);
-            }
+            self::folder()->delete((string) $row['filepath']);
             $deleted++;
         }
 
@@ -335,37 +251,6 @@ class DefectPhoto extends CommonDBChild
         return Ui::url(sprintf('front/photo.php?id=%d', $id));
     }
 
-    public static function isValidPath(string $relative): bool
-    {
-        return preg_match('#^\d{4}/\d{2}/\d+_\d+_[0-9a-f]{16}\.(jpg|png)$#', $relative) === 1;
-    }
-
-    public static function getFullPath(string $relative): ?string
-    {
-        if (!self::isValidPath($relative)) {
-            return null;
-        }
-        $path = self::getBaseDir() . '/' . $relative;
-
-        return is_file($path) ? $path : null;
-    }
-
-    public static function send(string $relative): void
-    {
-        $path = self::getFullPath($relative);
-        if ($path === null) {
-            http_response_code(404);
-            exit;
-        }
-
-        header('Content-Type: ' . (str_ends_with($path, '.png') ? 'image/png' : 'image/jpeg'));
-        header('Content-Length: ' . filesize($path));
-        header('Cache-Control: private, max-age=3600');
-        header('X-Content-Type-Options: nosniff');
-        readfile($path);
-        exit;
-    }
-
     /**
      * Anexa ao chamado as fotos do uso/fase que ainda não foram anexadas. Segue o mesmo caminho
      * do GLPI para anexos (CommonDBTM::addFiles): cópia em GLPI_TMP_DIR, Document com _filename
@@ -406,7 +291,7 @@ class DefectPhoto extends CommonDBChild
             $tmp_path = null;
 
             try {
-                $source = self::getFullPath((string) $row['filepath']);
+                $source = self::folder()->fullPath((string) $row['filepath']);
                 if ($source === null) {
                     Toolbox::logError(sprintf('checklistitens: arquivo da foto de defeito %d não encontrado', $row['id']));
                     continue;
