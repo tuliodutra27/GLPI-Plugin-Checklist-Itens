@@ -29,7 +29,6 @@ abstract class DeliveryProcess extends CommonDBTM
     /** @return array<int, string> */
     abstract public static function getStatusLabels(): array;
 
-    /** Entrega a que a linha pertence. */
     abstract protected static function deliveryIdOf(array $row): int;
 
     /** Mensagem para quem tenta continuar o que não está mais em andamento (0 = não existe). */

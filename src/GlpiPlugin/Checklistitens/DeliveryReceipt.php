@@ -14,7 +14,7 @@ use Session;
  */
 class DeliveryReceipt extends DeliveryProcess
 {
-    public const STATUS_DONE      = 2; // concluído
+    public const STATUS_DONE      = 2;
     public const STATUS_DISCARDED = 3; // descartado ou expirado
 
     /** Fase das fotos do defeito e situação dos rádios desta etapa (DeliveryProcess::holdsItem). */

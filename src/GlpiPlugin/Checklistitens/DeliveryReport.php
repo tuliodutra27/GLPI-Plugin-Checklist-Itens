@@ -94,7 +94,6 @@ class DeliveryReport
         ]) > 0;
     }
 
-    /** Contagem vazia dos rádios de uma entrega. */
     private const NO_COUNTS = ['total' => 0, 'draft' => 0, 'on_vessel' => 0, 'returned' => 0, 'blocked' => 0, 'cancelled' => 0];
 
     /**
