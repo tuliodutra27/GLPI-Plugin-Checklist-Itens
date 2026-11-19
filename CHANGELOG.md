@@ -7,6 +7,9 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Corrigido
+- Entrega para embarcação: o rádio que sai da entrega por problema deixava a entrega com "Rádios
+  ok? Não". A resposta agora vale para os rádios que foram com a embarcação; o rádio que saiu
+  continua aparecendo à parte, bloqueado.
 - O link "Conferência do setor" do e-mail de equipamento não devolvido apontava sempre para a pasta
   `plugins/` e não abria com o plugin instalado pelo marketplace.
 - A aba "Registro de uso" do Telefone podia continuar com o visual antigo depois de atualizar o

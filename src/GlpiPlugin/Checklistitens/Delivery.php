@@ -978,16 +978,17 @@ class Delivery extends DeliveryProcess
         if ($is_ok === null) {
             return Reply::fail(__('Responda se os rádios estão ok.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
-        $has_problem = count(self::getUsages($id, Usage::STATUS_REFUSED)) > 0;
+        // O rádio que saiu por problema fica registrado à parte (recusado e bloqueado): "Rádios ok?"
+        // vale para os que vão com a embarcação, e só o problema conhecido de um deles a deixa em Não
+        $refused = count(self::getUsages($id, Usage::STATUS_REFUSED)) > 0;
+        $known   = false;
         foreach ($usages as $usage) {
-            $has_problem = $has_problem || (int) $usage['checkout_known_issue'] === 1;
+            $known = $known || (int) $usage['checkout_known_issue'] === 1;
         }
-        if ($is_ok === 0 && !$has_problem) {
+        if ($is_ok === 0 && !$known && !$refused) {
             return Reply::fail(__('Indique o rádio com problema ou responda Sim.', 'checklistitens'), ['delivery' => self::stateOf($id)]);
         }
-        if ($has_problem) {
-            $is_ok = 0;
-        }
+        $is_ok = $known ? 0 : 1;
 
         $min    = Config::getDeliveryMinPhotos();
         $photos = DeliveryPhoto::countFor($id, 0);
