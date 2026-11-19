@@ -3,6 +3,7 @@
 namespace GlpiPlugin\Checklistitens;
 
 use CommonDBTM;
+use Ticket;
 
 /**
  * Item fora de circulação por problema marcado na retirada ou na devolução. Fica bloqueado até

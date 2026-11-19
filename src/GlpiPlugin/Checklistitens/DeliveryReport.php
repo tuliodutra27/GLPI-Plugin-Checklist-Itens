@@ -3,6 +3,7 @@
 namespace GlpiPlugin\Checklistitens;
 
 use Session;
+use Ticket;
 
 /**
  * Consulta das entregas de rádios para embarcação: lista, detalhe, CSV e o bloco "Com embarcações"
