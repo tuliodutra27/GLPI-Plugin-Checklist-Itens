@@ -106,7 +106,7 @@ class TicketFactory
             if ($laudo !== null) {
                 self::addPrivateFollowup($ticket, '<p>' . sprintf(
                     htmlspecialchars(__('Laudo do equipamento criado junto com este chamado: %s.', 'checklistitens')),
-                    '<a href="' . htmlspecialchars($laudo['url']) . '">' . htmlspecialchars($laudo['name']) . '</a>'
+                    '<a href="' . htmlspecialchars($laudo['url']) . '" target="_blank" rel="noopener">' . htmlspecialchars($laudo['name']) . '</a>'
                 ) . '</p>');
             }
 

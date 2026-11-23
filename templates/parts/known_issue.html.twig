@@ -16,7 +16,10 @@
                                 · <span class="badge bg-orange-lt text-wrap">{{ l.status }}</span>
                             </div>
                             {% if l.occurrence|default('') %}
-                                <div>{{ l.occurrence }}</div>
+                                <div><strong>{{ __('Ocorrência', 'checklistitens') }}:</strong> {{ l.occurrence }}</div>
+                            {% endif %}
+                            {% if l.resolution|default('') %}
+                                <div><strong>{{ __('Status final', 'checklistitens') }}:</strong> {{ l.resolution }}</div>
                             {% endif %}
                             {% if l.items|default('') %}
                                 <div class="ci-small">{{ __('Itens afetados', 'checklistitens') }}: {{ l.items }}</div>

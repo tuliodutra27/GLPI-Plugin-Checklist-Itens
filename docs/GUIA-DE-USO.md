@@ -409,9 +409,11 @@ com defeito (1 a 5)"** aparece.
 Só aparece quando o TI usa o plugin Laudo e o equipamento tem **laudo em aberto**.
 
 Ao escolher o equipamento, aparece o alerta **"Este equipamento tem problema já conhecido"**, com
-o nome do laudo, a data, a situação, a ocorrência e os itens afetados. Ex.: "Laudo 05 · 01/09/2026
-· Em análise", a ocorrência "tablet com a tela trincada" e "Itens afetados: 1x Tela". Quem tem
-acesso aos laudos vê também o link **Abrir laudo**.
+o nome do laudo, a data, a situação, a **Ocorrência** (descrição da ocorrência do laudo), o
+**Status final** (observações do status final, quando o TI já preencheu) e os itens afetados.
+Ex.: "Laudo 05 · 01/09/2026 · Em análise", "Ocorrência: tablet com a tela trincada", "Status
+final: aguardando a tela nova" e "Itens afetados: 1x Tela". Os textos longos aparecem cortados.
+Quem tem acesso aos laudos vê também o link **Abrir laudo**, que abre numa nova guia.
 
 - Se o equipamento não tem nenhum problema, responda **SIM** e siga normalmente.
 - Se tem problema (o do laudo ou outro), responda **NÃO**, marque os problemas e tire as fotos,
@@ -500,7 +502,7 @@ No bloco **Itens bloqueados**, toque em **Abrir chamado**.
     marcados (é o começo que aparece no alerta de problema conhecido);
   - Setor e equipamento do bloqueio, o colaborador como **Usuário responsável**, a **Data
     início** do dia e o número do chamado. O resto fica em branco para o TI;
-  - no chamado, um **acompanhamento privado** com o link para o laudo.
+  - no chamado, um **acompanhamento privado** com o link para o laudo, que abre numa nova guia.
 - Com a situação do equipamento configurada, ele passa para a situação de "chamado aberto"
   (ex.: Manutenção).
 
@@ -874,6 +876,10 @@ com registro de quem liberou. Use para casos sem chamado a resolver (ex.: chamad
 equipamento trocado). Depois de liberado, o equipamento só volta à lista se estiver num estado
 disponível. Com a situação do equipamento configurada, a liberação devolve a situação de
 "liberado" (ex.: Ativo) ([seção 4.2](#42-tela-de-configuração)).
+
+Com o plugin Laudo, a coluna **Laudo** mostra o laudo criado junto com o chamado do bloqueio e os
+outros laudos em aberto do equipamento, com a situação de cada um. Nos liberados recentemente
+aparece o laudo do chamado. Quem tem acesso aos laudos abre o laudo pelo nome, numa nova guia.
 
 O laudo inicial criado junto com o chamado **continua em aberto** quando o chamado é solucionado:
 ele é encerrado no plugin Laudo, pelo TI. Enquanto estiver em aberto, a próxima retirada do

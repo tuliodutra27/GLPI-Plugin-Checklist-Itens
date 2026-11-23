@@ -1,4 +1,15 @@
 {# TI: itens bloqueados de todos os setores, com liberação manual #}
+
+{# Link do laudo (nova guia; só o nome para quem não pode abrir laudos) #}
+{% macro laudo_link(l) %}
+    {% if l.url %}
+        <a href="{{ l.url }}" target="_blank" rel="noopener">{{ l.name }}</a>
+    {% else %}
+        {{ l.name }}
+    {% endif %}
+{% endmacro %}
+{% import _self as page %}
+
 <div class="ci-page container-fluid">
     <h2 class="ci-title mb-3"><i class="ti ti-lock"></i> {{ __('Itens bloqueados', 'checklistitens') }}</h2>
 
@@ -18,6 +29,7 @@
                         <th>{{ __('Setor', 'checklistitens') }}</th>
                         <th>{{ __('Motivo', 'checklistitens') }}</th>
                         <th>{{ __('Chamado', 'checklistitens') }}</th>
+                        {% if show_laudos %}<th>{{ __('Laudo', 'checklistitens') }}</th>{% endif %}
                         <th></th>
                     </tr>
                 </thead>
@@ -42,6 +54,18 @@
                                     <span class="text-muted">{{ __('Aguardando conferência do gestor', 'checklistitens') }}</span>
                                 {% endif %}
                             </td>
+                            {% if show_laudos %}
+                                <td>
+                                    {% for l in laudos[b.id]|default([]) %}
+                                        <div class="{{ loop.first ? '' : 'mt-1' }}">
+                                            {{ page.laudo_link(l) }}
+                                            <div class="ci-small text-muted">{{ l.status }}</div>
+                                        </div>
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endfor %}
+                                </td>
+                            {% endif %}
                             <td class="text-end">
                                 {% if can_release %}
                                     <form method="post" action="{{ post_url }}" onsubmit="return confirm('{{ __('Liberar este item para retirada?', 'checklistitens')|e('js') }}');">
@@ -54,7 +78,7 @@
                             </td>
                         </tr>
                     {% else %}
-                        <tr><td colspan="5" class="text-muted">{{ __('Nenhum item bloqueado.', 'checklistitens') }}</td></tr>
+                        <tr><td colspan="{{ show_laudos ? 6 : 5 }}" class="text-muted">{{ __('Nenhum item bloqueado.', 'checklistitens') }}</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -69,7 +93,8 @@
             {% for b in released %}
                 <div class="list-group-item">
                     <i class="{{ b.icon }}"></i> <strong>{{ b.label }}</strong> <span class="text-muted ci-small">{{ b.sector }}</span>
-                    <div class="ci-small text-muted">{{ b.release_label }}{% if b.ticket_id %} · <a href="{{ b.ticket_url }}" target="_blank" rel="noopener">#{{ b.ticket_id }}</a>{% endif %}</div>
+                    <div class="ci-small text-muted">{{ b.release_label }}{% if b.ticket_id %} · <a href="{{ b.ticket_url }}" target="_blank" rel="noopener">#{{ b.ticket_id }}</a>{% endif %}
+                        {%- for l in laudos[b.id]|default([]) %} · {{ page.laudo_link(l) }} ({{ l.status }}){% endfor %}</div>
                 </div>
             {% else %}
                 <div class="list-group-item text-muted">{{ __('Nenhuma liberação ainda.', 'checklistitens') }}</div>

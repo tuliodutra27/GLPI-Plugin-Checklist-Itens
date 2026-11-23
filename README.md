@@ -109,8 +109,8 @@ O ativo (rádio, celular ou tablet) **não muda de usuário**: tudo fica nos reg
 Opcional. Com o plugin Laudo (laudos técnicos) ativo e a integração ligada na configuração
 (padrão: ligada):
 - equipamento com **laudo em aberto** aparece com o selo "Problema conhecido" e mostra o alerta
-  "Este equipamento tem problema já conhecido" (laudo, data, situação, ocorrência e itens
-  afetados);
+  "Este equipamento tem problema já conhecido" (laudo, data, situação, ocorrência, observações
+  do status final e itens afetados);
 - laudo em aberto é o que não está numa situação marcada como concluída (padrão: "Concluído");
 - se o colaborador disser que é o problema do laudo, o uso é registrado com os problemas e as
   fotos, sem bloqueio e sem chamado. Se disser que é outro problema, vale a regra normal, e o

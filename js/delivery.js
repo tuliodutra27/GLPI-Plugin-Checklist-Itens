@@ -972,9 +972,14 @@
             head.appendChild(document.createTextNode(' · '));
             head.appendChild(el('span', 'badge bg-orange-lt text-wrap', laudo.status || ''));
             block.appendChild(head);
-            if (laudo.occurrence) {
-                block.appendChild(el('div', '', laudo.occurrence));
-            }
+            [['Ocorrência', laudo.occurrence], ['Status final', laudo.resolution]].forEach(function (pair) {
+                if (pair[1]) {
+                    var line = el('div');
+                    line.appendChild(el('strong', '', pair[0] + ':'));
+                    line.appendChild(document.createTextNode(' ' + pair[1]));
+                    block.appendChild(line);
+                }
+            });
             if (laudo.items) {
                 block.appendChild(el('div', 'ci-small', 'Itens afetados: ' + laudo.items));
             }
