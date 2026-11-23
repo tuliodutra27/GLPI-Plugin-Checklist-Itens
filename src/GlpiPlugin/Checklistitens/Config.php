@@ -39,6 +39,13 @@ class Config extends CommonGLPI
         'delivery_alert_days'     => [0, 0, null],
     ];
 
+    /** Situação do equipamento em cada fase do bloqueio (0 = não muda). */
+    private const BLOCK_STATES = [
+        ItemBlock::STATUS_WAITING  => 'block_state_waiting',
+        ItemBlock::STATUS_REPAIR   => 'block_state_repair',
+        ItemBlock::STATUS_RELEASED => 'block_state_released',
+    ];
+
     public static $rightname = Profile::RIGHT_CONFIG;
 
     /** Categorias ITIL padrão, achadas pelo nome completo na instalação. */
@@ -75,7 +82,9 @@ class Config extends CommonGLPI
             'home_shortcuts_profiles' => '',
             'laudo_enabled'         => '1',
             'laudo_done_statuses'   => '',
-        ] + array_map(static fn (array $number): string => (string) $number[0], self::NUMBERS);
+            'laudo_initial_status'  => '0',
+        ] + array_fill_keys(self::BLOCK_STATES, '0')
+          + array_map(static fn (array $number): string => (string) $number[0], self::NUMBERS);
     }
 
     /** Número da configuração dentro da faixa; o padrão quando não veio nada. */
@@ -111,6 +120,9 @@ class Config extends CommonGLPI
         }
         if (!isset($current['laudo_done_statuses'])) {
             $defaults['laudo_done_statuses'] = implode(',', LaudoProvider::findDefaultDoneStatuses());
+        }
+        if (!isset($current['laudo_initial_status'])) {
+            $defaults['laudo_initial_status'] = (string) LaudoProvider::findDefaultInitialStatus();
         }
         if (!isset($current['itilcategories'])) {
             $pairs = [];
@@ -349,6 +361,28 @@ class Config extends CommonGLPI
     }
 
     /**
+     * Situação do laudo criado junto com o chamado do item bloqueado (0 = não cria laudo).
+     * Enquanto a opção nunca foi gravada, vale a situação de nome "Aberto".
+     */
+    public static function getLaudoInitialStatus(): int
+    {
+        $stored = GlpiConfig::getConfigurationValues(self::CONTEXT, ['laudo_initial_status']);
+        if (!array_key_exists('laudo_initial_status', $stored)) {
+            return LaudoProvider::findDefaultInitialStatus();
+        }
+
+        return max(0, (int) $stored['laudo_initial_status']);
+    }
+
+    /** Situação do equipamento numa fase do bloqueio (0 = não muda). */
+    public static function getBlockState(int $block_status): int
+    {
+        $key = self::BLOCK_STATES[$block_status] ?? null;
+
+        return $key === null ? 0 : max(0, (int) self::getValue($key));
+    }
+
+    /**
      * Grava o formulário de configuração (valores já vêm tratados pelo GLPI em $_POST).
      */
     public static function saveFromForm(array $input): void
@@ -367,9 +401,22 @@ class Config extends CommonGLPI
             return;
         }
 
-        GlpiConfig::setConfigurationValues(self::CONTEXT, [
+        $states        = array_values(array_filter(array_map('intval', (array) ($input['states'] ?? []))));
+        $block_states  = array_map(static fn (string $key): int => max(0, (int) ($input[$key] ?? 0)), self::BLOCK_STATES);
+        $state_follows = $block_states[ItemBlock::STATUS_WAITING] > 0 || $block_states[ItemBlock::STATUS_REPAIR] > 0;
+        if ($state_follows && !in_array($block_states[ItemBlock::STATUS_RELEASED], $states, true)) {
+            Session::addMessageAfterRedirect(__('A situação ao liberar precisa ser um dos estados disponíveis para retirada; sem isso, o equipamento liberado não volta a aparecer na retirada.', 'checklistitens'), false, ERROR);
+            return;
+        }
+
+        // O campo só aparece com o plugin Laudo ativo: sem ele no formulário, fica o que já estava
+        $laudo_initial = array_key_exists('laudo_initial_status', $input)
+            ? ['laudo_initial_status' => (string) max(0, (int) $input['laudo_initial_status'])]
+            : [];
+
+        GlpiConfig::setConfigurationValues(self::CONTEXT, $laudo_initial + array_combine(self::BLOCK_STATES, array_map('strval', $block_states)) + [
             'itemtypes'             => implode(',', $types),
-            'states'                => implode(',', array_filter(array_map('intval', (array) ($input['states'] ?? [])))),
+            'states'                => implode(',', $states),
             'limits'                => implode(',', $limits),
             'inherit_subgroups'     => !empty($input['inherit_subgroups']) ? '1' : '0',
             'shift_starts'          => implode(',', $starts),
@@ -423,6 +470,20 @@ class Config extends CommonGLPI
             'multiple' => true,
         ]);
         echo "</td></tr>";
+
+        $block_labels = [
+            ItemBlock::STATUS_WAITING  => __('Situação do equipamento bloqueado, aguardando conferência', 'checklistitens'),
+            ItemBlock::STATUS_REPAIR   => __('Situação do equipamento com o chamado aberto', 'checklistitens'),
+            ItemBlock::STATUS_RELEASED => __('Situação do equipamento ao ser liberado', 'checklistitens'),
+        ];
+        foreach (self::BLOCK_STATES as $status => $key) {
+            echo "<tr class='tab_bg_1'><td>" . $block_labels[$status] . "</td><td>";
+            State::dropdown(['name' => $key, 'value' => self::getBlockState($status)]);
+            if ($status === ItemBlock::STATUS_RELEASED) {
+                echo "<div class='text-muted'>" . __('Vazio = a situação não muda. Só troca a situação que o checklist deixou (ou, ao bloquear, um dos estados disponíveis para retirada): o que o TI mudou à mão fica como está. Ao liberar, use um dos estados disponíveis para retirada.', 'checklistitens') . "</div>";
+            }
+            echo "</td></tr>";
+        }
 
         foreach (ItemProvider::getSupportedTypes() as $itemtype) {
             echo "<tr class='tab_bg_1'><td>" . sprintf(__('Limite por pessoa — %s (0 = sem limite)', 'checklistitens'), htmlspecialchars(ItemProvider::getTypeLabel($itemtype))) . "</td><td>";
@@ -500,6 +561,13 @@ class Config extends CommonGLPI
                 'multiple' => true,
             ]);
             echo "<div class='text-muted'>" . __('Laudo em qualquer outra situação conta como em aberto.', 'checklistitens') . "</div>";
+            echo "</td></tr>";
+
+            echo "<tr class='tab_bg_1'><td>" . __('Situação do laudo criado junto com o chamado', 'checklistitens') . "</td><td>";
+            Dropdown::showFromArray('laudo_initial_status', [0 => Dropdown::EMPTY_VALUE] + $statuses, [
+                'value' => self::getLaudoInitialStatus(),
+            ]);
+            echo "<div class='text-muted'>" . __('O chamado do item bloqueado ganha um laudo do equipamento com o relato do problema na descrição da ocorrência. Vazio = não cria laudo.', 'checklistitens') . "</div>";
             echo "</td></tr>";
         }
 

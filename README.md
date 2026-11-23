@@ -3,8 +3,10 @@
 Plugin para o [GLPI](https://glpi-project.org/) 10.0.x que controla a **retirada e a devolução de
 equipamentos compartilhados do setor** (rádios comunicadores, celulares e tablets), com checklist
 sem digitação, fotos do defeito, selfie com localização, conferência do gestor por turno e bloqueio
-automático de equipamento com problema. Com o plugin Laudo (opcional), o problema que já está num
-laudo técnico em aberto é avisado e não bloqueia o equipamento de novo. O gestor também faz a
+automático de equipamento com problema, com a situação do equipamento no GLPI acompanhando o
+bloqueio (opcional). Com o plugin Laudo (opcional), o problema que já está num laudo técnico em
+aberto é avisado e não bloqueia o equipamento de novo, e o chamado do equipamento bloqueado ganha
+um laudo inicial com o relato do problema. O gestor também faz a
 **entrega de vários rádios a uma embarcação** e o recebimento de volta, numa tela que guarda o
 trabalho no aparelho quando a conexão falha.
 
@@ -45,7 +47,8 @@ trabalho no aparelho quando a conexão falha.
   retiradas, as devoluções e os itens bloqueados, com as selfies, o mapa, os problemas e as fotos
   do defeito. Depois tira a própria selfie e confirma.
 - A confirmação libera a devolução e abre automaticamente o chamado do TI para cada item
-  bloqueado, com as **fotos do defeito anexadas**.
+  bloqueado, com as **fotos do defeito anexadas** e, com o plugin Laudo, um **laudo inicial**
+  vinculado ao chamado.
 - Problema já conhecido (laudo em aberto) aparece com o selo "Problema conhecido" e é conferido
   normalmente, **sem chamado**.
 - Alertas:
@@ -57,6 +60,9 @@ trabalho no aparelho quando a conexão falha.
 **TI (administração)**
 - Item bloqueado volta a circular sozinho quando o **chamado é solucionado ou fechado**. O TI
   também pode liberar manualmente.
+- **Situação do equipamento** acompanhando o bloqueio (opcional): uma situação do GLPI para cada
+  fase (aguardando conferência, chamado aberto, liberado), no rádio e no celular ou tablet. O
+  plugin só troca a situação que ele mesmo deixou: a que o TI mudou à mão fica como está.
 - **Registro de uso de cada equipamento**, com exportação CSV:
   - situação atual;
   - linha do tempo completa: quem retirou, conferiu e devolveu, selfies, localização, problemas,
@@ -108,7 +114,12 @@ Opcional. Com o plugin Laudo (laudos técnicos) ativo e a integração ligada na
 - laudo em aberto é o que não está numa situação marcada como concluída (padrão: "Concluído");
 - se o colaborador disser que é o problema do laudo, o uso é registrado com os problemas e as
   fotos, sem bloqueio e sem chamado. Se disser que é outro problema, vale a regra normal, e o
-  chamado lista os laudos em aberto do item.
+  chamado lista os laudos em aberto do item;
+- o chamado do equipamento bloqueado ganha um **laudo inicial** (situação configurável, padrão
+  "Aberto"): setor, equipamento, colaborador como usuário responsável, data de início e número do
+  chamado, com o relato do problema na descrição da ocorrência. O chamado recebe um acompanhamento
+  privado com o link do laudo. O laudo continua em aberto quando o chamado é solucionado; o TI o
+  encerra no plugin Laudo.
 
 ### Entrega de rádios para embarcação
 
@@ -155,7 +166,8 @@ Rádio habilitado.
 - Plugin [Radios](https://github.com/tuliodutra27/GLPI-Plugin-Radios): opcional. Ele habilita o
   tipo Rádio; o tipo Celular ou tablet usa o ativo nativo Telefone do GLPI. A entrega de rádios
   para embarcação só aparece com o tipo Rádio habilitado na configuração.
-- Plugin Laudo (laudos técnicos): opcional. Ele habilita o aviso de problema já conhecido.
+- Plugin Laudo (laudos técnicos): opcional. Ele habilita o aviso de problema já conhecido e o
+  laudo inicial criado junto com o chamado.
 - Ações automáticas do GLPI rodando por cron, para o alerta de não devolvido, a liberação dos
   bloqueios e o cancelamento das separações de entrega paradas.
 - HTTPS, recomendado para a câmera frontal na página e a localização, também na entrega para
@@ -180,13 +192,15 @@ Rádio habilitado.
    - *Conferência do setor (gestor)*: concedido ao perfil Gestor Operacional;
    - *Administração (TI)*: concedido ao Super-Admin.
 6. Em **Ativos > Checklist uso de equipamentos > Configuração**, confira:
-   - os estados disponíveis para retirada;
+   - os estados disponíveis para retirada e, se quiser, a situação do equipamento em cada fase
+     do bloqueio;
    - os limites por pessoa;
    - os turnos;
    - as categorias de chamado;
    - os perfis que abrem o plugin depois do login;
    - as retenções;
-   - a integração com o plugin Laudo e as situações do laudo consideradas concluídas;
+   - a integração com o plugin Laudo, as situações do laudo consideradas concluídas e a situação
+     do laudo criado junto com o chamado;
    - os limites da entrega de rádios para embarcação.
 7. Coloque colaboradores e gestores nos **grupos** dos seus setores e confira se os equipamentos
    têm o grupo preenchido.

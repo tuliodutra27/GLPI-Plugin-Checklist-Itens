@@ -31,9 +31,12 @@ O plugin controla a **retirada e a devolução de equipamentos compartilhados de
 - uma **selfie** com a **localização** em cada retirada, devolução e conferência;
 - a **conferência do gestor por turno**, que libera a devolução e abre os chamados do TI, com as
   fotos anexadas;
-- o **bloqueio automático** de equipamento com problema até o chamado ser solucionado;
+- o **bloqueio automático** de equipamento com problema até o chamado ser solucionado. Se o TI
+  configurar, a **situação do equipamento** no GLPI acompanha o bloqueio (ex.: Pendente,
+  Manutenção, Ativo);
 - o aviso de **problema já conhecido** quando o equipamento tem laudo em aberto no plugin Laudo
-  (opcional). Esse problema não bloqueia o equipamento de novo;
+  (opcional). Esse problema não bloqueia o equipamento de novo. Com o plugin Laudo, o chamado do
+  equipamento bloqueado também ganha um **laudo inicial** com o relato do problema;
 - a **entrega de rádios para embarcação**: o gestor separa vários rádios de uma vez, com as
   baterias reserva, fotografa, tira a selfie e entrega a uma embarcação. Depois recebe os rádios de
   volta numa tela no mesmo modelo. O que ele faz fica guardado no aparelho e é enviado aos poucos,
@@ -49,7 +52,7 @@ O plugin controla a **retirada e a devolução de equipamentos compartilhados de
 | **Uso** | Um ciclo retirada → conferência → devolução. Enquanto o uso está aberto, ninguém mais retira o mesmo equipamento. |
 | **Turno** | Período entre dois horários de início configurados. O padrão são turnos de 12 h, às 07:00 e às 19:00. O turno da noite pertence à data em que começou. |
 | **Conferência** | O gestor confere tudo o que está pendente no setor, tira a própria selfie e confirma. Isso libera a devolução. |
-| **Bloqueio** | Equipamento com problema fica **fora de circulação** até o chamado do TI ser solucionado. |
+| **Bloqueio** | Equipamento com problema fica **fora de circulação** até o chamado do TI ser solucionado. A situação do equipamento no GLPI pode acompanhar cada fase ([seção 4.2](#42-tela-de-configuração)). |
 | **Fotos do defeito** | De 1 a 5 fotos do equipamento, obrigatórias sempre que um problema é marcado. Vão anexadas ao chamado do TI e o plugin nunca as apaga. |
 | **Laudo** | Laudo técnico do plugin Laudo (opcional), vinculado ao equipamento. Fica **em aberto** enquanto a situação dele não for uma das marcadas como concluídas (padrão: "Concluído"). |
 | **Problema conhecido** | Problema que já está num laudo em aberto do equipamento. O colaborador vê o alerta e, se disser que é o problema do laudo, o uso é registrado com os problemas e as fotos, **sem bloqueio e sem chamado**. |
@@ -101,8 +104,13 @@ Itens a conferir no GLPI **antes** de liberar o plugin para os usuários:
    reinicie o serviço web.
 9. **Plugin Laudo (opcional).** Para o aviso de problema já conhecido, o plugin Laudo precisa
    estar ativo e cada laudo precisa ter o **equipamento vinculado** (o mesmo rádio, celular ou
-   tablet do GLPI).
-10. **Entrega para embarcação (opcional).** Ela só aparece com o tipo **Rádio** habilitado, e o
+   tablet do GLPI). Para o laudo inicial criado junto com o chamado, cadastre no Laudo a situação
+   que ele deve receber (padrão: "Aberto").
+10. **Situação do equipamento (opcional).** Para a situação acompanhar o bloqueio, cadastre em
+    **Configurar > Listas suspensas > Status dos itens** as situações das fases (ex.: Pendente e
+    Manutenção). A situação de volta precisa ser um dos estados disponíveis para retirada (ex.:
+    Ativo).
+11. **Entrega para embarcação (opcional).** Ela só aparece com o tipo **Rádio** habilitado, e o
     tipo Rádio depende do plugin Radios.
     - O TI cadastra as **embarcações** ([seção 4.4](#44-embarcações)).
     - O gestor precisa do direito **Conferir e abrir chamado**.
@@ -219,6 +227,9 @@ Em **Ativos > Checklist uso de equipamentos > Configuração**:
 |---|---|---|
 | Tipos de equipamento habilitados | Rádio (precisa do plugin Radios) e/ou Celular ou tablet | os dois |
 | Estados disponíveis para retirada | Só equipamentos nesses estados aparecem para retirar | "Ativo" |
+| Situação do equipamento bloqueado, aguardando conferência | Situação que o equipamento recebe quando um problema novo o bloqueia. Vazio = não muda | vazio |
+| Situação do equipamento com o chamado aberto | Situação quando o chamado é aberto, na conferência ou em "Abrir chamado". Vazio = não muda | vazio |
+| Situação do equipamento ao ser liberado | Situação quando o chamado é solucionado ou fechado, ou o TI libera. Precisa ser um dos estados disponíveis para retirada, senão o equipamento não volta à lista. Vazio = não muda | vazio |
 | Limite por pessoa (por tipo) | Quantos itens do tipo a pessoa pode estar ao mesmo tempo; 0 = sem limite | Rádio 1, Celular ou tablet sem limite |
 | Grupo pai vê os itens dos subgrupos | Herança de setores, para colaborador e gestor | Sim |
 | Início dos turnos | Horários separados por vírgula | 07:00,19:00 |
@@ -231,6 +242,12 @@ Em **Ativos > Checklist uso de equipamentos > Configuração**:
 | Retenção das localizações | Dias antes de poder limpar | 90 |
 | Integração com o plugin Laudo (problema já conhecido) | Equipamento com laudo em aberto mostra o alerta, e o problema já conhecido não bloqueia o item. Sem o plugin Laudo ativo, fica sem efeito | Sim |
 | Situações do laudo consideradas concluídas | Laudo em qualquer outra situação conta como em aberto. Só aparece se o plugin Laudo tiver situações cadastradas | "Concluído" |
+| Situação do laudo criado junto com o chamado | O chamado do equipamento bloqueado ganha um laudo nessa situação ([seção 6.2](#62-abrir-chamado-de-um-item-bloqueado-opcional)). Use uma situação fora das concluídas. Vazio = não cria laudo. Só aparece se o plugin Laudo tiver situações cadastradas | "Aberto" |
+
+A situação do equipamento só muda quando ainda é a que o plugin deixou na fase anterior. Ao
+bloquear, ela também muda se for um dos estados disponíveis para retirada. Se o TI mudou a
+situação à mão (ex.: baixa ou descarte), o plugin não volta por cima. A mudança fica no histórico
+do equipamento; no rádio, também na aba Histórico do plugin Radios.
 
 No bloco **Entrega de rádios para embarcação**, na mesma tela:
 
@@ -477,6 +494,15 @@ No bloco **Itens bloqueados**, toque em **Abrir chamado**.
 - Se o equipamento tinha laudo em aberto e o colaborador disse que era outro problema, a descrição
   lista também esses laudos.
 - O chamado fica **vinculado ao registro de uso** e, se for celular ou tablet, também ao ativo Telefone do GLPI.
+- Com o plugin Laudo, o chamado ganha um **laudo inicial** do equipamento
+  ([seção 4.2](#42-tela-de-configuração)):
+  - na **Descrição da ocorrência**, o mesmo relato do chamado, começando pelos problemas
+    marcados (é o começo que aparece no alerta de problema conhecido);
+  - Setor e equipamento do bloqueio, o colaborador como **Usuário responsável**, a **Data
+    início** do dia e o número do chamado. O resto fica em branco para o TI;
+  - no chamado, um **acompanhamento privado** com o link para o laudo.
+- Com a situação do equipamento configurada, ele passa para a situação de "chamado aberto"
+  (ex.: Manutenção).
 
 ### 6.3 Confirmar a conferência do turno
 
@@ -489,7 +515,8 @@ A confirmação vale para **todos os itens pendentes mostrados na tela**:
 - as retiradas ficam **liberadas para devolução**;
 - as devoluções e os bloqueios ficam conferidos;
 - os itens bloqueados que ainda não tinham chamado **recebem o chamado automaticamente**, com as
-  fotos anexadas;
+  fotos anexadas e, com o plugin Laudo, o laudo inicial
+  ([seção 6.2](#62-abrir-chamado-de-um-item-bloqueado-opcional));
 - os registros com **problema conhecido** são conferidos como os demais, **sem abrir chamado**: o
   problema já está no laudo.
 
@@ -845,7 +872,13 @@ fechado**. Uma ação automática diária confere os chamados já solucionados c
 Em **Itens bloqueados** o TI vê os bloqueios de todos os setores e pode **Liberar** manualmente,
 com registro de quem liberou. Use para casos sem chamado a resolver (ex.: chamado excluído,
 equipamento trocado). Depois de liberado, o equipamento só volta à lista se estiver num estado
-disponível.
+disponível. Com a situação do equipamento configurada, a liberação devolve a situação de
+"liberado" (ex.: Ativo) ([seção 4.2](#42-tela-de-configuração)).
+
+O laudo inicial criado junto com o chamado **continua em aberto** quando o chamado é solucionado:
+ele é encerrado no plugin Laudo, pelo TI. Enquanto estiver em aberto, a próxima retirada do
+equipamento mostra o alerta de problema conhecido
+([seção 5.5](#55-equipamento-com-problema-já-conhecido-laudo)).
 
 ### 8.4 Ações automáticas e notificação
 
@@ -931,6 +964,9 @@ mas **não bloqueia** o equipamento e não abre chamado.
 | Bloqueado, aguardando conferência | Problema novo na retirada ou na devolução, na entrega para embarcação ou no recebimento | Conferência ou "Abrir chamado" |
 | Em reparo (chamado aberto) | Chamado aberto pelo gestor ou na conferência | Chamado solucionado/fechado (automático) ou liberação manual do TI |
 | Liberado | — | O equipamento volta à lista, se estiver em estado disponível |
+
+Com as situações configuradas, a situação do equipamento no GLPI acompanha essas três fases
+(ex.: Pendente, Manutenção e Ativo).
 
 ### Entrega para embarcação
 

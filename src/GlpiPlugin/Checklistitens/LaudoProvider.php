@@ -5,10 +5,14 @@ namespace GlpiPlugin\Checklistitens;
 use Glpi\Toolbox\Sanitizer;
 use Plugin;
 use Session;
+use Throwable;
+use Toolbox;
 
 /**
- * Leitura dos laudos técnicos do plugin Laudo (pasta "laudo"), só para consulta: o checklist
- * nunca grava nada nas tabelas do Laudo.
+ * Laudos técnicos do plugin Laudo (pasta "laudo"): leitura dos laudos em aberto e criação do laudo
+ * inicial junto com o chamado do item bloqueado. A criação passa pela classe do próprio Laudo
+ * (valem a numeração por setor, as validações e o histórico dele); o checklist não grava direto
+ * nas tabelas do Laudo.
  *
  * Um laudo está "em aberto" quando não está na lixeira e a situação dele não é uma das
  * configuradas como concluídas (padrão: a situação de nome "Concluído"). Laudo sem situação conta
@@ -17,6 +21,8 @@ use Session;
 class LaudoProvider
 {
     public const PLUGIN_KEY = 'laudo';
+
+    private const LAUDO_CLASS = 'GlpiPlugin\\Laudo\\Laudo';
 
     public const TABLE_LAUDOS    = 'glpi_plugin_laudo_laudos';
     public const TABLE_STATUSES  = 'glpi_plugin_laudo_laudostatuses';
@@ -28,6 +34,9 @@ class LaudoProvider
 
     /** Nome da situação que, por padrão, conta como concluída. */
     public const DEFAULT_DONE_STATUS = 'Concluído';
+
+    /** Nome da situação que, por padrão, o laudo criado junto com o chamado recebe. */
+    public const DEFAULT_INITIAL_STATUS = 'Aberto';
 
     /** Plugin Laudo ativo e com as tabelas que o checklist lê. */
     public static function isAvailable(): bool
@@ -94,13 +103,79 @@ class LaudoProvider
      */
     public static function findDefaultDoneStatuses(): array
     {
+        return self::findStatuses(self::DEFAULT_DONE_STATUS);
+    }
+
+    /** Id da situação de nome "Aberto" (padrão do laudo inicial), ou 0. */
+    public static function findDefaultInitialStatus(): int
+    {
+        return self::findStatuses(self::DEFAULT_INITIAL_STATUS)[0] ?? 0;
+    }
+
+    /** @return int[] */
+    private static function findStatuses(string $name): array
+    {
         global $DB;
 
         if (!$DB->tableExists(self::TABLE_STATUSES)) {
             return [];
         }
 
-        return Config::findIdsByName(self::TABLE_STATUSES, 'name', [self::DEFAULT_DONE_STATUS]);
+        return Config::findIdsByName(self::TABLE_STATUSES, 'name', [$name]);
+    }
+
+    /**
+     * Laudo inicial do equipamento bloqueado, criado junto com o chamado: setor e equipamento do
+     * bloqueio, a situação da configuração, o chamado, o colaborador como usuário responsável, a
+     * data de hoje e o relato do problema na descrição da ocorrência. O resto fica para o TI.
+     *
+     * @return array{id: int, name: string, url: string}|null null quando não cria (integração
+     *         desligada, sem situação inicial) ou não consegue (o motivo vai para o log)
+     */
+    public static function createInitial(ItemBlock $block, int $users_id, int $tickets_id, string $occurrence): ?array
+    {
+        $status = Config::getLaudoInitialStatus();
+        if ($status <= 0 || !self::isEnabled() || !class_exists(self::LAUDO_CLASS)) {
+            return null;
+        }
+
+        $input = [
+            'entities_id'                   => (int) $block->fields['entities_id'],
+            'groups_id'                     => (int) $block->fields['groups_id'],
+            'plugin_laudo_laudostatuses_id' => $status,
+            'itemtype'                      => (string) $block->fields['itemtype'],
+            'items_id'                      => (int) $block->fields['items_id'],
+            'users_id'                      => $users_id,
+            'date_start'                    => substr(Shift::now(), 0, 10),
+            'tickets_id'                    => $tickets_id,
+            'ticket_reference'              => (string) $tickets_id,
+            'occurrence_description'        => $occurrence,
+        ];
+        // Custos ainda sem valor ("?"), como no formulário de um laudo novo: o Laudo grava
+        // "valor confirmado" quando a marca de pendente não vem
+        $cost_fields = self::LAUDO_CLASS . '::COST_FIELDS';
+        foreach (defined($cost_fields) ? constant($cost_fields) : [] as $field) {
+            $input[$field . '_pending'] = 1;
+        }
+
+        $class = self::LAUDO_CLASS;
+        $laudo = new $class();
+        try {
+            $id = (int) $laudo->add(Sanitizer::sanitize($input));
+        } catch (Throwable $e) {
+            Toolbox::logError('checklistitens: erro ao criar o laudo do chamado ' . $tickets_id . ': ' . $e->getMessage());
+            return null;
+        }
+        if ($id <= 0) {
+            Toolbox::logError('checklistitens: o plugin Laudo recusou o laudo do chamado ' . $tickets_id . ' (setor e situação preenchidos?)');
+            return null;
+        }
+
+        return [
+            'id'   => $id,
+            'name' => self::laudoName($id, $laudo->fields['name'] ?? ''),
+            'url'  => $class::getFormURLWithID($id),
+        ];
     }
 
     /**
@@ -215,12 +290,14 @@ class LaudoProvider
             $laudos_id <= 0
             || !self::isAvailable()
             || !Session::haveRight(self::RIGHT_LAUDO, READ)
-            || !class_exists('GlpiPlugin\\Laudo\\Laudo')
+            || !class_exists(self::LAUDO_CLASS)
         ) {
             return null;
         }
 
-        return \GlpiPlugin\Laudo\Laudo::getFormURLWithID($laudos_id);
+        $class = self::LAUDO_CLASS;
+
+        return $class::getFormURLWithID($laudos_id);
     }
 
     /**
