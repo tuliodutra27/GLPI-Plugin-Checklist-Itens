@@ -7,10 +7,6 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 ## [Não lançado]
 
 ### Adicionado
-- A situação do equipamento no GLPI pode acompanhar o bloqueio: uma situação para o equipamento
-  bloqueado aguardando conferência, outra com o chamado aberto e outra ao ser liberado (ex.:
-  Pendente, Manutenção e Ativo). Vale para o rádio e para o celular ou tablet, e só troca a
-  situação que o próprio plugin deixou. Vem desligada: o TI escolhe as situações na configuração.
 - Com o plugin Laudo, o chamado do equipamento bloqueado ganha um laudo inicial vinculado ao
   equipamento e ao chamado, com o relato do problema na descrição da ocorrência, o colaborador
   como usuário responsável e a data de início. O chamado recebe um acompanhamento privado com o

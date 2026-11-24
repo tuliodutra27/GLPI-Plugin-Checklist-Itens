@@ -3,10 +3,9 @@
 Plugin para o [GLPI](https://glpi-project.org/) 10.0.x que controla a **retirada e a devolução de
 equipamentos compartilhados do setor** (rádios comunicadores, celulares e tablets), com checklist
 sem digitação, fotos do defeito, selfie com localização, conferência do gestor por turno e bloqueio
-automático de equipamento com problema, com a situação do equipamento no GLPI acompanhando o
-bloqueio (opcional). Com o plugin Laudo (opcional), o problema que já está num laudo técnico em
-aberto é avisado e não bloqueia o equipamento de novo, e o chamado do equipamento bloqueado ganha
-um laudo inicial com o relato do problema. O gestor também faz a
+automático de equipamento com problema. Com o plugin Laudo (opcional), o problema que já está num
+laudo técnico em aberto é avisado e não bloqueia o equipamento de novo, e o chamado do equipamento
+bloqueado ganha um laudo inicial com o relato do problema. O gestor também faz a
 **entrega de vários rádios a uma embarcação** e o recebimento de volta, numa tela que guarda o
 trabalho no aparelho quando a conexão falha.
 
@@ -60,9 +59,8 @@ trabalho no aparelho quando a conexão falha.
 **TI (administração)**
 - Item bloqueado volta a circular sozinho quando o **chamado é solucionado ou fechado**. O TI
   também pode liberar manualmente.
-- **Situação do equipamento** acompanhando o bloqueio (opcional): uma situação do GLPI para cada
-  fase (aguardando conferência, chamado aberto, liberado), no rádio e no celular ou tablet. O
-  plugin só troca a situação que ele mesmo deixou: a que o TI mudou à mão fica como está.
+- O plugin não muda a **situação (Status) do equipamento** no GLPI: o bloqueio vale dentro do
+  checklist, e o TI muda o Status à mão quando quiser marcar o equipamento em manutenção.
 - **Registro de uso de cada equipamento**, com exportação CSV:
   - situação atual;
   - linha do tempo completa: quem retirou, conferiu e devolveu, selfies, localização, problemas,
@@ -192,8 +190,7 @@ Rádio habilitado.
    - *Conferência do setor (gestor)*: concedido ao perfil Gestor Operacional;
    - *Administração (TI)*: concedido ao Super-Admin.
 6. Em **Ativos > Checklist uso de equipamentos > Configuração**, confira:
-   - os estados disponíveis para retirada e, se quiser, a situação do equipamento em cada fase
-     do bloqueio;
+   - os estados disponíveis para retirada;
    - os limites por pessoa;
    - os turnos;
    - as categorias de chamado;

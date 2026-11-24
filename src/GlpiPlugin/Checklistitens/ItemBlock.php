@@ -7,8 +7,7 @@ use Ticket;
 
 /**
  * Item fora de circulação por problema marcado na retirada ou na devolução. Fica bloqueado até
- * o chamado do TI ser solucionado (ou o TI liberar manualmente). A situação do equipamento
- * acompanha cada fase (AssetState).
+ * o chamado do TI ser solucionado (ou o TI liberar manualmente).
  *
  * lock_active = 1 enquanto o bloqueio vale; o índice único (itemtype, items_id, lock_active)
  * garante um bloqueio ativo por item.
@@ -93,24 +92,6 @@ class ItemBlock extends CommonDBTM
         ]);
 
         return $id ? (int) $id : 0;
-    }
-
-    public function post_addItem()
-    {
-        $this->followAssetState();
-    }
-
-    public function post_updateItem($history = true)
-    {
-        if (in_array('status', $this->updates, true)) {
-            $this->followAssetState();
-        }
-    }
-
-    /** A situação do equipamento acompanha a fase do bloqueio. */
-    private function followAssetState(): void
-    {
-        AssetState::follow((string) $this->fields['itemtype'], (int) $this->fields['items_id'], (int) $this->fields['status']);
     }
 
     /**

@@ -7,8 +7,8 @@ use QuerySubQuery;
 
 /**
  * Tipos de equipamento atendidos pelo plugin e acesso aos ativos (rádios do plugin Radios e
- * telefones nativos do GLPI). Daqui o plugin só lê; a única mudança nos ativos é a situação que
- * acompanha o bloqueio (AssetState), quando configurada.
+ * telefones nativos do GLPI). O plugin só lê essas tabelas, nunca altera os ativos: a situação
+ * (Status) do equipamento é mudada à mão pelo TI.
  */
 class ItemProvider
 {
