@@ -6,6 +6,7 @@ use Document;
 use Document_Item;
 use Glpi\Toolbox\Sanitizer;
 use Item_Ticket;
+use ITILFollowup;
 use Session;
 use Ticket;
 use Throwable;
@@ -13,8 +14,8 @@ use Toolbox;
 
 /**
  * Chamados do TI abertos pelo plugin, com texto gerado automaticamente (o gestor não digita nada)
- * e as fotos anexadas como documentos do GLPI: o do item bloqueado e o das baterias e capas que
- * voltaram com defeito da embarcação.
+ * e as fotos anexadas como documentos do GLPI: o do item bloqueado, que ganha também o laudo
+ * inicial do equipamento, e o das baterias e capas que voltaram com defeito da embarcação.
  */
 class TicketFactory
 {
@@ -41,28 +42,11 @@ class TicketFactory
         $problems  = UsageProblem::getFor($usages_id, $phase);
         $item      = ItemProvider::describe($itemtype, $items_id);
         $names     = array_column($problems, 'name');
+        $facts     = self::blockFacts($block, $usage, $item);
 
-        $when = $phase === Usage::PHASE_CHECKIN
-            ? sprintf(__('Devolução em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkin']), Shift::label($usage->fields['checkin_shift_start']))
-            : sprintf(__('Retirada em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkout']), Shift::label($usage->fields['checkout_shift_start']));
-
-        // Problema visto numa entrega para embarcação (na separação ou no recebimento de volta)
-        $vessel      = '';
-        $delivery_id = (int) ($usage->fields['plugin_checklistitens_deliveries_id'] ?? 0);
-        if ($delivery_id > 0) {
-            $delivery = Delivery::getRow($delivery_id);
-            $vessel   = $delivery ? Ui::text($delivery['vessel_name']) : '';
-            $when     = $phase === Usage::PHASE_CHECKIN
-                ? sprintf(__('Recebimento da embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkin']), Shift::label($usage->fields['checkin_shift_start']))
-                : sprintf(__('Separação para a embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkout']), Shift::label($usage->fields['checkout_shift_start']));
-        }
-
-        $html  = self::line(__('Equipamento', 'checklistitens'), $item);
-        $html .= self::line(__('Setor', 'checklistitens'), Sector::getName((int) $block->fields['groups_id']));
-        $html .= self::line(__('Colaborador', 'checklistitens'), Ui::text(getUserName((int) $usage->fields['users_id'])));
-        $html .= self::line(__('Quando', 'checklistitens'), $when);
-        if ($vessel !== '') {
-            $html .= self::line(__('Embarcação', 'checklistitens'), $vessel);
+        $html = '';
+        foreach ($facts as $label => $value) {
+            $html .= self::line($label, $value);
         }
         $html .= '<p><strong>' . htmlspecialchars(__('Problemas marcados', 'checklistitens')) . ':</strong></p>' . self::bullets($names);
 
@@ -101,15 +85,31 @@ class TicketFactory
             $link->add(['tickets_id' => $tickets_id, 'itemtype' => $itemtype, 'items_id' => $items_id]);
         }
 
-        // Primeiro liga o chamado ao bloqueio: se o anexo das fotos falhar no meio, a próxima
-        // conferência não abre um chamado repetido
+        // Primeiro liga o chamado ao bloqueio: se o laudo ou o anexo das fotos falhar no meio, a
+        // próxima conferência não abre um chamado repetido
         $block->update([
             'id'         => $block->getID(),
             'tickets_id' => $tickets_id,
             'status'     => ItemBlock::STATUS_REPAIR,
         ]);
 
-        self::quietly(static function () use ($ticket, $photos, $usages_id): void {
+        // O problema vai primeiro: é o começo da ocorrência que aparece no alerta de problema
+        // conhecido da próxima retirada
+        $occurrence = __('Problemas marcados', 'checklistitens') . ': ' . implode('; ', $names);
+        foreach ($facts as $label => $value) {
+            $occurrence .= "\n" . $label . ': ' . $value;
+        }
+        $users_id = (int) $usage->fields['users_id'];
+
+        self::quietly(static function () use ($ticket, $block, $users_id, $occurrence, $photos, $usages_id): void {
+            $laudo = LaudoProvider::createInitial($block, $users_id, (int) $ticket->getID(), $occurrence);
+            if ($laudo !== null) {
+                self::addPrivateFollowup($ticket, '<p>' . sprintf(
+                    htmlspecialchars(__('Laudo do equipamento criado junto com este chamado: %s.', 'checklistitens')),
+                    '<a href="' . htmlspecialchars($laudo['url']) . '" target="_blank" rel="noopener">' . htmlspecialchars($laudo['name']) . '</a>'
+                ) . '</p>');
+            }
+
             foreach ($photos as $photo) {
                 if ($photo['documents_id'] > 0 || $photo['path'] === null) {
                     continue;
@@ -127,6 +127,67 @@ class TicketFactory
         });
 
         return $tickets_id;
+    }
+
+    /**
+     * Relato do problema do item bloqueado, o mesmo no chamado e no laudo: equipamento, setor,
+     * colaborador, quando e, na entrega para embarcação, a embarcação. Valores em texto puro.
+     *
+     * @return array<string, string> rótulo => valor
+     */
+    private static function blockFacts(ItemBlock $block, Usage $usage, string $item): array
+    {
+        $phase = ItemBlock::phaseOf($block->fields);
+        $when  = $phase === Usage::PHASE_CHECKIN
+            ? sprintf(__('Devolução em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkin']), Shift::label($usage->fields['checkin_shift_start']))
+            : sprintf(__('Retirada em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkout']), Shift::label($usage->fields['checkout_shift_start']));
+
+        // Problema visto numa entrega para embarcação (na separação ou no recebimento de volta)
+        $vessel      = '';
+        $delivery_id = (int) ($usage->fields['plugin_checklistitens_deliveries_id'] ?? 0);
+        if ($delivery_id > 0) {
+            $delivery = Delivery::getRow($delivery_id);
+            $vessel   = $delivery ? Ui::text($delivery['vessel_name']) : '';
+            $when     = $phase === Usage::PHASE_CHECKIN
+                ? sprintf(__('Recebimento da embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkin']), Shift::label($usage->fields['checkin_shift_start']))
+                : sprintf(__('Separação para a embarcação em %1$s (turno %2$s)', 'checklistitens'), Ui::datetime($usage->fields['date_checkout']), Shift::label($usage->fields['checkout_shift_start']));
+        }
+
+        $facts = [
+            __('Equipamento', 'checklistitens') => $item,
+            __('Setor', 'checklistitens')       => Sector::getName((int) $block->fields['groups_id']),
+            __('Colaborador', 'checklistitens') => Ui::text(getUserName((int) $usage->fields['users_id'])),
+            __('Quando', 'checklistitens')      => $when,
+        ];
+        if ($vessel !== '') {
+            $facts[__('Embarcação', 'checklistitens')] = $vessel;
+        }
+
+        return $facts;
+    }
+
+    /**
+     * Acompanhamento privado (só o TI vê), sem e-mail de "chamado atualizado" e sem contar como
+     * o chamado atendido, mesmo quando quem confere tem direitos de técnico.
+     */
+    private static function addPrivateFollowup(Ticket $ticket, string $html): void
+    {
+        try {
+            $added = (new ITILFollowup())->add([
+                'itemtype'                        => Ticket::class,
+                'items_id'                        => (int) $ticket->getID(),
+                'content'                         => Sanitizer::sanitize($html),
+                'is_private'                      => 1,
+                'users_id'                        => (int) Session::getLoginUserID(),
+                '_disablenotif'                   => true,
+                '_do_not_compute_takeintoaccount' => true,
+            ]);
+            if (!$added) {
+                Toolbox::logError('checklistitens: não foi possível registrar o acompanhamento no chamado ' . $ticket->getID());
+            }
+        } catch (Throwable $e) {
+            Toolbox::logError('checklistitens: erro no acompanhamento do chamado ' . $ticket->getID() . ': ' . $e->getMessage());
+        }
     }
 
     /**

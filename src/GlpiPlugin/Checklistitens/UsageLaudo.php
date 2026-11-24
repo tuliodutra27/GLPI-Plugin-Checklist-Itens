@@ -72,7 +72,7 @@ class UsageLaudo extends CommonDBChild
 
     /**
      * Laudos gravados em vários usos, em uma consulta. Mesmo formato de LaudoProvider::getOpenFor;
-     * occurrence vem vazio e items traz o resumo gravado.
+     * occurrence e resolution vêm vazios e items traz o resumo gravado.
      *
      * @param int[] $usage_ids
      *
@@ -102,6 +102,7 @@ class UsageLaudo extends CommonDBChild
                 'status'     => Ui::text($row['laudo_status']),
                 'date'       => (string) ($row['laudo_date'] ?? ''),
                 'occurrence' => '',
+                'resolution' => '',
                 'items'      => Ui::text($row['laudo_summary']),
                 'url'        => $with_link ? LaudoProvider::getLaudoUrl($laudos_id) : null,
             ];

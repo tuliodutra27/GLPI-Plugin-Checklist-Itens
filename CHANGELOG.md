@@ -6,6 +6,22 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- Com o plugin Laudo, o chamado do equipamento bloqueado ganha um laudo inicial vinculado ao
+  equipamento e ao chamado, com o relato do problema na descrição da ocorrência, o colaborador
+  como usuário responsável e a data de início. O chamado recebe um acompanhamento privado com o
+  link do laudo, que abre numa nova guia. A situação do laudo novo é configurável (padrão:
+  "Aberto"; vazio = não cria).
+- Coluna "Laudo" em Itens bloqueados: o laudo do chamado do bloqueio e os laudos em aberto do
+  equipamento, com a situação, abrindo numa nova guia. Nos liberados recentemente aparece o laudo
+  do chamado.
+- O alerta "Este equipamento tem problema já conhecido" mostra também as observações do status
+  final do laudo, além da ocorrência.
+
+### Alterado
+- No alerta de problema já conhecido, a ocorrência do laudo vem com o rótulo "Ocorrência" e as
+  linhas separadas por "·", em vez de emendadas.
+
 ### Corrigido
 - Entrega para embarcação: o rádio que sai da entrega por problema deixava a entrega com "Rádios
   ok? Não". A resposta agora vale para os rádios que foram com a embarcação; o rádio que saiu

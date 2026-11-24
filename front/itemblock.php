@@ -1,6 +1,7 @@
 <?php
 
 use GlpiPlugin\Checklistitens\ItemBlock;
+use GlpiPlugin\Checklistitens\LaudoProvider;
 use GlpiPlugin\Checklistitens\Profile;
 use GlpiPlugin\Checklistitens\Ui;
 
@@ -33,6 +34,8 @@ Ui::header(ItemBlock::getTypeName(Session::getPluralNumber()), 'itemblock');
 Ui::render('itemblock.html.twig', [
     'active'      => $active,
     'released'    => $released,
+    'show_laudos' => LaudoProvider::isEnabled(),
+    'laudos'      => LaudoProvider::getForBlocks(array_merge($active, $released)),
     'can_release' => Profile::canAdministrate(),
     'post_url'    => Ui::url('front/itemblock.php'),
     'home_url'    => Ui::url('front/home.php'),

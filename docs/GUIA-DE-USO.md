@@ -33,7 +33,8 @@ O plugin controla a **retirada e a devolução de equipamentos compartilhados de
   fotos anexadas;
 - o **bloqueio automático** de equipamento com problema até o chamado ser solucionado;
 - o aviso de **problema já conhecido** quando o equipamento tem laudo em aberto no plugin Laudo
-  (opcional). Esse problema não bloqueia o equipamento de novo;
+  (opcional). Esse problema não bloqueia o equipamento de novo. Com o plugin Laudo, o chamado do
+  equipamento bloqueado também ganha um **laudo inicial** com o relato do problema;
 - a **entrega de rádios para embarcação**: o gestor separa vários rádios de uma vez, com as
   baterias reserva, fotografa, tira a selfie e entrega a uma embarcação. Depois recebe os rádios de
   volta numa tela no mesmo modelo. O que ele faz fica guardado no aparelho e é enviado aos poucos,
@@ -101,7 +102,8 @@ Itens a conferir no GLPI **antes** de liberar o plugin para os usuários:
    reinicie o serviço web.
 9. **Plugin Laudo (opcional).** Para o aviso de problema já conhecido, o plugin Laudo precisa
    estar ativo e cada laudo precisa ter o **equipamento vinculado** (o mesmo rádio, celular ou
-   tablet do GLPI).
+   tablet do GLPI). Para o laudo inicial criado junto com o chamado, cadastre no Laudo a situação
+   que ele deve receber (padrão: "Aberto").
 10. **Entrega para embarcação (opcional).** Ela só aparece com o tipo **Rádio** habilitado, e o
     tipo Rádio depende do plugin Radios.
     - O TI cadastra as **embarcações** ([seção 4.4](#44-embarcações)).
@@ -231,6 +233,7 @@ Em **Ativos > Checklist uso de equipamentos > Configuração**:
 | Retenção das localizações | Dias antes de poder limpar | 90 |
 | Integração com o plugin Laudo (problema já conhecido) | Equipamento com laudo em aberto mostra o alerta, e o problema já conhecido não bloqueia o item. Sem o plugin Laudo ativo, fica sem efeito | Sim |
 | Situações do laudo consideradas concluídas | Laudo em qualquer outra situação conta como em aberto. Só aparece se o plugin Laudo tiver situações cadastradas | "Concluído" |
+| Situação do laudo criado junto com o chamado | O chamado do equipamento bloqueado ganha um laudo nessa situação ([seção 6.2](#62-abrir-chamado-de-um-item-bloqueado-opcional)). Use uma situação fora das concluídas. Vazio = não cria laudo. Só aparece se o plugin Laudo tiver situações cadastradas | "Aberto" |
 
 No bloco **Entrega de rádios para embarcação**, na mesma tela:
 
@@ -392,9 +395,11 @@ com defeito (1 a 5)"** aparece.
 Só aparece quando o TI usa o plugin Laudo e o equipamento tem **laudo em aberto**.
 
 Ao escolher o equipamento, aparece o alerta **"Este equipamento tem problema já conhecido"**, com
-o nome do laudo, a data, a situação, a ocorrência e os itens afetados. Ex.: "Laudo 05 · 01/09/2026
-· Em análise", a ocorrência "tablet com a tela trincada" e "Itens afetados: 1x Tela". Quem tem
-acesso aos laudos vê também o link **Abrir laudo**.
+o nome do laudo, a data, a situação, a **Ocorrência** (descrição da ocorrência do laudo), o
+**Status final** (observações do status final, quando o TI já preencheu) e os itens afetados.
+Ex.: "Laudo 05 · 01/09/2026 · Em análise", "Ocorrência: tablet com a tela trincada", "Status
+final: aguardando a tela nova" e "Itens afetados: 1x Tela". Os textos longos aparecem cortados.
+Quem tem acesso aos laudos vê também o link **Abrir laudo**, que abre numa nova guia.
 
 - Se o equipamento não tem nenhum problema, responda **SIM** e siga normalmente.
 - Se tem problema (o do laudo ou outro), responda **NÃO**, marque os problemas e tire as fotos,
@@ -477,6 +482,13 @@ No bloco **Itens bloqueados**, toque em **Abrir chamado**.
 - Se o equipamento tinha laudo em aberto e o colaborador disse que era outro problema, a descrição
   lista também esses laudos.
 - O chamado fica **vinculado ao registro de uso** e, se for celular ou tablet, também ao ativo Telefone do GLPI.
+- Com o plugin Laudo, o chamado ganha um **laudo inicial** do equipamento
+  ([seção 4.2](#42-tela-de-configuração)):
+  - na **Descrição da ocorrência**, o mesmo relato do chamado, começando pelos problemas
+    marcados (é o começo que aparece no alerta de problema conhecido);
+  - Setor e equipamento do bloqueio, o colaborador como **Usuário responsável**, a **Data
+    início** do dia e o número do chamado. O resto fica em branco para o TI;
+  - no chamado, um **acompanhamento privado** com o link para o laudo, que abre numa nova guia.
 
 ### 6.3 Confirmar a conferência do turno
 
@@ -489,7 +501,8 @@ A confirmação vale para **todos os itens pendentes mostrados na tela**:
 - as retiradas ficam **liberadas para devolução**;
 - as devoluções e os bloqueios ficam conferidos;
 - os itens bloqueados que ainda não tinham chamado **recebem o chamado automaticamente**, com as
-  fotos anexadas;
+  fotos anexadas e, com o plugin Laudo, o laudo inicial
+  ([seção 6.2](#62-abrir-chamado-de-um-item-bloqueado-opcional));
 - os registros com **problema conhecido** são conferidos como os demais, **sem abrir chamado**: o
   problema já está no laudo.
 
@@ -846,6 +859,21 @@ Em **Itens bloqueados** o TI vê os bloqueios de todos os setores e pode **Liber
 com registro de quem liberou. Use para casos sem chamado a resolver (ex.: chamado excluído,
 equipamento trocado). Depois de liberado, o equipamento só volta à lista se estiver num estado
 disponível.
+
+O plugin **não muda a situação (Status) do equipamento** no GLPI: o bloqueio vale só dentro do
+checklist. Se o TI quiser marcar o equipamento em manutenção enquanto trata o chamado e o laudo,
+muda o Status à mão no próprio equipamento e, ao terminar, volta para um dos estados disponíveis
+para retirada (ex.: Ativo). Fora desses estados o equipamento não aparece para retirar, mesmo
+depois de liberado.
+
+Com o plugin Laudo, a coluna **Laudo** mostra o laudo criado junto com o chamado do bloqueio e os
+outros laudos em aberto do equipamento, com a situação de cada um. Nos liberados recentemente
+aparece o laudo do chamado. Quem tem acesso aos laudos abre o laudo pelo nome, numa nova guia.
+
+O laudo inicial criado junto com o chamado **continua em aberto** quando o chamado é solucionado:
+ele é encerrado no plugin Laudo, pelo TI. Enquanto estiver em aberto, a próxima retirada do
+equipamento mostra o alerta de problema conhecido
+([seção 5.5](#55-equipamento-com-problema-já-conhecido-laudo)).
 
 ### 8.4 Ações automáticas e notificação
 
