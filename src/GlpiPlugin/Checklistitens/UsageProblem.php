@@ -4,6 +4,8 @@ namespace GlpiPlugin\Checklistitens;
 
 use CommonDBTM;
 use Glpi\Toolbox\Sanitizer;
+use Throwable;
+use Toolbox;
 
 /**
  * Problemas marcados num uso (retirada ou devolução). Guarda uma cópia do texto do problema
@@ -57,5 +59,74 @@ class UsageProblem extends CommonDBTM
         }
 
         return $list;
+    }
+    /**
+     * Confere o problema informado num uso: pelo menos um problema ativo do catálogo do tipo e
+     * pelo menos DefectPhoto::MIN_PHOTOS fotos do defeito.
+     *
+     * @param string $radio rótulo do rádio, quando a tela lista vários (a mensagem diz qual)
+     * @return array{problems: array<int, array>, error: string} problemas válidos (linhas do catálogo)
+     */
+    public static function validate(string $itemtype, array $problem_ids, int $photos, string $radio = ''): array
+    {
+        $problems = ProblemType::getValidForType($itemtype, $problem_ids);
+        if (!count($problems)) {
+            return ['problems' => [], 'error' => $radio === ''
+                ? __('Marque pelo menos um problema encontrado.', 'checklistitens')
+                : sprintf(__('Marque pelo menos um problema encontrado no rádio %s.', 'checklistitens'), $radio)];
+        }
+        if ($photos < DefectPhoto::MIN_PHOTOS) {
+            return ['problems' => [], 'error' => $radio === ''
+                ? __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')
+                : sprintf(__('Tire pelo menos uma foto do defeito do rádio %s.', 'checklistitens'), $radio)];
+        }
+
+        return ['problems' => $problems, 'error' => ''];
+    }
+
+    /**
+     * Grava os problemas marcados que ainda não estão no uso e confere se todos ficaram gravados
+     * (o pedido pode chegar de novo).
+     *
+     * @param array<int, array> $problems linhas do catálogo (validate)
+     */
+    public static function record(int $usages_id, int $phase, array $problems): bool
+    {
+        $stored  = array_flip(array_column(self::getFor($usages_id, $phase), 'problemtypes_id'));
+        $missing = array_diff_key($problems, $stored);
+        if (!count($missing)) {
+            return true;
+        }
+
+        try {
+            self::addAll($usages_id, $phase, $missing);
+        } catch (Throwable $e) {
+            Toolbox::logError('checklistitens: ' . $e->getMessage());
+        }
+        $stored = array_flip(array_column(self::getFor($usages_id, $phase), 'problemtypes_id'));
+
+        return !count(array_diff_key($problems, $stored));
+    }
+    /**
+     * Nomes dos problemas marcados em vários usos, numa consulta.
+     *
+     * @param int[] $usage_ids
+     * @return array<int, array<int, string[]>> usages_id => fase => textos dos problemas
+     */
+    public static function namesFor(array $usage_ids): array
+    {
+        global $DB;
+
+        $usage_ids = array_values(array_unique(array_filter(array_map('intval', $usage_ids))));
+        if (!count($usage_ids)) {
+            return [];
+        }
+
+        $names = [];
+        foreach ($DB->request(['FROM' => self::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $row) {
+            $names[(int) $row['plugin_checklistitens_usages_id']][(int) $row['phase']][] = Ui::text($row['problem_name']);
+        }
+
+        return $names;
     }
 }

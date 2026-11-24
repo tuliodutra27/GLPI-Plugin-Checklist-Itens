@@ -1,6 +1,7 @@
 <?php
 
 use GlpiPlugin\Checklistitens\Config;
+use GlpiPlugin\Checklistitens\DefectPhoto;
 use GlpiPlugin\Checklistitens\ItemProvider;
 use GlpiPlugin\Checklistitens\LaudoProvider;
 use GlpiPlugin\Checklistitens\ProblemType;
@@ -52,7 +53,6 @@ foreach (Config::getEnabledTypes() as $itemtype) {
     $types[] = [
         'itemtype'      => $itemtype,
         'label'         => ItemProvider::getTypeLabel($itemtype),
-        'short_label'   => ItemProvider::getShortTypeLabel($itemtype),
         'icon'          => ItemProvider::getTypeIcon($itemtype),
         'items'         => $items,
         'limit_reached' => $limitReached,
@@ -86,5 +86,6 @@ Ui::render('kiosk.html.twig', [
     'checkin_url'   => Ui::url('front/kiosk.php?step=checkin'),
     'logout_url'    => Ui::logoutUrl(),
     'idle_seconds'  => Config::getIdleSeconds(),
+    'defect_limits' => DefectPhoto::limits(),
 ]);
 Ui::footer();

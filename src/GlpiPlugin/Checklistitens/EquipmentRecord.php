@@ -38,7 +38,7 @@ class EquipmentRecord extends CommonGLPI
 
     public static function canView()
     {
-        return Profile::isManager() || Profile::isAdmin();
+        return Profile::canViewRecords();
     }
 
     /** @return array<string, array{label: string, color: string}> */
@@ -97,7 +97,7 @@ class EquipmentRecord extends CommonGLPI
     public static function displayTabContentForItem(CommonGLPI $item, $tabnum = 1, $withtemplate = 0)
     {
         if ($item instanceof Phone) {
-            echo Html::css(\Plugin::getWebDir('checklistitens', false) . '/css/checklistitens.css');
+            echo Ui::css();
             Ui::render('equipment_record.html.twig', self::getRecord(ItemProvider::PHONE, (int) $item->getID(), []) + [
                 'embedded'   => true,
                 'page_url'   => Ui::url('front/equipment.form.php'),
@@ -145,19 +145,15 @@ class EquipmentRecord extends CommonGLPI
                 $id   = (int) $row['id'];
                 $item = ItemProvider::present($itemtype, $row);
 
-                $holder = '';
-                if (isset($blocks[$id])) {
-                    $situation = (int) $blocks[$id]['status'] === ItemBlock::STATUS_REPAIR ? self::SITUATION_REPAIR : self::SITUATION_BLOCKED;
-                } elseif (isset($open[$id])) {
-                    $situation = self::situationForOpenUsage($open[$id]);
-                    $vessel    = $vessels[(int) $open[$id]['plugin_checklistitens_deliveries_id']] ?? '';
-                    $holder    = $vessel !== ''
-                        ? sprintf(__('%1$s desde %2$s', 'checklistitens'), $vessel, Ui::datetime($open[$id]['date_checkout']))
-                        : sprintf(__('%1$s desde %2$s', 'checklistitens'), Ui::text(getUserName((int) $open[$id]['users_id'])), Ui::datetime($open[$id]['date_checkout']));
-                } elseif (!in_array((int) $row['states_id'], $states, true)) {
-                    $situation = self::SITUATION_OUT;
-                } else {
-                    $situation = self::SITUATION_AVAILABLE;
+                $situation = self::situationOf($blocks[$id] ?? null, $open[$id] ?? null, $row, $states);
+                $holder    = '';
+                if (!isset($blocks[$id]) && isset($open[$id])) {
+                    $vessel = $vessels[(int) $open[$id]['plugin_checklistitens_deliveries_id']] ?? '';
+                    $holder = sprintf(
+                        __('%1$s desde %2$s', 'checklistitens'),
+                        $vessel !== '' ? $vessel : Ui::text(getUserName((int) $open[$id]['users_id'])),
+                        Ui::datetime($open[$id]['date_checkout'])
+                    );
                 }
 
                 if (!empty($filters['situation']) && $filters['situation'] !== $situation) {
@@ -169,7 +165,7 @@ class EquipmentRecord extends CommonGLPI
 
                 $list[] = $item + [
                     'itemtype'        => $itemtype,
-                    'type_label'      => ItemProvider::getShortTypeLabel($itemtype),
+                    'type_label'      => ItemProvider::getTypeLabel($itemtype),
                     'icon'            => ItemProvider::getTypeIcon($itemtype),
                     'sector'          => Sector::getName((int) $row['groups_id']),
                     'state'           => Ui::text($row['state_name'] ?? ''),
@@ -193,10 +189,27 @@ class EquipmentRecord extends CommonGLPI
         return Ui::url(sprintf('front/equipment.form.php?itemtype=%s&items_id=%d', urlencode($itemtype), $items_id));
     }
 
-    /** Situação do equipamento a partir do uso aberto (retirada comum ou entrega para embarcação). */
-    private static function situationForOpenUsage(array $usage): string
+    /**
+     * Situação do equipamento: bloqueado (aguardando conferência ou em reparo), preso por um uso
+     * aberto (retirada comum ou entrega para embarcação), fora de uso pelo estado ou disponível.
+     *
+     * @param array|null $block    bloqueio ativo
+     * @param array|null $open     uso aberto
+     * @param array|null $item_row linha do ativo (estado)
+     * @param int[]      $states   estados disponíveis para retirada
+     */
+    private static function situationOf(?array $block, ?array $open, ?array $item_row, array $states): string
     {
-        switch ((int) $usage['status']) {
+        if ($block !== null) {
+            return (int) $block['status'] === ItemBlock::STATUS_REPAIR ? self::SITUATION_REPAIR : self::SITUATION_BLOCKED;
+        }
+        if ($open === null) {
+            return $item_row !== null && !in_array((int) $item_row['states_id'], $states, true)
+                ? self::SITUATION_OUT
+                : self::SITUATION_AVAILABLE;
+        }
+
+        switch ((int) $open['status']) {
             case Usage::STATUS_ON_VESSEL:
                 return self::SITUATION_ON_VESSEL;
             case Usage::STATUS_DELIVERY_DRAFT:
@@ -215,7 +228,7 @@ class EquipmentRecord extends CommonGLPI
     private static function getVesselNames(array $delivery_ids): array
     {
         $names = [];
-        foreach (self::loadById(Install::TABLE_DELIVERIES, array_filter($delivery_ids)) as $id => $row) {
+        foreach (self::loadById(Delivery::getTable(), array_filter($delivery_ids)) as $id => $row) {
             $names[$id] = Ui::text($row['vessel_name']);
         }
 
@@ -312,11 +325,8 @@ class EquipmentRecord extends CommonGLPI
         $row  = ItemProvider::getRow($itemtype, $items_id);
         $item = $row !== null ? ItemProvider::present($itemtype, $row) : ['id' => $items_id, 'label' => '#' . $items_id, 'detail' => '', 'groups_id' => 0];
 
-        // Datas só no formato AAAA-MM-DD (o valor vai direto para a consulta)
         foreach (['date_from', 'date_to'] as $key) {
-            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($filters[$key] ?? ''))) {
-                $filters[$key] = '';
-            }
+            $filters[$key] = Ui::date($filters[$key] ?? '');
         }
 
         // Separação de entrega cancelada não chegou a ser um uso: fica só no detalhe da entrega
@@ -341,22 +351,11 @@ class EquipmentRecord extends CommonGLPI
             $confirmation_ids[] = (int) $u['plugin_checklistitens_confirmations_id_checkin'];
         }
         $confirmations = self::loadById(Confirmation::getTable(), array_filter($confirmation_ids));
-        $blocks        = [];
-        $problems      = [];
-        if (count($ids)) {
-            foreach ($DB->request(['FROM' => ItemBlock::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $ids]]) as $b) {
-                $blocks[(int) $b['plugin_checklistitens_usages_id']] = $b;
-            }
-            foreach ($DB->request(['FROM' => UsageProblem::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $ids], 'ORDER' => 'id']) as $p) {
-                $problems[(int) $p['plugin_checklistitens_usages_id']][(int) $p['phase']][] = Ui::text($p['problem_name']);
-            }
-        }
-        $photos = DefectPhoto::getForUsages($ids);
-        $laudos = UsageLaudo::getForUsages($ids);
+        $view          = new UsageView($usages);
 
         // Entregas para embarcação e recebimentos ligados aos usos (selfie e localização vêm deles)
-        $deliveries = self::loadById(Install::TABLE_DELIVERIES, array_filter(array_column($usages, 'plugin_checklistitens_deliveries_id')));
-        $receipts   = self::loadById(Install::TABLE_DELIVERYRECEIPTS, array_filter(array_column($usages, 'plugin_checklistitens_deliveryreceipts_id')));
+        $deliveries = self::loadById(Delivery::getTable(), array_filter(array_column($usages, 'plugin_checklistitens_deliveries_id')));
+        $receipts   = self::loadById(DeliveryReceipt::getTable(), array_filter(array_column($usages, 'plugin_checklistitens_deliveryreceipts_id')));
 
         $timeline = [];
         $stats    = ['uses' => 0, 'refusals' => 0, 'with_problem' => 0, 'known_issue' => 0, 'blocks' => 0, 'tickets' => [], 'repair_seconds' => 0, 'last_use' => ''];
@@ -386,8 +385,8 @@ class EquipmentRecord extends CommonGLPI
             }
 
             $block = null;
-            if (isset($blocks[$id])) {
-                $b = $blocks[$id];
+            $b     = $view->block($u);
+            if ($b !== null) {
                 $stats['blocks']++;
                 if ((int) $b['tickets_id'] > 0) {
                     $stats['tickets'][(int) $b['tickets_id']] = true;
@@ -407,17 +406,17 @@ class EquipmentRecord extends CommonGLPI
             $delivery = $deliveries[(int) $u['plugin_checklistitens_deliveries_id']] ?? null;
             $receipt  = $receipts[(int) $u['plugin_checklistitens_deliveryreceipts_id']] ?? null;
 
-            $checkout_selfie   = self::selfieInfo((string) $u['checkout_selfie'], Selfie::KIND_CHECKOUT, $id, $u['date_checkout']);
-            $checkout_location = Location::present($u, 'checkout_', __('Retirada', 'checklistitens') . ' — ' . $item['label']);
+            $checkout_selfie   = Selfie::info(Selfie::KIND_CHECKOUT, $u);
+            $checkout_location = Selfie::location(Selfie::KIND_CHECKOUT, $u, __('Retirada', 'checklistitens') . ' — ' . $item['label']);
             if ($delivery !== null) {
-                $checkout_selfie   = self::selfieInfo((string) $delivery['selfie'], Selfie::KIND_DELIVERY, (int) $delivery['id'], $delivery['date_delivery']);
-                $checkout_location = Location::present($delivery, '', __('Entrega', 'checklistitens') . ' — ' . Ui::text($delivery['vessel_name']));
+                $checkout_selfie   = Selfie::info(Selfie::KIND_DELIVERY, $delivery);
+                $checkout_location = Selfie::location(Selfie::KIND_DELIVERY, $delivery, __('Entrega', 'checklistitens') . ' — ' . Ui::text($delivery['vessel_name']));
             }
-            $checkin_selfie   = self::selfieInfo((string) $u['checkin_selfie'], Selfie::KIND_CHECKIN, $id, $u['date_checkin']);
-            $checkin_location = Location::present($u, 'checkin_', __('Devolução', 'checklistitens') . ' — ' . $item['label']);
+            $checkin_selfie   = Selfie::info(Selfie::KIND_CHECKIN, $u);
+            $checkin_location = Selfie::location(Selfie::KIND_CHECKIN, $u, __('Devolução', 'checklistitens') . ' — ' . $item['label']);
             if ($receipt !== null) {
-                $checkin_selfie   = self::selfieInfo((string) $receipt['selfie'], Selfie::KIND_RECEIPT, (int) $receipt['id'], $receipt['date_receipt']);
-                $checkin_location = Location::present($receipt, '', __('Recebimento', 'checklistitens') . ' — ' . $item['label']);
+                $checkin_selfie   = Selfie::info(Selfie::KIND_RECEIPT, $receipt);
+                $checkin_location = Selfie::location(Selfie::KIND_RECEIPT, $receipt, __('Recebimento', 'checklistitens') . ' — ' . $item['label']);
             }
 
             $timeline[] = [
@@ -433,25 +432,17 @@ class EquipmentRecord extends CommonGLPI
                     'url'    => DeliveryReport::getUrl((int) $delivery['id']),
                 ] : null,
                 'checkout'     => [
-                    'when'     => Ui::datetime($u['date_checkout']),
-                    'shift'    => Shift::label($u['checkout_shift_start']),
-                    'is_ok'    => (int) $u['checkout_is_ok'] === 1,
-                    'known'    => $known_out,
-                    'problems' => $problems[$id][Usage::PHASE_CHECKOUT] ?? [],
-                    'photos'   => $photos[$id][Usage::PHASE_CHECKOUT] ?? [],
-                    'laudos'   => $laudos[$id][Usage::PHASE_CHECKOUT] ?? [],
+                    'when'  => Ui::datetime($u['date_checkout']),
+                    'shift' => Shift::label($u['checkout_shift_start']),
+                ] + $view->result($u, Usage::PHASE_CHECKOUT) + [
                     'selfie'   => $checkout_selfie,
                     'location' => $checkout_location,
                 ],
                 'confirmation' => self::confirmationInfo($confirmations[(int) $u['plugin_checklistitens_confirmations_id']] ?? null),
                 'checkin'      => $u['date_checkin'] ? [
-                    'when'     => Ui::datetime($u['date_checkin']),
-                    'shift'    => Shift::label($u['checkin_shift_start']),
-                    'is_ok'    => (int) $u['checkin_is_ok'] === 1,
-                    'known'    => $known_in,
-                    'problems' => $problems[$id][Usage::PHASE_CHECKIN] ?? [],
-                    'photos'   => $photos[$id][Usage::PHASE_CHECKIN] ?? [],
-                    'laudos'   => $laudos[$id][Usage::PHASE_CHECKIN] ?? [],
+                    'when'  => Ui::datetime($u['date_checkin']),
+                    'shift' => Shift::label($u['checkin_shift_start']),
+                ] + $view->result($u, Usage::PHASE_CHECKIN) + [
                     'selfie'   => $checkin_selfie,
                     'location' => $checkin_location,
                 ] : null,
@@ -463,18 +454,12 @@ class EquipmentRecord extends CommonGLPI
 
         $active_block = ItemBlock::getActiveFor($itemtype, $items_id);
         $situations   = self::getSituations();
-        if ($active_block !== null) {
-            $situation = (int) $active_block['status'] === ItemBlock::STATUS_REPAIR ? self::SITUATION_REPAIR : self::SITUATION_BLOCKED;
-        } else {
-            $open = self::getOpenUsages($itemtype)[$items_id] ?? null;
-            if ($open !== null) {
-                $situation = self::situationForOpenUsage($open);
-            } elseif ($row !== null && !in_array((int) $row['states_id'], Config::getAvailableStates(), true)) {
-                $situation = self::SITUATION_OUT;
-            } else {
-                $situation = self::SITUATION_AVAILABLE;
-            }
-        }
+        $situation    = self::situationOf(
+            $active_block,
+            $active_block === null ? (self::getOpenUsages($itemtype)[$items_id] ?? null) : null,
+            $row,
+            Config::getAvailableStates()
+        );
 
         return [
             'itemtype'        => $itemtype,
@@ -511,18 +496,13 @@ class EquipmentRecord extends CommonGLPI
     }
 
     /**
-     * CSV (separador ";" e BOM UTF-8, para abrir direto no Excel).
+     * CSV do registro de uso, uma linha por uso.
      */
     public static function sendCsv(string $itemtype, int $items_id, array $filters): void
     {
         $record = self::getRecord($itemtype, $items_id, $filters);
 
-        header('Content-Type: text/csv; charset=UTF-8');
-        header(sprintf('Content-Disposition: attachment; filename="registro_uso_%s_%d.csv"', strtolower($itemtype), $items_id));
-
-        $out = fopen('php://output', 'w');
-        fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, [
+        $header = [
             __('Uso', 'checklistitens'), __('Equipamento', 'checklistitens'), __('Colaborador', 'checklistitens'),
             __('Setor', 'checklistitens'), __('Situação', 'checklistitens'), __('Retirada', 'checklistitens'),
             __('Turno da retirada', 'checklistitens'), __('Problemas na retirada', 'checklistitens'),
@@ -535,11 +515,12 @@ class EquipmentRecord extends CommonGLPI
             __('Problema conhecido na retirada', 'checklistitens'), __('Problema conhecido na devolução', 'checklistitens'),
             __('Laudos em aberto', 'checklistitens'), __('Fotos do defeito', 'checklistitens'),
             __('Embarcação', 'checklistitens'),
-        ], ';');
+        ];
 
+        $rows  = [];
         $label = trim($record['label'] . ' ' . $record['detail']);
         foreach ($record['timeline'] as $entry) {
-            fputcsv($out, [
+            $rows[] = [
                 $entry['id'],
                 $label,
                 $entry['user'],
@@ -568,10 +549,10 @@ class EquipmentRecord extends CommonGLPI
                 ))),
                 count($entry['checkout']['photos']) + count($entry['checkin']['photos'] ?? []),
                 $entry['delivery']['vessel'] ?? '',
-            ], ';');
+            ];
         }
-        fclose($out);
-        exit;
+
+        Ui::sendCsv(sprintf('registro_uso_%s_%d.csv', strtolower($itemtype), $items_id), $header, $rows);
     }
 
     /** @return array<int, array> */
@@ -601,20 +582,8 @@ class EquipmentRecord extends CommonGLPI
         return [
             'user'   => Ui::text(getUserName((int) $row['users_id'])),
             'when'   => Ui::datetime($row['date_confirmation']),
-            'selfie' => self::selfieInfo((string) $row['selfie'], Selfie::KIND_CONFIRMATION, (int) $row['id'], $row['date_confirmation']),
-            'location' => Location::present($row, '', __('Conferência do gestor', 'checklistitens')),
+            'selfie' => Selfie::info(Selfie::KIND_CONFIRMATION, $row),
+            'location' => Selfie::location(Selfie::KIND_CONFIRMATION, $row, __('Conferência do gestor', 'checklistitens')),
         ];
-    }
-
-    /**
-     * @return array{url: string, removed: string}
-     */
-    private static function selfieInfo(string $path, string $kind, int $id, ?string $date): array
-    {
-        if ($path !== '') {
-            return ['url' => Selfie::getUrl($kind, $id), 'removed' => ''];
-        }
-
-        return ['url' => '', 'removed' => SelfiePurge::getRemovedLabel($date)];
     }
 }

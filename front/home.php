@@ -13,7 +13,7 @@ if (!Home::canSee()) {
 
 // Quem só usa (ex.: operador) e não está com nenhum equipamento vai direto para a retirada.
 if (
-    Profile::canUse() && !Profile::isManager() && !Profile::isAdmin()
+    Profile::canUse() && !Profile::canViewRecords()
     && !count(Usage::getOpenForUser((int) Session::getLoginUserID()))
 ) {
     Html::redirect(Ui::url('front/kiosk.php?step=checkout'));

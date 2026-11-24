@@ -614,7 +614,10 @@ Depois de concluída, a entrega fica **"Entregue"** e os rádios ficam **"Com a 
 - O rádio bloqueado aparece em **Itens bloqueados** na conferência do setor. O chamado é aberto por
   lá, com as fotos anexadas ([seção 6.2](#62-abrir-chamado-de-um-item-bloqueado-opcional)), ou na
   confirmação da conferência.
-- Com algum rádio com problema, a resposta de "Rádios ok?" fica em **NÃO**.
+- Com algum rádio com problema, a resposta de "Rádios ok?" fica em **NÃO** durante a separação. Na
+  entrega concluída, ela vale para os rádios que foram com a embarcação: fica **SIM** quando o
+  único problema foi de rádio que saiu da entrega (ele aparece à parte, como saído por problema), e
+  **NÃO** quando algum rádio foi com problema já conhecido (laudo em aberto).
 - Se **todos** os rádios saírem por problema, a entrega não pode ser concluída: acrescente outros
   rádios ou cancele a separação.
 

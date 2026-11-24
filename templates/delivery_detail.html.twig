@@ -1,38 +1,5 @@
 {# Detalhe de uma entrega para embarcação: dados, rádios, fotos, selfie e recebimentos #}
-{% macro selfie(info) %}
-    {% if info.url %}
-        <a href="{{ info.url }}" target="_blank" rel="noopener" title="{{ __('Ver selfie', 'checklistitens') }}">
-            <img src="{{ info.url }}" class="ci-thumb" alt="{{ __('Selfie', 'checklistitens') }}" loading="lazy">
-        </a>
-    {% elseif info.removed %}
-        <span class="ci-small text-muted">{{ info.removed }}</span>
-    {% endif %}
-{% endmacro %}
-
-{% macro photos(list, title) %}
-    {% if list|length %}
-        <div class="ci-photo-strip mt-1">
-            {% for p in list %}
-                <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ title }}">
-                    <img src="{{ p.url }}" class="ci-thumb ci-thumb-photo" alt="{{ title }}" loading="lazy">
-                </a>
-            {% endfor %}
-        </div>
-    {% endif %}
-{% endmacro %}
-
-{# Resultado do checklist de um rádio numa fase: problemas, problema conhecido e fotos do defeito #}
-{% macro result(phase) %}
-    {% import _self as m %}
-    {% import '@checklistitens/parts/known_issue.html.twig' as known %}
-    {% if phase.problems|length %}
-        <ul class="ci-problem-tags mb-1">{% for p in phase.problems %}<li>{{ p }}</li>{% endfor %}</ul>
-        {% if phase.known %}{{ known.badge(phase.laudos) }}{% endif %}
-    {% endif %}
-    {{ m.photos(phase.photos, __('Foto do defeito', 'checklistitens')) }}
-{% endmacro %}
-
-{% import _self as ci %}
+{% import '@checklistitens/parts/record.html.twig' as ci %}
 {# "geo" e não "location": a entrega já traz uma variável location com os dados do mapa #}
 {% import '@checklistitens/parts/location.html.twig' as geo %}
 
@@ -118,13 +85,13 @@
                         <div>
                             <a href="{{ i.record_url }}"><strong>{{ i.label }}</strong></a>
                             <span class="text-muted ci-small">{{ i.detail }}</span>
-                            {{ ci.result(i.checkout) }}
+                            {{ ci.problems(i.checkout) }}
                             {% if i.checkin %}
                                 <div class="ci-small mt-1">
                                     <i class="ti ti-arrow-back-up"></i> {{ __('Recebido em', 'checklistitens') }} {{ i.checkin.when }}
                                     {% if i.checkin.is_ok %}· <span class="badge bg-green-lt">{{ __('Ok', 'checklistitens') }}</span>{% endif %}
                                 </div>
-                                {{ ci.result(i.checkin) }}
+                                {{ ci.problems(i.checkin) }}
                             {% endif %}
                             {% if i.block %}
                                 <div class="ci-small mt-1">

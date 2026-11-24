@@ -50,17 +50,10 @@ class SelfiePurge extends CommonDBTM
         global $DB;
 
         $limit = $limit_date . ' 23:59:59';
-        $sources = [
-            [Usage::getTable(), 'checkout_selfie', 'date_checkout'],
-            [Usage::getTable(), 'checkin_selfie', 'date_checkin'],
-            [Confirmation::getTable(), 'selfie', 'date_confirmation'],
-            // Selfies do gestor na entrega para embarcação e no recebimento de volta
-            [Install::TABLE_DELIVERIES, 'selfie', 'date_delivery'],
-            [Install::TABLE_DELIVERYRECEIPTS, 'selfie', 'date_receipt'],
-        ];
 
         $files = [];
-        foreach ($sources as [$table, $field, $date_field]) {
+        foreach (Selfie::sources() as [$class, $field, $date_field]) {
+            $table    = $class::getTable();
             $iterator = $DB->request([
                 'SELECT' => ['id', $field],
                 'FROM'   => $table,
@@ -85,7 +78,7 @@ class SelfiePurge extends CommonDBTM
         $bytes = 0;
         $files = self::getEligible($limit_date);
         foreach ($files as $file) {
-            $path = Selfie::getFullPath($file['path']);
+            $path = Selfie::folder()->fullPath($file['path']);
             if ($path !== null) {
                 $bytes += (int) filesize($path);
             }
@@ -103,7 +96,7 @@ class SelfiePurge extends CommonDBTM
     {
         global $DB;
 
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $limit_date) || $limit_date > self::getMaxLimitDate()) {
+        if (Ui::date($limit_date) === '' || $limit_date > self::getMaxLimitDate()) {
             return ['ok' => false, 'message' => sprintf(
                 __('Escolha uma data até %s (as selfies ficam guardadas por pelo menos %d dias).', 'checklistitens'),
                 \Html::convDate(self::getMaxLimitDate()),
@@ -114,20 +107,12 @@ class SelfiePurge extends CommonDBTM
         $count = 0;
         $bytes = 0;
         foreach (self::getEligible($limit_date) as $file) {
-            $bytes += Selfie::deleteFile($file['path']);
+            $bytes += Selfie::folder()->delete($file['path']);
             $DB->update($file['table'], [$file['field'] => ''], ['id' => $file['id']]);
             $count++;
         }
 
-        $purge = new self();
-        $purge->add([
-            'users_id'   => $users_id,
-            'purge_type' => self::TYPE_SELFIES,
-            'date_purge' => Shift::now(),
-            'date_limit' => $limit_date . ' 23:59:59',
-            'nb_files'   => $count,
-            'size_bytes' => $bytes,
-        ]);
+        self::record(self::TYPE_SELFIES, $limit_date, $users_id, $count, $bytes);
 
         return ['ok' => true, 'message' => sprintf(
             __('%1$d selfie(s) removida(s), %2$s liberados. Os registros de uso foram mantidos.', 'checklistitens'),
@@ -154,16 +139,10 @@ class SelfiePurge extends CommonDBTM
         global $DB;
 
         $limit = $limit_date . ' 23:59:59';
-        $sources = [
-            [Usage::getTable(), 'checkout_', 'date_checkout'],
-            [Usage::getTable(), 'checkin_', 'date_checkin'],
-            [Confirmation::getTable(), '', 'date_confirmation'],
-            [Install::TABLE_DELIVERIES, '', 'date_delivery'],
-            [Install::TABLE_DELIVERYRECEIPTS, '', 'date_receipt'],
-        ];
 
         $rows = [];
-        foreach ($sources as [$table, $prefix, $date_field]) {
+        foreach (Selfie::sources() as [$class, , $date_field, $prefix]) {
+            $table    = $class::getTable();
             $iterator = $DB->request([
                 'SELECT' => ['id'],
                 'FROM'   => $table,
@@ -190,7 +169,7 @@ class SelfiePurge extends CommonDBTM
     {
         global $DB;
 
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $limit_date) || $limit_date > self::getLocationMaxLimitDate()) {
+        if (Ui::date($limit_date) === '' || $limit_date > self::getLocationMaxLimitDate()) {
             return ['ok' => false, 'message' => sprintf(
                 __('Escolha uma data até %s (as localizações ficam guardadas por %d dias).', 'checklistitens'),
                 \Html::convDate(self::getLocationMaxLimitDate()),
@@ -209,20 +188,25 @@ class SelfiePurge extends CommonDBTM
             $count++;
         }
 
-        $purge = new self();
-        $purge->add([
-            'users_id'   => $users_id,
-            'purge_type' => self::TYPE_LOCATIONS,
-            'date_purge' => Shift::now(),
-            'date_limit' => $limit_date . ' 23:59:59',
-            'nb_files'   => $count,
-            'size_bytes' => 0,
-        ]);
+        self::record(self::TYPE_LOCATIONS, $limit_date, $users_id, $count, 0);
 
         return ['ok' => true, 'message' => sprintf(
             __('%d localização(ões) removida(s). Os registros de uso foram mantidos.', 'checklistitens'),
             $count
         )];
+    }
+
+    /** Registro de uma limpeza (quem, quando, até que data e quanto saiu). */
+    private static function record(int $type, string $limit_date, int $users_id, int $count, int $bytes): void
+    {
+        (new self())->add([
+            'users_id'   => $users_id,
+            'purge_type' => $type,
+            'date_purge' => Shift::now(),
+            'date_limit' => $limit_date . ' 23:59:59',
+            'nb_files'   => $count,
+            'size_bytes' => $bytes,
+        ]);
     }
 
     /**

@@ -1,0 +1,37 @@
+{# Partes comuns do registro de uso, do detalhe da entrega e da conferência do setor #}
+
+{# Selfie de um registro, ou o aviso de que foi removida na limpeza (Selfie::info) #}
+{% macro selfie(info) %}
+    {% if info.url %}
+        <a href="{{ info.url }}" target="_blank" rel="noopener" title="{{ __('Ver selfie', 'checklistitens') }}">
+            <img src="{{ info.url }}" class="ci-thumb" alt="{{ __('Selfie', 'checklistitens') }}" loading="lazy">
+        </a>
+    {% elseif info.removed %}
+        <span class="ci-small text-muted">{{ info.removed }}</span>
+    {% endif %}
+{% endmacro %}
+
+{# Miniaturas que abrem a foto inteira #}
+{% macro photos(list, title) %}
+    {% set title = title|default(__('Foto do defeito', 'checklistitens')) %}
+    {% if list|length %}
+        <div class="ci-photo-strip mt-1">
+            {% for p in list %}
+                <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ title }}">
+                    <img src="{{ p.url }}" class="ci-thumb ci-thumb-photo" alt="{{ title }}" loading="lazy">
+                </a>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endmacro %}
+
+{# Problemas marcados numa fase (UsageView::result), o selo do problema conhecido e as fotos do defeito #}
+{% macro problems(phase) %}
+    {% import _self as record %}
+    {% import '@checklistitens/parts/known_issue.html.twig' as known %}
+    {% if phase.problems|length %}
+        <ul class="ci-problem-tags mb-1">{% for p in phase.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+        {% if phase.known %}{{ known.badge(phase.laudos) }}{% endif %}
+    {% endif %}
+    {{ record.photos(phase.photos) }}
+{% endmacro %}

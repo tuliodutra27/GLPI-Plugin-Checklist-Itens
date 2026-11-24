@@ -1,7 +1,6 @@
 <?php
 
 use GlpiPlugin\Checklistitens\DeliveryPhoto;
-use GlpiPlugin\Checklistitens\Install;
 
 include('../../../inc/includes.php');
 
@@ -12,7 +11,7 @@ global $DB;
 $id = (int) ($_GET['id'] ?? 0);
 
 $photo = $id > 0
-    ? $DB->request(['FROM' => Install::TABLE_DELIVERYPHOTOS, 'WHERE' => ['id' => $id]])->current()
+    ? $DB->request(['FROM' => DeliveryPhoto::getTable(), 'WHERE' => ['id' => $id]])->current()
     : null;
 
 if (!$photo) {
@@ -25,4 +24,4 @@ if (!DeliveryPhoto::canViewPhoto($photo)) {
     Html::displayRightError();
 }
 
-DeliveryPhoto::send((string) $photo['filepath']);
+DeliveryPhoto::folder()->send((string) $photo['filepath']);

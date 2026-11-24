@@ -1,6 +1,5 @@
 <?php
 
-use GlpiPlugin\Checklistitens\Config;
 use GlpiPlugin\Checklistitens\EquipmentRecord;
 use GlpiPlugin\Checklistitens\ItemProvider;
 use GlpiPlugin\Checklistitens\Ui;

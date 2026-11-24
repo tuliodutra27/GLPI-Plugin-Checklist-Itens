@@ -53,8 +53,6 @@ class NotificationTargetUsage extends NotificationTarget
 
     public function addDataForTemplate($event, $options = [])
     {
-        global $CFG_GLPI;
-
         $groups_id = (int) ($options['groups_id'] ?? 0);
         $usage     = new Usage();
         $items     = [];
@@ -64,7 +62,7 @@ class NotificationTargetUsage extends NotificationTarget
                 continue;
             }
             $items[] = [
-                '##item.type##'     => ItemProvider::getShortTypeLabel((string) $usage->fields['itemtype']),
+                '##item.type##'     => ItemProvider::getTypeLabel((string) $usage->fields['itemtype']),
                 '##item.label##'    => ItemProvider::describe((string) $usage->fields['itemtype'], (int) $usage->fields['items_id']),
                 '##item.user##'     => Ui::text(getUserName((int) $usage->fields['users_id'])),
                 '##item.checkout##' => Ui::datetime($usage->fields['date_checkout']),
@@ -75,7 +73,7 @@ class NotificationTargetUsage extends NotificationTarget
         $this->data['##checklist.sector##'] = Sector::getName($groups_id);
         $this->data['##checklist.shift##']  = Shift::label($options['shift_start'] ?? null);
         $this->data['##checklist.count##']  = count($items);
-        $this->data['##checklist.url##']    = $CFG_GLPI['url_base'] . '/plugins/checklistitens/front/manager.php?groups_id=' . $groups_id;
+        $this->data['##checklist.url##']    = Ui::absoluteUrl('front/manager.php?groups_id=' . $groups_id);
         $this->data['items']                = $items;
 
         $this->getTags();

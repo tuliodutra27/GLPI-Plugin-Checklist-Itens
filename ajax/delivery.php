@@ -1,9 +1,12 @@
 <?php
 
+use GlpiPlugin\Checklistitens\Db;
 use GlpiPlugin\Checklistitens\DefectPhoto;
 use GlpiPlugin\Checklistitens\Delivery;
 use GlpiPlugin\Checklistitens\DeliveryPhoto;
 use GlpiPlugin\Checklistitens\DeliveryReceipt;
+use GlpiPlugin\Checklistitens\Input;
+use GlpiPlugin\Checklistitens\Reply;
 use GlpiPlugin\Checklistitens\Usage;
 
 /**
@@ -24,19 +27,12 @@ header('Content-Type: application/json; charset=UTF-8');
 $AJAX_INCLUDE = 1;
 include('../../../inc/includes.php');
 
-global $DB;
-
 /**
  * Envia a resposta e encerra.
  */
 $respond = static function (array $data, int $http = 200): void {
     while (ob_get_level() > 0 && @ob_end_clean()) {
         // descarta tudo o que foi escrito até aqui
-    }
-
-    // Erro de regra sempre diz se vale reenviar o mesmo pedido
-    if ($http === 200 && ($data['ok'] ?? null) === false) {
-        $data += ['message' => '', 'retry' => false];
     }
 
     http_response_code($http);
@@ -63,7 +59,7 @@ $is_post = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST';
 // POST maior que o limite do PHP chega sem campo nenhum (e o GLPI só confere o token quando há
 // campos): nada é executado
 if ($is_post && !count($_POST)) {
-    $respond(Delivery::fail(__('O servidor não recebeu os dados do pedido (o envio pode ser grande demais).', 'checklistitens')));
+    $respond(Reply::fail(__('O servidor não recebeu os dados do pedido (o envio pode ser grande demais).', 'checklistitens')));
 }
 
 $action = $is_post ? ($_POST['action'] ?? '') : ($_GET['action'] ?? '');
@@ -79,188 +75,138 @@ if (!Delivery::canDeliver()) {
     $respond(['ok' => false, 'code' => 'right', 'message' => Delivery::noRightMessage()], 403);
 }
 
-$text = static function (string $name): string {
-    $value = $_POST[$name] ?? '';
-
-    return is_scalar($value) ? trim((string) $value) : '';
-};
-$int  = static fn (string $name): int => (int) $text($name);
-$list = static function (string $name): array {
-    $value = $_POST[$name] ?? [];
-
-    return is_array($value) ? $value : [];
-};
-
 $invalid = __('Pedido inválido.', 'checklistitens');
 
-/**
- * Separação ou recebimento em andamento do usuário que recebe (ou perde) uma foto.
- *
- * @return array{deliveries_id?: int, receipts_id?: int, error?: array}
- */
-$photo_target = static function (string $kind, int $id) use ($users_id, $invalid): array {
-    if ($kind === 'delivery') {
-        $row = Delivery::getRow($id);
-        $row = ($row !== null && (int) $row['users_id'] === $users_id) ? $row : null;
-        if ($row === null || (int) $row['status'] !== Delivery::STATUS_DRAFT) {
-            return ['error' => Delivery::gone($row)];
-        }
-
-        return ['deliveries_id' => $id, 'receipts_id' => 0];
-    }
-    if ($kind === 'receipt') {
-        $row = DeliveryReceipt::getRow($id);
-        $row = ($row !== null && (int) $row['users_id'] === $users_id) ? $row : null;
-        if ($row === null || (int) $row['status'] !== DeliveryReceipt::STATUS_DRAFT) {
-            return ['error' => DeliveryReceipt::gone($row)];
-        }
-
-        return ['deliveries_id' => (int) $row['plugin_checklistitens_deliveries_id'], 'receipts_id' => $id];
-    }
-
-    return ['error' => Delivery::fail($invalid)];
-};
+// Os dois processos que o aparelho envia: por tipo ("kind") e pela fase das fotos do defeito
+$processes = ['delivery' => Delivery::class, 'receipt' => DeliveryReceipt::class];
+$by_phase  = [Delivery::DEFECT_PHASE => Delivery::class, DeliveryReceipt::DEFECT_PHASE => DeliveryReceipt::class];
 
 try {
     if (!$is_post) {
         switch ($action) {
             case 'state':
-                $kind = $_GET['kind'] ?? 'delivery';
-                if ($kind === 'receipt') {
-                    $draft  = DeliveryReceipt::getDraftFor($users_id);
-                    $result = ['ok' => true, 'message' => '', 'receipt' => $draft !== null ? DeliveryReceipt::getState($draft) : null];
-                } elseif ($kind === 'delivery') {
-                    $draft  = Delivery::getDraftFor($users_id);
-                    $result = ['ok' => true, 'message' => '', 'delivery' => $draft !== null ? Delivery::getState($draft) : null];
-                } else {
-                    $result = Delivery::fail($invalid);
+                $kind    = (string) ($_GET['kind'] ?? 'delivery');
+                $process = $processes[$kind] ?? null;
+                if ($process === null) {
+                    $result = Reply::fail($invalid);
+                    break;
                 }
+                $draft  = $process::getDraftFor($users_id);
+                $result = Reply::ok([$kind => $draft !== null ? $process::getState($draft) : null]);
                 break;
 
             case 'available':
-                $result = ['ok' => true, 'message' => '', 'items' => Delivery::getAvailableRadios()];
+                $result = Reply::ok(['items' => Delivery::getAvailableRadios()]);
                 break;
 
             default:
                 // inclui as ações de gravação pedidas por GET
-                $result = Delivery::fail($invalid);
+                $result = Reply::fail($invalid);
         }
     } else {
         switch ($action) {
             case 'reserve':
-                $result = Delivery::reserve($text('client_uuid'), $int('vessels_id'), $list('items'));
+                $result = Delivery::reserve(Input::text('client_uuid'), Input::int('vessels_id'), Input::list('items'));
                 break;
 
             case 'add_items':
-                $result = Delivery::addItems($int('delivery_id'), $list('items'));
+                $result = Delivery::addItems(Input::int('delivery_id'), Input::list('items'));
                 break;
 
             case 'remove_item':
-                $result = Delivery::removeItem($int('delivery_id'), $int('items_id'));
+                $result = Delivery::removeItem(Input::int('delivery_id'), Input::int('items_id'));
                 break;
 
             case 'set_vessel':
-                $result = Delivery::setVessel($int('delivery_id'), $int('vessels_id'));
+                $result = Delivery::setVessel(Input::int('delivery_id'), Input::int('vessels_id'));
                 break;
 
             case 'photo':
             case 'photo_delete':
-                $target = $photo_target($text('kind'), $int('id'));
-                if (isset($target['error'])) {
-                    $result = $target['error'];
+                $process = $processes[Input::text('kind')] ?? null;
+                if ($process === null) {
+                    $result = Reply::fail($invalid);
                     break;
                 }
+                $id     = Input::int('id');
+                $result = $process::requireOwnDraft($id, $draft);
+                if ($result !== null) {
+                    break;
+                }
+                [$deliveries_id, $receipts_id] = $process::photoOwner($draft);
                 if ($action === 'photo') {
                     // "ref": foto de bateria ou capa com defeito, só no recebimento
-                    $ref    = $target['receipts_id'] > 0 ? $text('ref') : '';
-                    $result = DeliveryPhoto::storeUploaded($target['deliveries_id'], $target['receipts_id'], $text('uuid'), $ref);
-                    break;
+                    $ref    = $receipts_id > 0 ? Input::text('ref') : '';
+                    $result = DeliveryPhoto::storeUploaded($deliveries_id, $receipts_id, Input::text('uuid'), $ref);
+                } else {
+                    // Foto que já não existe conta como apagada (pedido reenviado)
+                    $result = DeliveryPhoto::remove($deliveries_id, $receipts_id, Input::text('uuid'))
+                        ? Reply::ok()
+                        : Reply::retry(__('Não foi possível apagar a foto. Tente de novo.', 'checklistitens'));
                 }
-                // Foto que já não existe conta como apagada (pedido reenviado)
-                $result = DeliveryPhoto::remove($target['deliveries_id'], $target['receipts_id'], $text('uuid'))
-                    ? ['ok' => true, 'message' => '']
-                    : Delivery::retry(__('Não foi possível apagar a foto. Tente de novo.', 'checklistitens'));
-                $result['count'] = DeliveryPhoto::countFor($target['deliveries_id'], $target['receipts_id']);
+                // a foto conta como atividade: o que expira é o processo parado
+                if ($result['ok']) {
+                    $process::touch($id);
+                }
                 break;
 
             case 'defect_photo':
-                $usage_id      = $int('usage_id');
-                $phase         = $int('phase');
-                $usage         = $usage_id > 0 ? $DB->request(['FROM' => Usage::getTable(), 'WHERE' => ['id' => $usage_id]])->current() : null;
-                $deliveries_id = $usage ? (int) $usage['plugin_checklistitens_deliveries_id'] : 0;
-
-                if ($phase === Usage::PHASE_CHECKOUT) {
-                    // Na separação: rádio reservado na separação aberta do usuário
-                    $draft = Delivery::getDraftFor($users_id);
-                    if ($draft === null) {
-                        $result = Delivery::gone();
-                        break;
-                    }
-                    $in_list = $usage
-                        && $deliveries_id === (int) $draft['id']
-                        && (int) $usage['status'] === Usage::STATUS_DELIVERY_DRAFT;
-                } elseif ($phase === Usage::PHASE_CHECKIN) {
-                    // No recebimento: rádio com a embarcação, da entrega que o usuário está recebendo
-                    $draft = DeliveryReceipt::getDraftFor($users_id);
-                    if ($draft === null) {
-                        $result = DeliveryReceipt::gone();
-                        break;
-                    }
-                    $in_list = $usage
-                        && $deliveries_id === (int) $draft['plugin_checklistitens_deliveries_id']
-                        && (int) $usage['status'] === Usage::STATUS_ON_VESSEL;
-                } else {
-                    $result = Delivery::fail($invalid);
+                $phase   = Input::int('phase');
+                $process = $by_phase[$phase] ?? null;
+                if ($process === null) {
+                    $result = Reply::fail($invalid);
                     break;
                 }
-                if (!$in_list) {
-                    $result = Delivery::fail(__('Este rádio não está mais na lista. Atualize a tela.', 'checklistitens'));
+                $draft = $process::getDraftFor($users_id);
+                if ($draft === null) {
+                    $result = $process::gone();
+                    break;
+                }
+                $usage_id = Input::int('usage_id');
+                $usage    = Db::row(Usage::getTable(), $usage_id);
+                if (!$usage || !$process::holdsItem($draft, $usage)) {
+                    $result = Reply::fail(__('Este rádio não está mais na lista. Atualize a tela.', 'checklistitens'));
                     break;
                 }
 
-                $result = DefectPhoto::storeUploaded($usage_id, $phase, $text('uuid'));
+                $result = DefectPhoto::storeUploaded($usage_id, $phase, Input::text('uuid'));
                 if ($result['ok']) {
-                    // a foto conta como atividade: o que expira é o processo parado
-                    if ($phase === Usage::PHASE_CHECKOUT) {
-                        Delivery::touch((int) $draft['id']);
-                    } else {
-                        DeliveryReceipt::touch((int) $draft['id']);
-                    }
+                    $process::touch((int) $draft['id']);
                 }
                 break;
 
             case 'item_problem':
-                $result = Delivery::itemProblem($int('delivery_id'), $int('items_id'), $list('problems'), $text('known') === '1');
+                $result = Delivery::itemProblem(Input::int('delivery_id'), Input::int('items_id'), Input::list('problems'), Input::text('known') === '1');
                 break;
 
             case 'finish':
-                $result = Delivery::finish($int('delivery_id'));
+                $result = Delivery::finish(Input::int('delivery_id'));
                 break;
 
             case 'cancel':
-                $result = Delivery::cancel($int('delivery_id'));
+                $result = Delivery::cancel(Input::int('delivery_id'));
                 break;
 
             case 'receipt_start':
-                $result = DeliveryReceipt::start($int('deliveries_id'), $text('client_uuid'));
+                $result = DeliveryReceipt::start(Input::int('deliveries_id'), Input::text('client_uuid'));
                 break;
 
             case 'receipt_finish':
-                $result = DeliveryReceipt::finish($int('receipt_id'), $list('usages'), $list('problems'), $list('known'), $list('acc'));
+                $result = DeliveryReceipt::finish(Input::int('receipt_id'), Input::list('usages'), Input::list('problems'), Input::list('known'), Input::list('acc'));
                 break;
 
             case 'receipt_cancel':
-                $result = DeliveryReceipt::cancel($int('receipt_id'));
+                $result = DeliveryReceipt::cancel(Input::int('receipt_id'));
                 break;
 
             default:
-                $result = Delivery::fail($invalid);
+                $result = Reply::fail($invalid);
         }
     }
 } catch (Throwable $e) {
     // Erro inesperado (banco fora do ar, disco cheio): o aparelho guarda o pedido e tenta de novo
     Toolbox::logError(sprintf('checklistitens: %s: %s em %s:%d', get_class($e), $e->getMessage(), $e->getFile(), $e->getLine()));
-    $result = Delivery::retry(__('Não foi possível concluir o pedido. Tente de novo.', 'checklistitens'));
+    $result = Reply::retry(__('Não foi possível concluir o pedido. Tente de novo.', 'checklistitens'));
 }
 
 $respond($result);

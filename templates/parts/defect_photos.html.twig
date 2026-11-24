@@ -1,17 +1,16 @@
 {#
-  Fotos do equipamento com defeito (de min_photos a max_photos; padrão 1 a 5), pela câmera
-  traseira do aparelho ou escolhidas da galeria. O JS (ChecklistDefectPhotos, em js/checklistitens.js) reduz cada foto e
-  grava em defect_photos[]; sem JS, os próprios campos de arquivo (defect_photo_files[]) vão no
-  envio, como na selfie.
+  Fotos do equipamento com defeito, pela câmera traseira do aparelho ou escolhidas da galeria. O
+  JS (ChecklistDefectPhotos, em js/checklistitens.js) reduz cada foto e grava em defect_photos[];
+  sem JS, os próprios campos de arquivo (defect_photo_files[]) vão no envio, como na selfie.
 
-  Variáveis opcionais: min_photos, max_photos, photos_title.
+  Variável: defect_limits (DefectPhoto::limits(), {min, max}).
 #}
-{% set ci_min = min_photos|default(1) %}
-{% set ci_max = max_photos|default(5) %}
-<div class="ci-defect-photos" data-ci-defect-photos data-ci-min="{{ ci_min }}" data-ci-max="{{ ci_max }}" data-ci-defect-count="0">
+{% set ci_min = defect_limits.min %}
+{% set ci_max = defect_limits.max %}
+<div class="ci-defect-photos" data-ci-defect-photos data-ci-min="{{ ci_min }}" data-ci-max="{{ ci_max }}">
     <p class="fw-bold mb-1">
         <i class="ti ti-camera"></i>
-        {{ photos_title|default(__('Fotos do equipamento com defeito (1 a 5)', 'checklistitens')) }}
+        {{ __('Fotos do equipamento com defeito (%1$d a %2$d)', 'checklistitens')|format(ci_min, ci_max) }}
     </p>
     <p class="text-muted ci-small mb-2">{{ __('Fotografe só o equipamento.', 'checklistitens') }}</p>
 

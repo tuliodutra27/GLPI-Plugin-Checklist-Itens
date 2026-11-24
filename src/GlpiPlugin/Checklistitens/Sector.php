@@ -3,7 +3,6 @@
 namespace GlpiPlugin\Checklistitens;
 
 use Group;
-use Group_User;
 
 /**
  * Setor = grupos do GLPI. Com a herança ligada (padrão), quem está num grupo pai também
@@ -11,19 +10,6 @@ use Group_User;
  */
 class Sector
 {
-    /** @return int[] grupos a que o usuário pertence diretamente */
-    public static function getUserGroups(int $users_id): array
-    {
-        global $DB;
-
-        $groups = [];
-        foreach ($DB->request(['SELECT' => 'groups_id', 'FROM' => Group_User::getTable(), 'WHERE' => ['users_id' => $users_id]]) as $row) {
-            $groups[] = (int) $row['groups_id'];
-        }
-
-        return $groups;
-    }
-
     /** @return int[] grupos do usuário logado (carregados pelo GLPI no login) */
     public static function getCurrentUserGroups(): array
     {
@@ -59,12 +45,6 @@ class Sector
     public static function forCurrentUser(): array
     {
         return self::expand(self::getCurrentUserGroups());
-    }
-
-    /** @return int[] setor de qualquer usuário, com subgrupos */
-    public static function forUser(int $users_id): array
-    {
-        return self::expand(self::getUserGroups($users_id));
     }
 
     /**

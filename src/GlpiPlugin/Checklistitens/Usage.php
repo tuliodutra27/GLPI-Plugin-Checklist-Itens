@@ -4,8 +4,6 @@ namespace GlpiPlugin\Checklistitens;
 
 use CommonDBTM;
 use Session;
-use Throwable;
-use Toolbox;
 
 /**
  * Uso de equipamento: um registro por ciclo retirada → devolução, ou por retirada recusada
@@ -16,6 +14,8 @@ use Toolbox;
  */
 class Usage extends CommonDBTM
 {
+    use ReadOnlyRecord;
+
     public const STATUS_IN_USE   = 1; // retirado, aguardando conferência do gestor
     public const STATUS_RELEASED = 2; // conferido, liberado para devolução
     public const STATUS_RETURNED = 3;
@@ -45,7 +45,7 @@ class Usage extends CommonDBTM
 
     public static function canView()
     {
-        return Profile::isManager() || Profile::isAdmin();
+        return Profile::canViewRecords();
     }
 
     public function canViewItem()
@@ -55,26 +55,6 @@ class Usage extends CommonDBTM
         }
 
         return Profile::isManager() && in_array((int) $this->fields['groups_id'], Sector::forCurrentUser(), true);
-    }
-
-    public static function canCreate()
-    {
-        return false;
-    }
-
-    public static function canUpdate()
-    {
-        return false;
-    }
-
-    public static function canDelete()
-    {
-        return false;
-    }
-
-    public static function canPurge()
-    {
-        return false;
     }
 
     public function getName($options = [])
@@ -209,7 +189,7 @@ class Usage extends CommonDBTM
         }
         switch ($field) {
             case 'itemtype':
-                return htmlspecialchars(ItemProvider::getShortTypeLabel((string) $values['itemtype']));
+                return htmlspecialchars(ItemProvider::getTypeLabel((string) $values['itemtype']));
             case 'items_id':
                 if (!empty($values['itemtype'])) {
                     return htmlspecialchars(ItemProvider::describe((string) $values['itemtype'], (int) $values['items_id']));
@@ -232,7 +212,7 @@ class Usage extends CommonDBTM
             case 'itemtype':
                 $types = [];
                 foreach (ItemProvider::getSupportedTypes() as $itemtype) {
-                    $types[$itemtype] = ItemProvider::getShortTypeLabel($itemtype);
+                    $types[$itemtype] = ItemProvider::getTypeLabel($itemtype);
                 }
                 return \Dropdown::showFromArray($name, $types, $options + ['value' => $values[$field]]);
             case 'status':
@@ -301,20 +281,29 @@ class Usage extends CommonDBTM
 
         return iterator_to_array($DB->request([
             'FROM'  => self::getTable(),
-            'WHERE' => ['users_id' => $users_id, 'lock_open' => 1, 'plugin_checklistitens_deliveries_id' => 0],
+            'WHERE' => ['users_id' => $users_id, 'lock_open' => 1] + self::commonUse(),
             'ORDER' => 'date_checkout',
         ]), false);
     }
 
+    /** Usos abertos do usuário num tipo, para o limite por pessoa. */
     public static function countOpenForUser(int $users_id, string $itemtype): int
     {
         return countElementsInTable(self::getTable(), [
             'users_id'  => $users_id,
             'itemtype'  => $itemtype,
             'lock_open' => 1,
-            // entregas para embarcação não contam no limite por pessoa
-            'plugin_checklistitens_deliveries_id' => 0,
-        ]);
+        ] + self::commonUse());
+    }
+
+    /**
+     * Critério do uso comum (retirada e devolução pelo colaborador). O rádio entregue a uma
+     * embarcação também é um uso, mas não está com o gestor: não conta no limite por pessoa, na
+     * conferência do turno nem no alerta de não devolvido.
+     */
+    public static function commonUse(): array
+    {
+        return ['plugin_checklistitens_deliveries_id' => 0];
     }
 
     /**
@@ -323,10 +312,7 @@ class Usage extends CommonDBTM
     public static function present(array $row): array
     {
         $itemtype = (string) $row['itemtype'];
-        $item     = ItemProvider::getRow($itemtype, (int) $row['items_id']);
-        $info     = $item !== null
-            ? ItemProvider::present($itemtype, $item)
-            : ['label' => '#' . $row['items_id'], 'detail' => ''];
+        $info     = ItemProvider::labelOf($itemtype, (int) $row['items_id']);
         $status   = (int) $row['status'];
 
         return [
@@ -372,26 +358,23 @@ class Usage extends CommonDBTM
             return ['ok' => false, 'message' => sprintf(
                 __('Você já está com o limite de %1$d %2$s. Devolva antes de retirar outro.', 'checklistitens'),
                 $limit,
-                mb_strtolower(ItemProvider::getShortTypeLabel($itemtype))
+                mb_strtolower(ItemProvider::getTypeLabel($itemtype))
             )];
         }
 
         $laudos   = LaudoProvider::getOpenForItem($itemtype, $items_id);
         $problems = $photos = [];
         if ($known_issue) {
-            $problems = ProblemType::getValidForType($itemtype, $problem_ids);
-            if (!count($problems)) {
-                return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
-            }
             $photos = DefectPhoto::collectFromRequest();
-            if (count($photos) < DefectPhoto::MIN_PHOTOS) {
-                return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
+            $report = UsageProblem::validate($itemtype, $problem_ids, count($photos));
+            if ($report['error'] !== '') {
+                return ['ok' => false, 'message' => $report['error']];
             }
-            if (!count($laudos)) {
+            $problems = $report['problems'];
+            if (!LaudoProvider::acceptsKnown(true, $laudos)) {
                 $result = self::refuse($itemtype, $items_id, $problem_ids);
                 if ($result['ok']) {
-                    $result['message'] = __('O laudo deste equipamento foi concluído: o problema bloqueia o item.', 'checklistitens')
-                        . ' ' . $result['message'];
+                    $result['message'] = LaudoProvider::closedMessage() . ' ' . $result['message'];
                 }
 
                 return $result + ['refused' => true];
@@ -405,7 +388,7 @@ class Usage extends CommonDBTM
 
         $now   = Shift::now();
         $usage = new self();
-        $id    = self::safeAdd($usage, [
+        $id    = Db::add($usage, [
             'entities_id'          => (int) $item['entities_id'],
             'itemtype'             => $itemtype,
             'items_id'             => $items_id,
@@ -422,7 +405,7 @@ class Usage extends CommonDBTM
 
         if (!$id) {
             // o índice único de uso aberto recusou: alguém retirou o mesmo item agora há pouco
-            Selfie::deleteFile($selfie);
+            Selfie::folder()->delete($selfie);
             return ['ok' => false, 'message' => __('Este item acabou de ser retirado por outra pessoa, escolha outro.', 'checklistitens')];
         }
 
@@ -455,18 +438,16 @@ class Usage extends CommonDBTM
         }
         $item = $check['item'];
 
-        $problems = ProblemType::getValidForType($itemtype, $problem_ids);
-        if (!count($problems)) {
-            return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
-        }
         $photos = DefectPhoto::collectFromRequest();
-        if (count($photos) < DefectPhoto::MIN_PHOTOS) {
-            return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
+        $report = UsageProblem::validate($itemtype, $problem_ids, count($photos));
+        if ($report['error'] !== '') {
+            return ['ok' => false, 'message' => $report['error']];
         }
+        $problems = $report['problems'];
 
         $now   = Shift::now();
         $usage = new self();
-        $id    = self::safeAdd($usage, [
+        $id    = Db::add($usage, [
             'entities_id'          => (int) $item['entities_id'],
             'itemtype'             => $itemtype,
             'items_id'             => $items_id,
@@ -487,7 +468,7 @@ class Usage extends CommonDBTM
         if (count($laudos)) {
             UsageLaudo::recordAll($id, self::PHASE_CHECKOUT, $laudos);
         }
-        ItemBlock::createFor($usage->fields, ItemBlock::REASON_CHECKOUT);
+        ItemBlock::ensureFor($usage->fields, self::PHASE_CHECKOUT);
 
         return [
             'ok'      => true,
@@ -527,19 +508,16 @@ class Usage extends CommonDBTM
 
         $problems = $photos = [];
         if ($is_ok === 0) {
-            $problems = ProblemType::getValidForType($itemtype, $problem_ids);
-            if (!count($problems)) {
-                return ['ok' => false, 'message' => __('Marque pelo menos um problema encontrado.', 'checklistitens')];
-            }
             $photos = DefectPhoto::collectFromRequest();
-            if (count($photos) < DefectPhoto::MIN_PHOTOS) {
-                return ['ok' => false, 'message' => __('Tire pelo menos uma foto do equipamento com defeito.', 'checklistitens')];
+            $report = UsageProblem::validate($itemtype, $problem_ids, count($photos));
+            if ($report['error'] !== '') {
+                return ['ok' => false, 'message' => $report['error']];
             }
+            $problems = $report['problems'];
         }
 
-        // "É o problema do laudo" só vale se o laudo ainda estiver em aberto agora
-        $laudo_closed = $is_ok === 0 && $known_issue && !count($laudos);
-        $known        = $is_ok === 0 && $known_issue && count($laudos) > 0;
+        $known        = $is_ok === 0 && LaudoProvider::acceptsKnown($known_issue, $laudos);
+        $laudo_closed = $is_ok === 0 && $known_issue && !$known;
 
         $selfie = Selfie::storeFromRequest(Selfie::KIND_CHECKIN, $users_id);
         if ($selfie === null) {
@@ -553,14 +531,12 @@ class Usage extends CommonDBTM
             'lock_open'           => 'NULL',
             'date_checkin'        => $now,
             'checkin_shift_start' => Shift::startFor($now),
-            // Em texto: a coluna começa vazia e o update() do GLPI trata vazio e o número 0 como
-            // iguais, então o "Não" (0) em número nunca chegava ao banco
-            'checkin_is_ok'       => (string) $is_ok,
+            'checkin_is_ok'       => Db::yesNo($is_ok),
             'checkin_known_issue' => $known ? 1 : 0,
             'checkin_selfie'      => $selfie,
         ] + Location::toFields('checkin_', Location::fromRequest()));
         if (!$updated) {
-            Selfie::deleteFile($selfie);
+            Selfie::folder()->delete($selfie);
             return ['ok' => false, 'message' => __('Não foi possível registrar a devolução. Tente de novo.', 'checklistitens')];
         }
 
@@ -573,12 +549,12 @@ class Usage extends CommonDBTM
         }
         $blocked = $is_ok === 0 && !$known;
         if ($blocked) {
-            ItemBlock::createFor($usage->fields, ItemBlock::REASON_CHECKIN);
+            ItemBlock::ensureFor($usage->fields, self::PHASE_CHECKIN);
         }
 
         return [
             'ok'           => true,
-            'message'      => $laudo_closed ? __('O laudo deste equipamento foi concluído: o problema bloqueia o item.', 'checklistitens') : '',
+            'message'      => $laudo_closed ? LaudoProvider::closedMessage() : '',
             'id'           => $usages_id,
             'blocked'      => $blocked,
             'laudo_closed' => $laudo_closed,
@@ -602,22 +578,5 @@ class Usage extends CommonDBTM
         }
 
         return ['ok' => true, 'message' => '', 'item' => $item];
-    }
-
-    /**
-     * add() que não deixa um erro de banco (ex.: índice único) virar erro de tela.
-     *
-     * @return int id criado, ou 0
-     */
-    private static function safeAdd(self $usage, array $input): int
-    {
-        try {
-            $id = $usage->add($input);
-        } catch (Throwable $e) {
-            Toolbox::logError('checklistitens: ' . $e->getMessage());
-            $id = false;
-        }
-
-        return $id ? (int) $id : 0;
     }
 }

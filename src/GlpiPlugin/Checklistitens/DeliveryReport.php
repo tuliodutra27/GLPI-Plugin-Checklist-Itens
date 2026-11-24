@@ -3,6 +3,7 @@
 namespace GlpiPlugin\Checklistitens;
 
 use Session;
+use Ticket;
 
 /**
  * Consulta das entregas de rádios para embarcação: lista, detalhe, CSV e o bloco "Com embarcações"
@@ -22,7 +23,7 @@ class DeliveryReport
 
     public static function canView(): bool
     {
-        return self::isFeatureAvailable() && (Profile::isManager() || Profile::isAdmin());
+        return self::isFeatureAvailable() && Profile::canViewRecords();
     }
 
     public static function getUrl(int $id): string
@@ -49,35 +50,81 @@ class DeliveryReport
             $iterator = $DB->request([
                 'SELECT'   => 'plugin_checklistitens_deliveries_id',
                 'DISTINCT' => true,
-                'FROM'     => Install::TABLE_USAGES,
+                'FROM'     => Usage::getTable(),
                 'WHERE'    => ['plugin_checklistitens_deliveries_id' => ['>', 0], 'groups_id' => $groups],
             ]);
             foreach ($iterator as $row) {
                 $ids[(int) $row['plugin_checklistitens_deliveries_id']] = true;
             }
         }
-        foreach ($DB->request(['SELECT' => 'id', 'FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['users_id' => (int) Session::getLoginUserID()]]) as $row) {
+        foreach ($DB->request(['SELECT' => 'id', 'FROM' => Delivery::getTable(), 'WHERE' => ['users_id' => (int) Session::getLoginUserID()]]) as $row) {
             $ids[(int) $row['id']] = true;
         }
 
         return array_keys($ids);
     }
 
-    public static function canViewDelivery(array $row): bool
+    /**
+     * Quem vê uma entrega (e as fotos, os recebimentos e o histórico dela): o TI, quem fez a
+     * entrega, quem fez o recebimento informado e o gestor cujo setor inclui o grupo de algum rádio
+     * da entrega.
+     *
+     * @param array|null $receipt linha do recebimento, quando é dele que se trata
+     */
+    public static function canViewDelivery(int $deliveries_id, ?array $receipt = null): bool
     {
-        if (!self::canView()) {
+        $users_id = (int) Session::getLoginUserID();
+        if ($deliveries_id <= 0 || $users_id <= 0) {
             return false;
         }
-        $visible = self::getVisibleIds();
+        if (Profile::isAdmin()) {
+            return true;
+        }
+        if ($receipt !== null && (int) $receipt['users_id'] === $users_id) {
+            return true;
+        }
+        if (countElementsInTable(Delivery::getTable(), ['id' => $deliveries_id, 'users_id' => $users_id]) > 0) {
+            return true;
+        }
 
-        return $visible === null || in_array((int) $row['id'], $visible, true);
+        $groups = Sector::forCurrentUser();
+
+        return Profile::isManager() && count($groups) > 0 && countElementsInTable(Usage::getTable(), [
+            'plugin_checklistitens_deliveries_id' => $deliveries_id,
+            'groups_id'                           => $groups,
+        ]) > 0;
+    }
+
+    private const NO_COUNTS = ['total' => 0, 'draft' => 0, 'on_vessel' => 0, 'returned' => 0, 'blocked' => 0, 'cancelled' => 0];
+
+    /**
+     * Soma $n rádios de uma situação do uso na contagem da entrega. "total" são os rádios que
+     * foram (ou vão) para a embarcação: o que saiu por problema novo ("blocked") e o que saiu da
+     * separação cancelada ("cancelled") não entram.
+     */
+    private static function count(array &$counts, int $status, int $n): void
+    {
+        $bucket = [
+            Usage::STATUS_DELIVERY_DRAFT     => 'draft',
+            Usage::STATUS_ON_VESSEL          => 'on_vessel',
+            Usage::STATUS_RETURNED           => 'returned',
+            Usage::STATUS_REFUSED            => 'blocked',
+            Usage::STATUS_DELIVERY_CANCELLED => 'cancelled',
+        ][$status] ?? null;
+        if ($bucket === null) {
+            return;
+        }
+        $counts[$bucket] += $n;
+        if (!in_array($bucket, ['blocked', 'cancelled'], true)) {
+            $counts['total'] += $n;
+        }
     }
 
     /**
      * Quantos rádios cada entrega tem em cada situação.
      *
      * @param int[] $ids
-     * @return array<int, array{total: int, draft: int, on_vessel: int, returned: int, blocked: int}>
+     * @return array<int, array{total: int, draft: int, on_vessel: int, returned: int, blocked: int, cancelled: int}>
      */
     private static function getCounts(array $ids): array
     {
@@ -91,32 +138,14 @@ class DeliveryReport
         $iterator = $DB->request([
             'SELECT'  => ['plugin_checklistitens_deliveries_id', 'status'],
             'COUNT'   => 'total',
-            'FROM'    => Install::TABLE_USAGES,
+            'FROM'    => Usage::getTable(),
             'WHERE'   => ['plugin_checklistitens_deliveries_id' => $ids],
             'GROUPBY' => ['plugin_checklistitens_deliveries_id', 'status'],
         ]);
         foreach ($iterator as $row) {
             $id = (int) $row['plugin_checklistitens_deliveries_id'];
-            $counts[$id] ??= ['total' => 0, 'draft' => 0, 'on_vessel' => 0, 'returned' => 0, 'blocked' => 0];
-            $n = (int) $row['total'];
-            switch ((int) $row['status']) {
-                case Usage::STATUS_DELIVERY_DRAFT:
-                    $counts[$id]['draft'] += $n;
-                    $counts[$id]['total'] += $n;
-                    break;
-                case Usage::STATUS_ON_VESSEL:
-                    $counts[$id]['on_vessel'] += $n;
-                    $counts[$id]['total']     += $n;
-                    break;
-                case Usage::STATUS_RETURNED:
-                    $counts[$id]['returned'] += $n;
-                    $counts[$id]['total']    += $n;
-                    break;
-                case Usage::STATUS_REFUSED:
-                    // saiu da entrega por problema novo: não foi para a embarcação
-                    $counts[$id]['blocked'] += $n;
-                    break;
-            }
+            $counts[$id] ??= self::NO_COUNTS;
+            self::count($counts[$id], (int) $row['status'], (int) $row['total']);
         }
 
         return $counts;
@@ -141,7 +170,7 @@ class DeliveryReport
             $where['groups_id'] = array_values(array_map('intval', $groups));
         }
         $ids = [];
-        foreach ($DB->request(['SELECT' => 'plugin_checklistitens_deliveries_id', 'DISTINCT' => true, 'FROM' => Install::TABLE_USAGES, 'WHERE' => $where]) as $row) {
+        foreach ($DB->request(['SELECT' => 'plugin_checklistitens_deliveries_id', 'DISTINCT' => true, 'FROM' => Usage::getTable(), 'WHERE' => $where]) as $row) {
             $ids[] = (int) $row['plugin_checklistitens_deliveries_id'];
         }
         if (!count($ids)) {
@@ -154,7 +183,7 @@ class DeliveryReport
 
         $list = [];
         $iterator = $DB->request([
-            'FROM'  => Install::TABLE_DELIVERIES,
+            'FROM'  => Delivery::getTable(),
             'WHERE' => ['id' => $ids, 'status' => Delivery::STATUS_DELIVERED],
             'ORDER' => 'date_delivery',
         ]);
@@ -205,7 +234,7 @@ class DeliveryReport
         $options = [];
         $iterator = $DB->request([
             'SELECT' => ['plugin_checklistitens_vessels_id', 'vessel_name'],
-            'FROM'   => Install::TABLE_DELIVERIES,
+            'FROM'   => Delivery::getTable(),
             'WHERE'  => $where,
             'ORDER'  => 'vessel_name',
         ]);
@@ -238,7 +267,7 @@ class DeliveryReport
         $iterator = $DB->request([
             'SELECT'   => 'groups_id',
             'DISTINCT' => true,
-            'FROM'     => Install::TABLE_DELIVERIES,
+            'FROM'     => Delivery::getTable(),
             'WHERE'    => $where,
         ]);
         foreach ($iterator as $row) {
@@ -275,16 +304,15 @@ class DeliveryReport
         if (!empty($filters['groups_id'])) {
             $where['groups_id'] = (int) $filters['groups_id'];
         }
-        // Datas só no formato AAAA-MM-DD (o valor vai direto para a consulta)
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($filters['date_from'] ?? ''))) {
+        if (Ui::date($filters['date_from'] ?? '') !== '') {
             $where[] = ['date_start' => ['>=', $filters['date_from'] . ' 00:00:00']];
         }
-        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($filters['date_to'] ?? ''))) {
+        if (Ui::date($filters['date_to'] ?? '') !== '') {
             $where[] = ['date_start' => ['<=', $filters['date_to'] . ' 23:59:59']];
         }
 
         $rows = iterator_to_array($DB->request([
-            'FROM'  => Install::TABLE_DELIVERIES,
+            'FROM'  => Delivery::getTable(),
             'WHERE' => $where,
             'ORDER' => 'date_start DESC',
             'LIMIT' => 300,
@@ -306,7 +334,7 @@ class DeliveryReport
                 'status'       => $status,
                 'status_label' => $labels[$status] ?? '',
                 'status_color' => Delivery::getStatusColor($status),
-                'counts'       => $counts[$id] ?? ['total' => 0, 'draft' => 0, 'on_vessel' => 0, 'returned' => 0, 'blocked' => 0],
+                'counts'       => $counts[$id] ?? self::NO_COUNTS,
                 'url'          => self::getUrl($id),
             ];
         }
@@ -319,64 +347,32 @@ class DeliveryReport
      */
     public static function getDetail(int $id): ?array
     {
-        global $CFG_GLPI, $DB;
+        global $DB;
 
-        $row = $DB->request(['FROM' => Install::TABLE_DELIVERIES, 'WHERE' => ['id' => $id]])->current();
-        if (!$row || !self::canViewDelivery($row)) {
+        $row = Delivery::getRow($id);
+        if (!$row || !self::canView() || !self::canViewDelivery((int) $row['id'])) {
             return null;
         }
 
         $status   = (int) $row['status'];
         $vessel   = Ui::text($row['vessel_name']);
         $usages   = iterator_to_array($DB->request([
-            'FROM'  => Install::TABLE_USAGES,
+            'FROM'  => Usage::getTable(),
             'WHERE' => ['plugin_checklistitens_deliveries_id' => $id],
             'ORDER' => 'id',
         ]), false);
-        $usage_ids = array_map(static fn ($u) => (int) $u['id'], $usages);
-
-        $problems = [];
-        $blocks   = [];
-        if (count($usage_ids)) {
-            foreach ($DB->request(['FROM' => Install::TABLE_USAGEPROBLEMS, 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $p) {
-                $problems[(int) $p['plugin_checklistitens_usages_id']][(int) $p['phase']][] = Ui::text($p['problem_name']);
-            }
-            foreach ($DB->request(['FROM' => Install::TABLE_ITEMBLOCKS, 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $b) {
-                $blocks[(int) $b['plugin_checklistitens_usages_id']] = ItemBlock::present($b);
-            }
-        }
-        $defects = DefectPhoto::getForUsages($usage_ids);
-        $laudos  = UsageLaudo::getForUsages($usage_ids);
-        $labels  = Usage::getStatusLabels();
+        $view   = new UsageView($usages);
+        $labels = Usage::getStatusLabels();
 
         $items  = [];
-        $counts = ['total' => 0, 'on_vessel' => 0, 'returned' => 0, 'blocked' => 0, 'cancelled' => 0];
+        $counts = self::NO_COUNTS;
         foreach ($usages as $u) {
             $uid      = (int) $u['id'];
             $ustatus  = (int) $u['status'];
             $itemtype = (string) $u['itemtype'];
-            $item_row = ItemProvider::getRow($itemtype, (int) $u['items_id']);
-            $item     = $item_row !== null ? ItemProvider::present($itemtype, $item_row) : ['label' => '#' . $u['items_id'], 'detail' => ''];
-
-            switch ($ustatus) {
-                case Usage::STATUS_DELIVERY_DRAFT:
-                    $counts['total']++;
-                    break;
-                case Usage::STATUS_ON_VESSEL:
-                    $counts['total']++;
-                    $counts['on_vessel']++;
-                    break;
-                case Usage::STATUS_RETURNED:
-                    $counts['total']++;
-                    $counts['returned']++;
-                    break;
-                case Usage::STATUS_REFUSED:
-                    $counts['blocked']++;
-                    break;
-                case Usage::STATUS_DELIVERY_CANCELLED:
-                    $counts['cancelled']++;
-                    break;
-            }
+            $item     = ItemProvider::labelOf($itemtype, (int) $u['items_id']);
+            $block    = $view->block($u);
+            self::count($counts, $ustatus, 1);
 
             $items[] = [
                 'usage_id'     => $uid,
@@ -387,27 +383,17 @@ class DeliveryReport
                 'status_color' => Usage::getStatusColor($ustatus),
                 'record_url'   => EquipmentRecord::getUrl($itemtype, (int) $u['items_id']) . '#usage-' . $uid,
                 'receipt_id'   => (int) $u['plugin_checklistitens_deliveryreceipts_id'],
-                'checkout'     => [
-                    'known'    => (int) $u['checkout_known_issue'] === 1,
-                    'problems' => $problems[$uid][Usage::PHASE_CHECKOUT] ?? [],
-                    'photos'   => $defects[$uid][Usage::PHASE_CHECKOUT] ?? [],
-                    'laudos'   => $laudos[$uid][Usage::PHASE_CHECKOUT] ?? [],
-                ],
-                'checkin'      => $u['date_checkin'] ? [
-                    'when'     => Ui::datetime($u['date_checkin']),
-                    'is_ok'    => (int) $u['checkin_is_ok'] === 1,
-                    'known'    => (int) $u['checkin_known_issue'] === 1,
-                    'problems' => $problems[$uid][Usage::PHASE_CHECKIN] ?? [],
-                    'photos'   => $defects[$uid][Usage::PHASE_CHECKIN] ?? [],
-                    'laudos'   => $laudos[$uid][Usage::PHASE_CHECKIN] ?? [],
-                ] : null,
-                'block'        => $blocks[$uid] ?? null,
+                'checkout'     => $view->result($u, Usage::PHASE_CHECKOUT),
+                'checkin'      => $u['date_checkin']
+                    ? ['when' => Ui::datetime($u['date_checkin'])] + $view->result($u, Usage::PHASE_CHECKIN)
+                    : null,
+                'block'        => $block !== null ? ItemBlock::present($block) : null,
             ];
         }
 
         $receipts = [];
         $iterator = $DB->request([
-            'FROM'  => Install::TABLE_DELIVERYRECEIPTS,
+            'FROM'  => DeliveryReceipt::getTable(),
             'WHERE' => ['plugin_checklistitens_deliveries_id' => $id, 'status' => DeliveryReceipt::STATUS_DONE],
             'ORDER' => 'date_receipt',
         ]);
@@ -428,11 +414,11 @@ class DeliveryReport
                 // baterias e capas com defeito, e o chamado aberto para elas
                 'defects'             => $defects[$rid] ?? [],
                 'tickets_id'          => (int) $r['tickets_id'],
-                'ticket_url'          => (int) $r['tickets_id'] > 0 ? $CFG_GLPI['root_doc'] . '/front/ticket.form.php?id=' . (int) $r['tickets_id'] : '',
-                'can_open_ticket'     => isset($defects[$rid]) && (int) $r['tickets_id'] === 0 && (Delivery::canDeliver() || Profile::canAdministrate()),
+                'ticket_url'          => (int) $r['tickets_id'] > 0 ? Ticket::getFormURLWithID((int) $r['tickets_id']) : '',
+                'can_open_ticket'     => isset($defects[$rid]) && (int) $r['tickets_id'] === 0 && DeliveryReceipt::canOpenAccessoryTicket(),
                 'comment'             => Ui::text($r['comment'] ?? ''),
-                'selfie'              => self::selfieInfo((string) $r['selfie'], Selfie::KIND_RECEIPT, $rid, $r['date_receipt']),
-                'location'            => Location::present($r, '', __('Recebimento', 'checklistitens') . ' — ' . $vessel),
+                'selfie'              => Selfie::info(Selfie::KIND_RECEIPT, $r),
+                'location'            => Selfie::location(Selfie::KIND_RECEIPT, $r, __('Recebimento', 'checklistitens') . ' — ' . $vessel),
                 'photos'              => DeliveryPhoto::getFor($id, $rid),
                 'items'               => count(array_filter($items, static fn ($i) => $i['receipt_id'] === $rid)),
             ];
@@ -454,8 +440,8 @@ class DeliveryReport
             'spare_batteries' => (int) $row['spare_batteries'],
             'spare_covers'    => (int) $row['spare_covers'],
             'comment'         => Ui::text($row['comment'] ?? ''),
-            'selfie'          => self::selfieInfo((string) $row['selfie'], Selfie::KIND_DELIVERY, $id, $row['date_delivery']),
-            'location'        => Location::present($row, '', __('Entrega', 'checklistitens') . ' — ' . $vessel),
+            'selfie'          => Selfie::info(Selfie::KIND_DELIVERY, $row),
+            'location'        => Selfie::location(Selfie::KIND_DELIVERY, $row, __('Entrega', 'checklistitens') . ' — ' . $vessel),
             'photos'          => DeliveryPhoto::getFor($id, 0),
             'items'           => $items,
             'receipts'        => $receipts,
@@ -465,7 +451,7 @@ class DeliveryReport
     }
 
     /**
-     * CSV de uma entrega, uma linha por rádio (separador ";" e BOM UTF-8, para abrir no Excel).
+     * CSV de uma entrega, uma linha por rádio.
      */
     public static function sendCsv(int $id): void
     {
@@ -475,12 +461,7 @@ class DeliveryReport
             exit;
         }
 
-        header('Content-Type: text/csv; charset=UTF-8');
-        header(sprintf('Content-Disposition: attachment; filename="entrega_embarcacao_%d.csv"', $id));
-
-        $out = fopen('php://output', 'w');
-        fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, [
+        $header = [
             __('Entrega', 'checklistitens'), __('Embarcação', 'checklistitens'), __('Situação da entrega', 'checklistitens'),
             __('Gestor', 'checklistitens'), __('Entregue em', 'checklistitens'), __('Baterias reserva', 'checklistitens'),
             __('Capas', 'checklistitens'),
@@ -494,14 +475,15 @@ class DeliveryReport
             __('Baterias devolvidas', 'checklistitens'), __('Baterias com defeito', 'checklistitens'),
             __('Capas devolvidas', 'checklistitens'), __('Capas em bom estado', 'checklistitens'),
             __('Baterias e capas com defeito', 'checklistitens'), __('Chamado das baterias e capas', 'checklistitens'),
-        ], ';');
+        ];
 
+        $rows     = [];
         $yes      = __('Sim', 'checklistitens');
         $no       = __('Não', 'checklistitens');
         $receipts = array_column($detail['receipts'], null, 'id');
         foreach ($detail['items'] as $item) {
             $receipt = $receipts[$item['receipt_id']] ?? null;
-            fputcsv($out, [
+            $rows[] = [
                 $detail['id'],
                 $detail['vessel'],
                 $detail['status_label'],
@@ -527,21 +509,9 @@ class DeliveryReport
                 $receipt === null || $receipt['covers_ok'] === null ? '' : ($receipt['covers_ok'] ? $yes : $no),
                 $receipt === null ? '' : AccessoryDefect::summary($receipt['defects']),
                 $receipt === null || $receipt['tickets_id'] === 0 ? '' : $receipt['tickets_id'],
-            ], ';');
-        }
-        fclose($out);
-        exit;
-    }
-
-    /**
-     * @return array{url: string, removed: string}
-     */
-    private static function selfieInfo(string $path, string $kind, int $id, ?string $date): array
-    {
-        if ($path !== '') {
-            return ['url' => Selfie::getUrl($kind, $id), 'removed' => ''];
+            ];
         }
 
-        return ['url' => '', 'removed' => SelfiePurge::getRemovedLabel($date)];
+        Ui::sendCsv(sprintf('entrega_embarcacao_%d.csv', $id), $header, $rows);
     }
 }

@@ -15,19 +15,6 @@
     {% endif %}
 {% endmacro %}
 
-{# Fotos do equipamento com defeito: miniaturas que abrem a foto inteira #}
-{% macro photos(list) %}
-    {% if list|length %}
-        <div class="ci-photo-strip mt-1">
-            {% for p in list %}
-                <a href="{{ p.url }}" target="_blank" rel="noopener" title="{{ __('Foto do defeito', 'checklistitens') }}">
-                    <img src="{{ p.url }}" class="ci-thumb ci-thumb-photo" alt="{{ __('Foto do defeito', 'checklistitens') }}" loading="lazy">
-                </a>
-            {% endfor %}
-        </div>
-    {% endif %}
-{% endmacro %}
-
 {# Selo de resultado do checklist: Ok, problema já conhecido (laudo) ou com problema #}
 {% macro result_badge(u) %}
     {% import '@checklistitens/parts/known_issue.html.twig' as known %}
@@ -41,6 +28,7 @@
 {% endmacro %}
 
 {% import _self as ci %}
+{% import '@checklistitens/parts/record.html.twig' as record %}
 {% import '@checklistitens/parts/location.html.twig' as location %}
 
 <div class="ci-page container-fluid">
@@ -84,7 +72,7 @@
                             <ul class="ci-problem-tags mb-1">
                                 {% for p in b.problems %}<li>{{ p }}</li>{% endfor %}
                             </ul>
-                            {{ ci.photos(b.photos) }}
+                            {{ record.photos(b.photos) }}
                             {{ ci.shift_badge(b) }}
                             {% if b.conferred %}<span class="badge bg-green-lt">{{ __('Conferido', 'checklistitens') }}</span>{% endif %}
                         </div>
@@ -127,7 +115,7 @@
                         {% if u.problems|length %}
                             <ul class="ci-problem-tags mb-1">{% for p in u.problems %}<li>{{ p }}</li>{% endfor %}</ul>
                         {% endif %}
-                        {{ ci.photos(u.photos) }}
+                        {{ record.photos(u.photos) }}
                         {{ ci.shift_badge(u) }}
                         <div class="mt-1">{{ location.map(u.location) }}</div>
                     </div>
@@ -154,7 +142,7 @@
                         {% if u.problems|length %}
                             <ul class="ci-problem-tags mb-1">{% for p in u.problems %}<li>{{ p }}</li>{% endfor %}</ul>
                         {% endif %}
-                        {{ ci.photos(u.photos) }}
+                        {{ record.photos(u.photos) }}
                         {{ ci.shift_badge(u) }}
                         <div class="mt-1">{{ location.map(u.location) }}</div>
                     </div>

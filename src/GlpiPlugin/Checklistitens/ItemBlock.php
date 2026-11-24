@@ -3,6 +3,7 @@
 namespace GlpiPlugin\Checklistitens;
 
 use CommonDBTM;
+use Ticket;
 
 /**
  * Item fora de circulação por problema marcado na retirada ou na devolução. Fica bloqueado até
@@ -13,15 +14,21 @@ use CommonDBTM;
  */
 class ItemBlock extends CommonDBTM
 {
+    use ReadOnlyRecord;
+
     public const STATUS_WAITING  = 1; // aguardando conferência (sem chamado)
     public const STATUS_REPAIR   = 2; // em reparo (chamado aberto)
     public const STATUS_RELEASED = 3;
 
-    public const REASON_CHECKOUT = 1;
-    public const REASON_CHECKIN  = 2;
+    // O motivo do bloqueio é a fase do uso em que o problema apareceu
+    public const REASON_CHECKOUT = Usage::PHASE_CHECKOUT;
+    public const REASON_CHECKIN  = Usage::PHASE_CHECKIN;
 
     public const RELEASE_TICKET = 1;
     public const RELEASE_MANUAL = 2;
+
+    /** Situações do chamado que liberam o item bloqueado. */
+    public const TICKET_DONE = [\CommonITILObject::SOLVED, \CommonITILObject::CLOSED];
 
     public static $rightname = Profile::RIGHT_CONFIG;
 
@@ -39,28 +46,7 @@ class ItemBlock extends CommonDBTM
 
     public static function canView()
     {
-        return Profile::isManager() || Profile::isAdmin();
-    }
-
-    // Bloqueios só mudam pelos fluxos do plugin, nunca pela edição direta.
-    public static function canCreate()
-    {
-        return false;
-    }
-
-    public static function canUpdate()
-    {
-        return false;
-    }
-
-    public static function canDelete()
-    {
-        return false;
-    }
-
-    public static function canPurge()
-    {
-        return false;
+        return Profile::canViewRecords();
     }
 
     /** @return array<int, string> */
@@ -177,7 +163,7 @@ class ItemBlock extends CommonDBTM
             ],
             'WHERE'      => [
                 self::getTable() . '.lock_active' => 1,
-                'glpi_tickets.status'             => [\CommonITILObject::SOLVED, \CommonITILObject::CLOSED],
+                'glpi_tickets.status'             => self::TICKET_DONE,
             ],
         ]);
 
@@ -195,12 +181,9 @@ class ItemBlock extends CommonDBTM
      */
     public static function present(array $row): array
     {
-        global $CFG_GLPI;
-
         $itemtype = (string) $row['itemtype'];
-        $item_row = ItemProvider::getRow($itemtype, (int) $row['items_id']);
-        $item     = $item_row !== null ? ItemProvider::present($itemtype, $item_row) : ['label' => '#' . $row['items_id'], 'detail' => ''];
-        $phase    = (int) $row['reason'] === self::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
+        $item     = ItemProvider::labelOf($itemtype, (int) $row['items_id']);
+        $phase    = self::phaseOf($row);
         $ticket   = (int) $row['tickets_id'];
         $status   = (int) $row['status'];
 
@@ -235,11 +218,64 @@ class ItemBlock extends CommonDBTM
             'active'         => (int) $row['lock_active'] === 1,
             'problems'       => array_column(UsageProblem::getFor((int) $row['plugin_checklistitens_usages_id'], $phase), 'name'),
             'ticket_id'      => $ticket,
-            'ticket_url'     => $ticket > 0 ? $CFG_GLPI['root_doc'] . '/front/ticket.form.php?id=' . $ticket : '',
+            'ticket_url'     => $ticket > 0 ? Ticket::getFormURLWithID($ticket) : '',
             'ticket_status'  => $ticket_status,
             'conferred'      => (int) $row['plugin_checklistitens_confirmations_id'] > 0,
             'release_label'  => $release,
         ];
+    }
+
+    /** Fase do uso (retirada ou devolução) em que o problema do bloqueio apareceu. */
+    public static function phaseOf(array $row): int
+    {
+        return (int) $row['reason'] === self::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
+    }
+
+    /**
+     * Garante o bloqueio ativo do item de um uso (o pedido pode chegar de novo).
+     *
+     * @param array $usage linha do uso (users_id = quem encontrou o problema)
+     * @return bool false quando o item não ficou bloqueado
+     */
+    public static function ensureFor(array $usage, int $phase): bool
+    {
+        $itemtype = (string) $usage['itemtype'];
+        $items_id = (int) $usage['items_id'];
+
+        if (self::getActiveFor($itemtype, $items_id) !== null) {
+            return true;
+        }
+
+        try {
+            self::createFor($usage, $phase);
+        } catch (\Throwable $e) {
+            \Toolbox::logError('checklistitens: ' . $e->getMessage());
+        }
+
+        return self::getActiveFor($itemtype, $items_id) !== null;
+    }
+
+    /**
+     * Bloqueios criados por vários usos, numa consulta.
+     *
+     * @param int[] $usage_ids
+     * @return array<int, array> usages_id => linha do bloqueio
+     */
+    public static function getForUsages(array $usage_ids): array
+    {
+        global $DB;
+
+        $usage_ids = array_values(array_unique(array_filter(array_map('intval', $usage_ids))));
+        if (!count($usage_ids)) {
+            return [];
+        }
+
+        $blocks = [];
+        foreach ($DB->request(['FROM' => self::getTable(), 'WHERE' => ['plugin_checklistitens_usages_id' => $usage_ids], 'ORDER' => 'id']) as $row) {
+            $blocks[(int) $row['plugin_checklistitens_usages_id']] = $row;
+        }
+
+        return $blocks;
     }
 
     public static function getActiveFor(string $itemtype, int $items_id): ?array

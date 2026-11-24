@@ -6,6 +6,23 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Corrigido
+- Entrega para embarcação: o rádio que sai da entrega por problema deixava a entrega com "Rádios
+  ok? Não". A resposta agora vale para os rádios que foram com a embarcação; o rádio que saiu
+  continua aparecendo à parte, bloqueado.
+- O link "Conferência do setor" do e-mail de equipamento não devolvido apontava sempre para a pasta
+  `plugins/` e não abria com o plugin instalado pelo marketplace.
+- A aba "Registro de uso" do Telefone podia continuar com o visual antigo depois de atualizar o
+  plugin (o navegador não buscava o CSS novo).
+- Na entrega e no recebimento da embarcação, os avisos das fotos (foto que não pôde ser lida, o que
+  falta em cada bateria ou capa com defeito) apareciam sem o destaque de aviso.
+- Foto ou selfie que o navegador não consegue reduzir e que não é JPEG nem PNG agora é avisada na
+  hora, em vez de ser guardada e recusada pelo servidor ao salvar.
+- Ao reabrir a tela da entrega ou do recebimento, a linha da localização mostra o mesmo texto da
+  leitura original, com o motivo quando ela não foi registrada.
+- Na configuração, o máximo de fotos por entrega ou recebimento aceitava mais de 200 no campo e
+  voltava a 200 ao salvar sem aviso; agora o próprio campo avisa.
+
 ## [0.12.0] - 2026-11-10
 
 Requer Atualizar em Configurar > Plugins.

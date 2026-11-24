@@ -12,6 +12,8 @@ use Session;
  */
 class Confirmation extends CommonDBTM
 {
+    use ReadOnlyRecord;
+
     public static $rightname = Profile::RIGHT_MANAGER;
 
     public $dohistory = true;
@@ -28,27 +30,7 @@ class Confirmation extends CommonDBTM
 
     public static function canView()
     {
-        return Profile::isManager() || Profile::isAdmin();
-    }
-
-    public static function canCreate()
-    {
-        return false;
-    }
-
-    public static function canUpdate()
-    {
-        return false;
-    }
-
-    public static function canDelete()
-    {
-        return false;
-    }
-
-    public static function canPurge()
-    {
-        return false;
+        return Profile::canViewRecords();
     }
 
     /**
@@ -63,7 +45,7 @@ class Confirmation extends CommonDBTM
 
         $groups = Sector::forCurrentUser();
         if (Profile::isAdmin()) {
-            foreach ([Install::TABLE_USAGES, Install::TABLE_ITEMBLOCKS] as $table) {
+            foreach ([Usage::getTable(), ItemBlock::getTable()] as $table) {
                 foreach ($DB->request(['SELECT' => 'groups_id', 'DISTINCT' => true, 'FROM' => $table]) as $row) {
                     $groups[] = (int) $row['groups_id'];
                 }
@@ -71,6 +53,44 @@ class Confirmation extends CommonDBTM
         }
 
         return Sector::getNames(array_unique($groups));
+    }
+
+    /**
+     * O que a conferência do setor ainda precisa ver: retiradas aguardando, devoluções não
+     * conferidas (o rádio recebido de volta de uma embarcação não entra: quem recebe já é o gestor)
+     * e bloqueios não conferidos.
+     *
+     * @param int[] $scope grupos (com subgrupos)
+     * @return array{checkouts: array, checkins: array, blocks: array} critérios de cada lista
+     */
+    private static function pendingCriteria(array $scope): array
+    {
+        return [
+            'checkouts' => ['groups_id' => $scope, 'status' => Usage::STATUS_IN_USE],
+            'checkins'  => [
+                'groups_id' => $scope,
+                'status'    => Usage::STATUS_RETURNED,
+                'plugin_checklistitens_confirmations_id_checkin' => 0,
+            ] + Usage::commonUse(),
+            'blocks'    => ['groups_id' => $scope, 'plugin_checklistitens_confirmations_id' => 0],
+        ];
+    }
+
+    /**
+     * Quantos registros do setor aguardam a conferência (selo da tela inicial).
+     *
+     * @param int[] $scope grupos (com subgrupos)
+     */
+    public static function countPending(array $scope): int
+    {
+        if (!count($scope)) {
+            return 0;
+        }
+        $pending = self::pendingCriteria($scope);
+
+        return countElementsInTable(Usage::getTable(), $pending['checkouts'])
+            + countElementsInTable(Usage::getTable(), $pending['checkins'])
+            + countElementsInTable(ItemBlock::getTable(), $pending['blocks']);
     }
 
     /**
@@ -117,32 +137,27 @@ class Confirmation extends CommonDBTM
             }
         }
 
-        // Retiradas aguardando conferência
-        foreach ($DB->request(['FROM' => Usage::getTable(), 'WHERE' => ['groups_id' => $scope, 'status' => Usage::STATUS_IN_USE], 'ORDER' => 'date_checkout']) as $row) {
-            $data['checkouts'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKOUT);
-            $data['pending_count']++;
-        }
-
-        // Devoluções ainda não conferidas. Rádio recebido de volta de uma embarcação não entra:
-        // quem recebe já é o gestor.
-        $iterator = $DB->request([
-            'FROM'  => Usage::getTable(),
-            'WHERE' => [
-                'groups_id' => $scope,
-                'status'    => Usage::STATUS_RETURNED,
-                'plugin_checklistitens_confirmations_id_checkin' => 0,
-                'plugin_checklistitens_deliveries_id'            => 0,
-            ],
-            'ORDER' => 'date_checkin',
-        ]);
-        foreach ($iterator as $row) {
-            $data['checkins'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKIN);
-            $data['pending_count']++;
-        }
-
+        $pending   = self::pendingCriteria($scope);
+        $usages    = static fn (array $where, string $order): array => iterator_to_array(
+            $DB->request(['FROM' => Usage::getTable(), 'WHERE' => $where, 'ORDER' => $order]),
+            false
+        );
+        $checkouts = $usages($pending['checkouts'], 'date_checkout');
+        $checkins  = $usages($pending['checkins'], 'date_checkin');
         // Liberados, aguardando devolução
-        foreach ($DB->request(['FROM' => Usage::getTable(), 'WHERE' => ['groups_id' => $scope, 'status' => Usage::STATUS_RELEASED], 'ORDER' => 'date_checkout']) as $row) {
-            $data['released'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKOUT);
+        $released  = $usages(['groups_id' => $scope, 'status' => Usage::STATUS_RELEASED], 'date_checkout');
+        $view      = new UsageView(array_merge($checkouts, $checkins, $released));
+
+        foreach ($checkouts as $row) {
+            $data['checkouts'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKOUT, $view);
+            $data['pending_count']++;
+        }
+        foreach ($checkins as $row) {
+            $data['checkins'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKIN, $view);
+            $data['pending_count']++;
+        }
+        foreach ($released as $row) {
+            $data['released'][] = self::presentUsage($row, $current_shift, Usage::PHASE_CHECKOUT, $view);
         }
 
         $data['alerts'] = self::getAlerts($groups_id, $scope, $current_shift, $data);
@@ -179,7 +194,7 @@ class Confirmation extends CommonDBTM
             'selfie'            => $selfie,
         ] + Location::toFields('', Location::fromRequest()));
         if (!$id) {
-            Selfie::deleteFile($selfie);
+            Selfie::folder()->delete($selfie);
             return ['ok' => false, 'message' => __('Não foi possível registrar a conferência. Tente de novo.', 'checklistitens')];
         }
 
@@ -248,30 +263,27 @@ class Confirmation extends CommonDBTM
         return ['ok' => true, 'message' => $message];
     }
 
-    private static function presentUsage(array $row, string $current_shift, int $phase): array
+    private static function presentUsage(array $row, string $current_shift, int $phase, UsageView $view): array
     {
-        $usage    = Usage::present($row);
+        $usage      = Usage::present($row);
         $is_checkin = $phase === Usage::PHASE_CHECKIN;
-        $shift    = $is_checkin ? $row['checkin_shift_start'] : $row['checkout_shift_start'];
-        $id       = (int) $row['id'];
+        $kind       = $is_checkin ? Selfie::KIND_CHECKIN : Selfie::KIND_CHECKOUT;
+        $shift      = $is_checkin ? $row['checkin_shift_start'] : $row['checkout_shift_start'];
+        $result     = $view->result($row, $phase);
 
         return $usage + [
             'user'           => Ui::text(getUserName((int) $row['users_id'])),
             'when'           => Ui::datetime($is_checkin ? $row['date_checkin'] : $row['date_checkout']),
             'shift_label'    => Shift::label($shift),
             'previous_shift' => $shift !== null && $shift < $current_shift,
-            'is_ok'          => $is_checkin ? (int) $row['checkin_is_ok'] === 1 : (int) $row['checkout_is_ok'] === 1,
+            'is_ok'          => $result['is_ok'],
             // Problema já conhecido (laudo em aberto): registrado sem bloqueio e sem chamado
-            'known_issue'    => (int) ($row[($is_checkin ? 'checkin_' : 'checkout_') . 'known_issue'] ?? 0) === 1,
-            'laudos'         => UsageLaudo::getForUsages([$id])[$id][$phase] ?? [],
-            'photos'         => DefectPhoto::getForUsages([$id])[$id][$phase] ?? [],
-            'problems'       => array_column(UsageProblem::getFor($id, $phase), 'name'),
-            'selfie_url'     => ($is_checkin ? $row['checkin_selfie'] : $row['checkout_selfie']) !== ''
-                ? Selfie::getUrl($is_checkin ? Selfie::KIND_CHECKIN : Selfie::KIND_CHECKOUT, (int) $row['id'])
-                : '',
-            'location'       => $is_checkin
-                ? Location::present($row, 'checkin_', __('Devolução', 'checklistitens') . ' — ' . $usage['label'])
-                : Location::present($row, 'checkout_', __('Retirada', 'checklistitens') . ' — ' . $usage['label']),
+            'known_issue'    => $result['known'],
+            'laudos'         => $result['laudos'],
+            'photos'         => $result['photos'],
+            'problems'       => $result['problems'],
+            'selfie_url'     => Selfie::info($kind, $row)['url'],
+            'location'       => Selfie::location($kind, $row, ($is_checkin ? __('Devolução', 'checklistitens') : __('Retirada', 'checklistitens')) . ' — ' . $usage['label']),
         ];
     }
 
@@ -279,7 +291,7 @@ class Confirmation extends CommonDBTM
     {
         $block    = ItemBlock::present($row);
         $usage_id = (int) $row['plugin_checklistitens_usages_id'];
-        $phase    = (int) $row['reason'] === ItemBlock::REASON_CHECKIN ? Usage::PHASE_CHECKIN : Usage::PHASE_CHECKOUT;
+        $phase    = ItemBlock::phaseOf($row);
 
         return $block + [
             'photos'          => DefectPhoto::getForUsages([$usage_id])[$usage_id][$phase] ?? [],

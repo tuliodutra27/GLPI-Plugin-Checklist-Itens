@@ -298,7 +298,7 @@ class Profile extends GlpiProfile
     {
         $first_install = countElementsInTable(ProfileRight::getTable(), ['name' => self::RIGHT_USAGE]) === 0;
 
-        ProfileRight::addProfileRights([self::RIGHT_USAGE, self::RIGHT_MANAGER, self::RIGHT_CONFIG]);
+        ProfileRight::addProfileRights(self::getRightNames());
 
         if ($first_install) {
             foreach ((new GlpiProfile())->find() as $data) {
@@ -332,7 +332,7 @@ class Profile extends GlpiProfile
 
     public static function uninstallRights(): void
     {
-        ProfileRight::deleteProfileRights([self::RIGHT_USAGE, self::RIGHT_MANAGER, self::RIGHT_CONFIG]);
+        ProfileRight::deleteProfileRights(self::getRightNames());
     }
 
     public static function grantUsage(int $profiles_id): void
@@ -361,6 +361,12 @@ class Profile extends GlpiProfile
     public static function isAdmin(): bool
     {
         return Session::haveRight(self::RIGHT_CONFIG, READ);
+    }
+
+    /** Gestor ou TI: vê os registros e as telas de gestão do plugin. */
+    public static function canViewRecords(): bool
+    {
+        return self::isManager() || self::isAdmin();
     }
 
     /** TI: configura, libera itens bloqueados e limpa selfies. */

@@ -56,7 +56,7 @@ function plugin_checklistitens_ticket_update(Ticket $ticket)
     if (!in_array('status', $ticket->updates ?? [], true)) {
         return;
     }
-    if (in_array((int) $ticket->fields['status'], [CommonITILObject::SOLVED, CommonITILObject::CLOSED], true)) {
+    if (in_array((int) $ticket->fields['status'], ItemBlock::TICKET_DONE, true)) {
         ItemBlock::releaseByTicket((int) $ticket->getID());
     }
 }

@@ -44,6 +44,22 @@ class LaudoProvider
         return $available;
     }
 
+    /**
+     * "É o problema do laudo" só vale se o laudo ainda estiver em aberto agora; senão, o problema é
+     * novo e bloqueia o item.
+     *
+     * @param array $open_laudos laudos em aberto do item agora (getOpenForItem/getOpenFor)
+     */
+    public static function acceptsKnown(bool $said_known, array $open_laudos): bool
+    {
+        return $said_known && count($open_laudos) > 0;
+    }
+
+    public static function closedMessage(): string
+    {
+        return __('O laudo deste equipamento foi concluído: o problema bloqueia o item.', 'checklistitens');
+    }
+
     /** Integração ligada na configuração e plugin Laudo disponível. */
     public static function isEnabled(): bool
     {

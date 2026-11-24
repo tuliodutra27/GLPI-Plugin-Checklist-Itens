@@ -14,44 +14,77 @@ class ItemProvider
     public const RADIO = 'PluginRadiosRadio';
     public const PHONE = 'Phone';
 
+    /**
+     * Como cada tipo é lido e mostrado:
+     * - plugin: plugin que precisa estar ativo (null = tipo do próprio GLPI);
+     * - ticket: o ativo pode ser vinculado ao chamado (o rádio do plugin Radios não é tipo de item
+     *   de chamado);
+     * - label_by: campo do rótulo principal (rádio pelo número de série, telefone pelo nome);
+     * - model_join: tabela e chave do modelo, quando ele não é uma coluna da própria tabela;
+     * - order: coluna da ordem das listas.
+     *
+     * @return array<string, array{label: string, icon: string, table: string, plugin: ?string, ticket: bool, label_by: string, model_join: ?array, order: string}>
+     */
+    private static function types(): array
+    {
+        return [
+            self::RADIO => [
+                'label'      => __('Rádio', 'checklistitens'),
+                'icon'       => 'ti ti-radio',
+                'table'      => 'glpi_plugin_radios_radios',
+                'plugin'     => 'radios',
+                'ticket'     => false,
+                'label_by'   => 'serial',
+                'model_join' => null,
+                'order'      => 'serial',
+            ],
+            self::PHONE => [
+                'label'      => __('Celular ou tablet', 'checklistitens'),
+                'icon'       => 'ti ti-device-mobile',
+                'table'      => 'glpi_phones',
+                'plugin'     => null,
+                'ticket'     => true,
+                'label_by'   => 'name',
+                'model_join' => ['glpi_phonemodels', 'phonemodels_id'],
+                'order'      => 'name',
+            ],
+        ];
+    }
+
     /** @return string[] */
     public static function getSupportedTypes(): array
     {
-        return [self::RADIO, self::PHONE];
+        return array_keys(self::types());
     }
 
     public static function isSupported(string $itemtype): bool
     {
-        if ($itemtype === self::PHONE) {
-            return true;
-        }
-        if ($itemtype === self::RADIO) {
-            return Plugin::isPluginActive('radios') && class_exists(self::RADIO);
+        $type = self::types()[$itemtype] ?? null;
+        if ($type === null) {
+            return false;
         }
 
-        return false;
+        return $type['plugin'] === null || (Plugin::isPluginActive($type['plugin']) && class_exists($itemtype));
+    }
+
+    public static function linksToTicket(string $itemtype): bool
+    {
+        return self::types()[$itemtype]['ticket'] ?? false;
     }
 
     public static function getTypeLabel(string $itemtype): string
     {
-        switch ($itemtype) {
-            case self::RADIO:
-                return __('Rádio', 'checklistitens');
-            case self::PHONE:
-                return __('Celular ou tablet', 'checklistitens');
-        }
-
-        return $itemtype;
+        return self::types()[$itemtype]['label'] ?? $itemtype;
     }
 
     public static function getTypeIcon(string $itemtype): string
     {
-        return $itemtype === self::RADIO ? 'ti ti-radio' : 'ti ti-device-mobile';
+        return self::types()[$itemtype]['icon'] ?? 'ti ti-device-mobile';
     }
 
     public static function getTable(string $itemtype): string
     {
-        return $itemtype === self::RADIO ? 'glpi_plugin_radios_radios' : 'glpi_phones';
+        return self::types()[$itemtype]['table'] ?? '';
     }
 
     /**
@@ -129,7 +162,7 @@ class ItemProvider
         $model        = Ui::text($row['model'] ?? '');
         $manufacturer = Ui::text($row['manufacturer'] ?? '');
 
-        if ($itemtype === self::RADIO) {
+        if ((self::types()[$itemtype]['label_by'] ?? 'name') === 'serial') {
             $label  = $serial !== '' ? $serial : ($name !== '' ? $name : '#' . $row['id']);
             $detail = trim($manufacturer . ' ' . $model);
         } else {
@@ -145,6 +178,22 @@ class ItemProvider
         ];
     }
 
+    /**
+     * Rótulo e detalhe de um item para as telas; "#id" quando o ativo não existe mais.
+     *
+     * @return array{label: string, detail: string}
+     */
+    public static function labelOf(string $itemtype, int $items_id): array
+    {
+        $row = self::getRow($itemtype, $items_id);
+        if ($row === null) {
+            return ['label' => '#' . $items_id, 'detail' => ''];
+        }
+        $item = self::present($itemtype, $row);
+
+        return ['label' => $item['label'], 'detail' => $item['detail']];
+    }
+
     /** Descrição de uma linha só, ex.: "Rádio ABC123 - 0001 (Fabricante Modelo)". */
     public static function describe(string $itemtype, int $items_id): string
     {
@@ -154,12 +203,7 @@ class ItemProvider
         }
         $item = self::present($itemtype, $row);
 
-        return trim(sprintf('%s %s%s', self::getShortTypeLabel($itemtype), $item['label'], $item['detail'] !== '' ? ' (' . $item['detail'] . ')' : ''));
-    }
-
-    public static function getShortTypeLabel(string $itemtype): string
-    {
-        return $itemtype === self::RADIO ? __('Rádio', 'checklistitens') : __('Celular ou tablet', 'checklistitens');
+        return trim(sprintf('%s %s%s', self::getTypeLabel($itemtype), $item['label'], $item['detail'] !== '' ? ' (' . $item['detail'] . ')' : ''));
     }
 
     /**
@@ -181,8 +225,8 @@ class ItemProvider
 
         $open = $blocked = 0;
         if (count($ids)) {
-            $open    = countElementsInTable(Install::TABLE_USAGES, ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_open' => 1]);
-            $blocked = countElementsInTable(Install::TABLE_ITEMBLOCKS, ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_active' => 1]);
+            $open    = countElementsInTable(Usage::getTable(), ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_open' => 1]);
+            $blocked = countElementsInTable(ItemBlock::getTable(), ['itemtype' => $itemtype, 'items_id' => $ids, 'lock_active' => 1]);
         }
 
         $state_names = [];
@@ -227,7 +271,7 @@ class ItemProvider
         $criteria['WHERE'] = [
             "$table.is_deleted" => 0,
         ];
-        self::addEntityRestriction($criteria['WHERE'], $table);
+        Db::addEntityRestriction($criteria['WHERE'], $table, $DB->fieldExists($table, 'is_recursive'));
         if ($groups !== null) {
             $criteria['WHERE']["$table.groups_id"] = array_values(array_map('intval', $groups));
         }
@@ -261,36 +305,21 @@ class ItemProvider
             "$table.states_id"  => $states,
             ['NOT' => ["$table.id" => new QuerySubQuery([
                 'SELECT' => 'items_id',
-                'FROM'   => Install::TABLE_USAGES,
+                'FROM'   => Usage::getTable(),
                 'WHERE'  => ['itemtype' => $itemtype, 'lock_open' => 1],
             ])]],
             ['NOT' => ["$table.id" => new QuerySubQuery([
                 'SELECT' => 'items_id',
-                'FROM'   => Install::TABLE_ITEMBLOCKS,
+                'FROM'   => ItemBlock::getTable(),
                 'WHERE'  => ['itemtype' => $itemtype, 'lock_active' => 1],
             ])]],
         ];
-        self::addEntityRestriction($criteria['WHERE'], $table);
+        Db::addEntityRestriction($criteria['WHERE'], $table, $DB->fieldExists($table, 'is_recursive'));
         if ($DB->fieldExists($table, 'is_template')) {
             $criteria['WHERE']["$table.is_template"] = 0;
         }
 
         return $criteria;
-    }
-
-    /**
-     * Restrição de entidades do GLPI. Quem vê todas as entidades (ex.: Super-Admin na raiz com
-     * recursividade) recebe um critério vazio, que viraria "AND ()" (SQL inválido) se entrasse
-     * no WHERE como está; por isso só entra quando tem conteúdo.
-     */
-    private static function addEntityRestriction(array &$where, string $table): void
-    {
-        global $DB;
-
-        $restriction = getEntitiesRestrictCriteria($table, '', '', $DB->fieldExists($table, 'is_recursive'));
-        if (count($restriction)) {
-            $where[] = $restriction;
-        }
     }
 
     private static function getBaseCriteria(string $itemtype): array
@@ -315,14 +344,15 @@ class ItemProvider
             ],
         ];
 
-        if ($itemtype === self::RADIO) {
+        $type = self::types()[$itemtype];
+        if ($type['model_join'] === null) {
             $criteria['SELECT'][] = "$table.model";
-            $criteria['ORDER']    = "$table.serial";
         } else {
-            $criteria['SELECT'][] = 'glpi_phonemodels.name AS model';
-            $criteria['LEFT JOIN']['glpi_phonemodels'] = ['ON' => [$table => 'phonemodels_id', 'glpi_phonemodels' => 'id']];
-            $criteria['ORDER'] = "$table.name";
+            [$model_table, $model_key] = $type['model_join'];
+            $criteria['SELECT'][] = "$model_table.name AS model";
+            $criteria['LEFT JOIN'][$model_table] = ['ON' => [$table => $model_key, $model_table => 'id']];
         }
+        $criteria['ORDER'] = "$table." . $type['order'];
 
         return $criteria;
     }
