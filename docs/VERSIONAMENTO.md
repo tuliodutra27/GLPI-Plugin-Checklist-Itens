@@ -27,20 +27,26 @@ Regras que não mudam:
 
 ## 2. Número da versão (SemVer)
 
-Formato `MAJOR.MINOR.PATCH`, sempre numérico, sem zero à esquerda (`0.9.0` → `0.10.0` → `0.11.0`).
-O plugin está na faixa **0.y.z**, que a spec reserva para desenvolvimento inicial: qualquer coisa
-pode mudar, e a prática recomendada é subir o MINOR a cada release.
+Formato `MAJOR.MINOR.PATCH`, sempre numérico, sem zero à esquerda. Cada parte é um número inteiro
+próprio, não uma casa decimal: depois de `0.9.0` vem `0.10.0`, e depois de `1.9.0` vem `1.10.0`.
 
-### Quando sobe cada número (enquanto 0.y.z)
+O plugin é **estável desde a 1.0.0** (2026-11-25), declarada quando ele já estava em produção. Até
+a 0.13.0 ele ficou na faixa **0.y.z**, que a spec reserva para desenvolvimento inicial.
+
+### Quando sobe cada número (a partir da 1.0.0)
 
 | Sobe | Quando | Exemplo |
 |---|---|---|
-| **PATCH** (0.11.0 → 0.11.1) | só correção de defeito, **sem mexer no banco** e sem tela ou fluxo novo | corrigir permissão, texto espremido, consulta |
-| **MINOR** (0.11.0 → 0.12.0) | funcionalidade nova; **qualquer mudança no banco** (o administrador precisa clicar em *Atualizar*); mudança incompatível; mudança da faixa de GLPI suportada | entrega para embarcação; novo perfil padrão |
-| **MAJOR** | só depois do 1.0.0, para mudança incompatível | — |
+| **PATCH** (1.0.0 → 1.0.1) | só correção de defeito, **sem mexer no banco** e sem tela ou fluxo novo | corrigir permissão, texto espremido, consulta |
+| **MINOR** (1.0.0 → 1.1.0) | funcionalidade nova que não quebra o que existe, inclusive **acrescentar** tabela, coluna ou opção de configuração; passar a suportar mais versões do GLPI | entrega para embarcação; atalhos na página inicial |
+| **MAJOR** (1.x.y → 2.0.0) | mudança **incompatível** na API pública (abaixo): remover ou renomear tabela ou coluna, apagar ou converter dados gravados, remover opção ou direito, mudar o protocolo de `ajax/` sem aceitar o antigo, deixar de suportar uma versão do GLPI (ex.: passar a exigir o GLPI 11) | — |
 
-Em 0.y.z uma mudança incompatível sobe o MINOR (não existe MAJOR estável ainda), e vai com
-destaque no changelog.
+Quando sobe um número, os da direita voltam a zero (`1.2.3` → `1.3.0` → `2.0.0`).
+
+### Como foi na faixa 0.y.z (até a 0.13.0)
+
+Toda funcionalidade nova, toda mudança no banco e toda mudança incompatível subiam o MINOR
+(`0.11.0` → `0.12.0`); correção sem banco subia o PATCH. Não existia MAJOR.
 
 ### API pública do plugin
 
@@ -53,7 +59,8 @@ percebe e que não deve quebrar sem aviso:
 - as opções de configuração;
 - a faixa de GLPI suportada (`PLUGIN_CHECKLISTITENS_MIN_GLPI_VERSION` e `..._MAX_GLPI_VERSION`).
 
-Mudar a faixa de GLPI suportada sobe **pelo menos o MINOR** e vai no changelog.
+Mudar a faixa de GLPI suportada vai sempre no changelog: ampliar sobe o MINOR; deixar de atender
+uma versão sobe o MAJOR.
 
 ### Descontinuar antes de remover
 
@@ -62,16 +69,16 @@ Sempre que possível, uma versão avisa (changelog, categoria *Descontinuado*) e
 ### 1.0.0
 
 A spec diz que software em produção, do qual outras pessoas dependem, "provavelmente já deveria ser
-1.0.0". A decisão de quando declarar o 1.0.0 é do responsável pelo plugin; quando acontecer, a API
-pública acima passa a valer: MAJOR para incompatibilidade, MINOR para novidade compatível, PATCH
-para correção.
+1.0.0". O plugin entrou em produção com a 0.12.0 e foi declarado estável na 1.0.0 (2026-11-25),
+que não muda o banco em relação à 0.13.0. Desde então a API pública acima vale: MAJOR para
+incompatibilidade, MINOR para novidade compatível, PATCH para correção.
 
 ### Pré-lançamento (release candidate)
 
-Formato `X.Y.Z-rc.N` (`0.12.0-rc.1`, `0.12.0-rc.2`…). Pela SemVer, `0.12.0-rc.1 < 0.12.0`.
+Formato `X.Y.Z-rc.N` (`1.1.0-rc.1`, `1.1.0-rc.2`…). Pela SemVer, `1.1.0-rc.1 < 1.1.0`.
 
-- **Obrigatório** em versão que muda o banco (MINOR com *Atualizar*): o rc é instalado no GLPI de
-  teste antes da versão final.
+- **Obrigatório** em versão que muda o banco (MINOR ou MAJOR que mexe em tabela, coluna ou dados
+  gravados): o rc é instalado no GLPI de teste antes da versão final.
 - **Opcional** em PATCH.
 - Não se usam `alpha`/`beta` nem metadados de build (`+...`).
 
@@ -107,7 +114,7 @@ spec, e adotada aqui.
 ### Mudança incompatível
 
 Marque com `!` antes dos dois-pontos, com o rodapé `BREAKING CHANGE:` (em maiúsculas), ou com os dois.
-Em 0.y.z sobe o MINOR; depois do 1.0.0, o MAJOR.
+Sobe o MAJOR (até a 0.13.0, na faixa 0.y.z, subia o MINOR).
 
 ### Mudança que exige *Atualizar*
 
@@ -245,10 +252,11 @@ Para cada versão `X.Y.Z`:
    3. Saia e entre de novo no GLPI.
 
    Atualização: substitua os arquivos da pasta e, em Configurar > Plugins, clique em Atualizar
-   (a X.Y.Z muda o banco).
+   e depois em Ativar.
    ```
 
-   A última linha só entra quando a versão muda o banco.
+   O GLPI pede o Atualizar a cada versão nova (seção 7). Diga na mesma linha se a versão muda o
+   banco ou só grava opções novas da configuração.
 9. Envie: `git push origin main` e, separado, `git push origin vX.Y.Z`.
 10. Confira que o workflow **Release** terminou verde, que a release tem o zip
     `checklistitens-X.Y.Z.zip` e instale esse zip uma vez para ver que sobe.
