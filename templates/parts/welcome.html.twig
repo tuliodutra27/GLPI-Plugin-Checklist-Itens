@@ -1,0 +1,14 @@
+{# Topo das telas na interface simplificada: quem está conectado e o botão de sair (aparelho compartilhado) #}
+<div class="ci-page ci-welcome-page container-fluid">
+    <div class="card mb-3 ci-welcome">
+        <div class="card-body">
+            <div class="flex-fill">
+                <div class="ci-welcome-hello">{{ __('Olá, bem-vindo(a),', 'checklistitens') }} <strong>{{ first_name }}</strong>.</div>
+                <div class="text-muted">{{ __('Não é %s?', 'checklistitens')|format(full_name) }}</div>
+            </div>
+            <a href="{{ logout_url }}" class="btn btn-lg btn-danger ci-welcome-logout">
+                <i class="ti ti-power"></i> {{ __('Sair', 'checklistitens') }}
+            </a>
+        </div>
+    </div>
+</div>

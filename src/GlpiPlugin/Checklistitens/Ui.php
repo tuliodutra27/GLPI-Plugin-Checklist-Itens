@@ -24,7 +24,8 @@ class Ui
      */
     public static function header(string $title, string $option = 'home'): void
     {
-        if (self::isHelpdesk()) {
+        $helpdesk = self::isHelpdesk();
+        if ($helpdesk) {
             Html::helpHeader($title, 'plugins', 'checklistitens');
         } else {
             Html::header($title, $_SERVER['PHP_SELF'], 'assets', Menu::class, $option);
@@ -32,6 +33,30 @@ class Ui
 
         echo self::css();
         self::script('js/checklistitens.js');
+
+        // A interface simplificada é a dos aparelhos compartilhados do setor
+        if ($helpdesk) {
+            self::welcome();
+        }
+    }
+
+    /**
+     * Quem está conectado, com o botão de sair: "Olá, bem-vindo(a), <nome>. Não é <nome completo>?".
+     * O nome completo vai na ordem nome + sobrenome, qualquer que seja o formato de nomes do GLPI.
+     */
+    private static function welcome(): void
+    {
+        $first = trim(self::text($_SESSION['glpifirstname'] ?? ''));
+        $full  = trim($first . ' ' . trim(self::text($_SESSION['glpirealname'] ?? '')));
+        if ($full === '') {
+            $full = trim(self::text($_SESSION['glpiname'] ?? ''));
+        }
+
+        self::render('parts/welcome.html.twig', [
+            'first_name' => $first !== '' ? $first : $full,
+            'full_name'  => $full,
+            'logout_url' => self::logoutUrl(),
+        ]);
     }
 
     /** O CSS do plugin (também para as abas que o plugin põe em telas do GLPI). */

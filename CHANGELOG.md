@@ -6,6 +6,11 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- Na interface simplificada, o topo de cada tela do plugin mostra quem está conectado ("Olá,
+  bem-vindo(a), Ana. Não é Ana Lima?") e um botão grande de Sair, para quem pegar um aparelho
+  compartilhado com outra pessoa conectada.
+
 ## [0.13.0] - 2026-11-24
 
 Requer Atualizar em Configurar > Plugins.
