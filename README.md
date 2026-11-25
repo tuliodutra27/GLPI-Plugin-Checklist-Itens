@@ -36,6 +36,8 @@ trabalho no aparelho quando a conexão falha.
   "Pegar outro equipamento?". Com problema, também vão as fotos e o item volta bloqueado, a não ser
   que seja o problema do laudo em aberto.
 - Logoff automático por inatividade.
+- Na interface simplificada, o topo das telas mostra quem está conectado ("Não é você?") com um
+  botão grande de Sair, para aparelhos compartilhados.
 - Perfis configurados abrem direto a tela do plugin logo depois do login.
 - Opcional: na interface simplificada, a página inicial do GLPI mostra atalhos para as funções do
   plugin, para os perfis escolhidos na configuração (desligado por padrão). Para o gestor, os

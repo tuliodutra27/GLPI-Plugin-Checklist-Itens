@@ -40,6 +40,35 @@
     max-width: 1280px;
 }
 
+/* Topo das telas na interface simplificada: quem está conectado e o botão grande de sair */
+.ci-welcome-page {
+    padding-bottom: 0;
+}
+
+.ci-welcome .card-body {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* Nome longo quebra a linha em vez de empurrar o botão para fora */
+.ci-welcome .card-body > div {
+    min-width: 0;
+}
+
+.ci-welcome-hello {
+    font-size: 1.125rem;
+}
+
+.ci-welcome-logout {
+    flex: 0 0 auto;
+    gap: .5rem;
+    min-height: 3.5rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    font-size: 1.25rem;
+}
+
 .ci-title {
     display: flex;
     align-items: center;

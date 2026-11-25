@@ -304,6 +304,11 @@ interface simplificada.
 
 Se não estiver com nenhum equipamento, abre direto a **retirada**.
 
+**Quem está conectado:** na interface simplificada, toda tela do plugin começa com
+"Olá, bem-vindo(a), *nome*. Não é *nome e sobrenome*?" e um botão grande **Sair**. Se o aparelho
+estiver com outra pessoa conectada, toque em **Sair** e entre com o seu usuário. Na interface
+padrão o topo não aparece (o GLPI já mostra o usuário no canto da tela).
+
 **Atalhos na página inicial do GLPI:** com a opção ligada na configuração
 ([seção 4.2](#42-tela-de-configuração)), a página inicial do GLPI na interface simplificada (a que
 mostra os chamados) tem no topo o bloco **Checklist uso de equipamentos** para os perfis
