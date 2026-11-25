@@ -1,0 +1,18 @@
+{# Observação de um uso encerrado sem devolução, no formato de UsageNote::getForUsages #}
+
+{# Histórico de todas as alterações, da mais nova para a mais antiga; só aparece se houver mais de min versões #}
+{% macro history(history, min = 1) %}
+    {% if history|length >= min %}
+        <details class="ci-small mt-1">
+            <summary>{{ __('Histórico da observação', 'checklistitens') }} ({{ history|length }})</summary>
+            <ul class="mb-0 mt-1">
+                {% for h in history %}
+                    <li>
+                        <span class="text-muted">{{ h.when }} · {{ h.user }}:</span>
+                        {% if h.text %}{{ h.text|nl2br }}{% else %}<em>{{ __('(observação apagada)', 'checklistitens') }}</em>{% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </details>
+    {% endif %}
+{% endmacro %}

@@ -21,6 +21,7 @@
 {% import '@checklistitens/parts/record.html.twig' as record %}
 {% import '@checklistitens/parts/location.html.twig' as location %}
 {% import '@checklistitens/parts/known_issue.html.twig' as known %}
+{% import '@checklistitens/parts/usage_note.html.twig' as note %}
 
 <div class="ci-page ci-page-wide container-fluid">
     {% if not embedded %}
@@ -155,6 +156,17 @@
                                 <div class="ci-small">{{ e.checkin_confirmation.user }} · {{ e.checkin_confirmation.when }}</div>
                                 <div class="mt-1">{{ location.map(e.checkin_confirmation.location) }}</div>
                             </div>
+                        </div>
+                    {% endif %}
+
+                    {% if e.not_returned %}
+                        <div class="list-group-item">
+                            <div class="fw-bold text-danger"><i class="ti ti-alert-triangle"></i> {{ __('Devolução não registrada', 'checklistitens') }}</div>
+                            <div class="ci-small">{{ __('Encerrado por %1$s em %2$s', 'checklistitens')|format(e.not_returned.user, e.not_returned.when) }}</div>
+                            {% if e.not_returned.note %}
+                                <div class="ci-small mt-1"><strong>{{ __('Observação', 'checklistitens') }}:</strong> {{ e.not_returned.note|nl2br }}</div>
+                            {% endif %}
+                            {{ note.history(e.not_returned.history, 2) }}
                         </div>
                     {% endif %}
 

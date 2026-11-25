@@ -41,6 +41,9 @@ class Profile extends GlpiProfile
     /** Nome do perfil que recebe o direito de gestor na instalação (comparação sem maiúsculas). */
     public const MANAGER_PROFILE_NAME = 'gestor operacional';
 
+    /** Perfil de administrador do GLPI (comparação sem maiúsculas). */
+    public const SUPER_ADMIN_PROFILE_NAME = 'super-admin';
+
     /** Campos do Self-Service copiados para o Gestor Operacional (além de interface e direitos). */
     private const SELF_SERVICE_FIELDS = [
         'helpdesk_hardware',
@@ -308,7 +311,7 @@ class Profile extends GlpiProfile
                 if ($name === self::MANAGER_PROFILE_NAME) {
                     $rights[self::RIGHT_MANAGER] = READ | UPDATE;
                 }
-                if ($name === 'super-admin') {
+                if ($name === self::SUPER_ADMIN_PROFILE_NAME) {
                     $rights[self::RIGHT_MANAGER] = READ | UPDATE;
                     $rights[self::RIGHT_CONFIG]  = READ | UPDATE;
                 }

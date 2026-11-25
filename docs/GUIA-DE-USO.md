@@ -228,6 +228,7 @@ Em **Ativos > Checklist uso de equipamentos > Configuração**:
 | Perfis que abrem a tela do plugin depois do login | Esses perfis entram direto no plugin | "Operador" |
 | Atalhos do plugin na página inicial do GLPI (interface simplificada) | Liga o bloco de atalhos no topo da página inicial ([seção 5](#5-passo-a-passo-do-colaborador)) | Não |
 | Perfis que veem os atalhos na página inicial | Só esses perfis veem o bloco, e só com a opção acima em Sim | "Gestor Operacional" |
+| Perfis que podem encerrar uso sem devolução | Veem a tela **Devoluções pendentes** ([seção 8.7](#87-devoluções-pendentes)). Quem tem o direito de ver todos os setores vê tudo; os outros perfis da lista, só o próprio setor | "Super-Admin" |
 | Logoff por inatividade | Segundos sem uso nas telas do colaborador; 0 = desligado | 60 |
 | Retenção mínima das selfies | Dias antes de poder limpar; mínimo de 90 | 90 |
 | Retenção das localizações | Dias antes de poder limpar | 90 |
@@ -429,6 +430,9 @@ em aberto) foi registrado, com as fotos, para o gestor conferir."
 
 - **Logoff por inatividade:** as telas do colaborador saem sozinhas depois de um tempo sem uso
   (padrão 60 s). Isso protege aparelhos compartilhados.
+- **Devolva sempre pelo sistema:** deixar o equipamento na sala sem fazer a devolução mantém o uso
+  aberto. O equipamento fica preso para os outros, e você não consegue retirar outro do mesmo tipo
+  enquanto estiver no limite.
 - **Limite por pessoa:** se você já estiver com o limite de um tipo (padrão: 1 rádio), a lista
   avisa e pede para devolver antes.
 - **Localização obrigatória:** se ela não for registrada, a tela mostra o motivo e o botão
@@ -460,6 +464,8 @@ selfie, e no computador.
   **Mapa**, que abre a localização no **Apple Maps** ou no **Google Maps**.
 - **Devoluções não conferidas:** com a selfie, o mapa e os problemas, se houver.
 - **Liberados, aguardando devolução:** equipamentos já conferidos e ainda com o colaborador.
+  Se o equipamento já voltou para a sala mas o colaborador não devolveu pelo sistema, quem tem a
+  permissão encerra o uso em **Devoluções pendentes** ([seção 8.7](#87-devoluções-pendentes)).
 - Os rádios entregues a embarcações **não aparecem** no painel: a entrega é feita pelo próprio
   gestor e não passa pela conferência. Rádio que saiu da entrega por problema aparece nos itens
   bloqueados, como os demais. As entregas abertas ficam em **Entregas para embarcação**
@@ -938,6 +944,42 @@ O que cabe ao TI na entrega de rádios para embarcação:
 O TI que também tem o direito **Conferir e abrir chamado** pode fazer entregas e recebimentos com
 os rádios de qualquer setor.
 
+### 8.7 Devoluções pendentes
+
+Quando o colaborador entrega o equipamento na sala mas **não registra a devolução** no sistema, o
+uso fica aberto: o equipamento continua "em uso", ninguém consegue retirá-lo, e o próprio
+colaborador fica no limite por pessoa. A tela **Devoluções pendentes** resolve isso sem apagar
+nada.
+
+Quem vê a tela: os perfis escolhidos em **Perfis que podem encerrar uso sem devolução**, na
+configuração (padrão: Super-Admin). Quem tem o direito de ver todos os setores vê os usos de
+todos; os outros perfis da lista, só os do próprio setor.
+
+1. A tela lista as retiradas de **turnos que já terminaram** e que ainda estão abertas, agrupadas
+   por setor e turno. Cada uma mostra se o gestor chegou a conferir ("Conferido, liberado para
+   devolução") ou não ("Sem conferência do gestor"). Retiradas do turno atual e rádios com
+   embarcação não aparecem.
+2. Confira na sala quais equipamentos já voltaram e marque só esses. Há "Selecionar todos" geral
+   e por turno.
+3. Se quiser, escreva uma **observação** (vale para todos os marcados).
+4. Marque **"Conferi que os equipamentos marcados estão de volta"** e toque em **Encerrar sem
+   devolução**.
+
+O que acontece:
+- o uso fica na situação **Devolução não registrada**, com quem encerrou e quando. A retirada não
+  muda, e a devolução fica em branco, porque ela não foi feita;
+- o equipamento volta a ficar disponível para retirada, e o colaborador sai do limite por pessoa;
+- o uso sai de "Liberados, aguardando devolução" no painel do gestor e não gera mais alerta;
+- o registro do equipamento mostra o encerramento na linha do tempo e no CSV.
+
+Como ninguém respondeu o checklist da devolução, o estado do equipamento é conferido na próxima
+retirada ("Equipamento ok?"). Se o próximo colaborador achar um problema, o equipamento é
+bloqueado normalmente, e o registro mostra de quem era o uso anterior.
+
+**Observação e histórico:** em **Encerrados sem devolução** (últimos 30 dias), cada uso tem a
+observação, que pode ser alterada. Cada alteração fica guardada com quem escreveu e quando, em
+**Histórico da observação**; nada é apagado.
+
 ---
 
 ## 9. Ciclo de vida: uso, bloqueio e entrega
@@ -953,6 +995,7 @@ os rádios de qualquer setor.
 | Em separação para embarcação | O gestor reservou o rádio numa entrega ainda não concluída | sim |
 | Com a embarcação | Entrega concluída | sim, até o recebimento |
 | Separação cancelada | A separação foi cancelada pelo gestor ou passou do prazo, ou o rádio foi tirado da entrega | não |
+| Devolução não registrada | O colaborador não devolveu pelo sistema, o equipamento já voltou e o uso foi encerrado em **Devoluções pendentes** ([seção 8.7](#87-devoluções-pendentes)) | não |
 
 O **problema já conhecido** (laudo em aberto) fica registrado no uso, com os problemas e as fotos,
 mas **não bloqueia** o equipamento e não abre chamado.

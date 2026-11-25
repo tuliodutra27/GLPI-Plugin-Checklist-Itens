@@ -1,0 +1,102 @@
+{# Devoluções pendentes: encerrar sem devolução os usos de turnos já terminados #}
+{% import '@checklistitens/parts/usage_note.html.twig' as note %}
+<div class="ci-page container-fluid">
+    <h2 class="ci-title mb-3"><i class="ti ti-clock"></i> {{ __('Devoluções pendentes', 'checklistitens') }}</h2>
+
+    <div class="alert alert-info">
+        {{ __('Retiradas de turnos que já terminaram e que o colaborador não devolveu pelo sistema. Encerre só os equipamentos que já estão de volta: eles ficam disponíveis para retirada, e o registro do equipamento mostra "Devolução não registrada", com quem encerrou e quando.', 'checklistitens') }}
+    </div>
+
+    {% if groups is empty %}
+        <div class="card mb-3">
+            <div class="card-body text-muted">{{ __('Nenhuma devolução pendente.', 'checklistitens') }}</div>
+        </div>
+    {% else %}
+        <form method="post" action="{{ post_url }}"
+              onsubmit="return confirm('{{ __('Encerrar sem devolução os usos marcados?', 'checklistitens')|e('js') }}');">
+            <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+
+            <label class="form-check mb-2">
+                <input type="checkbox" class="form-check-input" data-ci-check-all="">
+                <span class="form-check-label">{{ __('Selecionar todos', 'checklistitens') }} ({{ total }})</span>
+            </label>
+
+            {% for g in groups %}
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <label class="form-check mb-0">
+                            <input type="checkbox" class="form-check-input" data-ci-check-all="{{ g.key }}">
+                            <span class="form-check-label">
+                                <strong>{{ g.sector }}</strong> · {{ __('turno', 'checklistitens') }} {{ g.shift }}
+                                <span class="badge bg-orange ms-1">{{ g.rows|length }}</span>
+                            </span>
+                        </label>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        {% for u in g.rows %}
+                            <label class="list-group-item d-flex gap-3 align-items-start">
+                                <input type="checkbox" class="form-check-input mt-1" name="usages[]" value="{{ u.id }}" data-ci-check-group="{{ g.key }}">
+                                <div class="flex-fill">
+                                    <div><i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted ci-small">{{ u.detail }}</span></div>
+                                    <div class="ci-small">{{ u.user }} · {{ __('Retirado em', 'checklistitens') }} {{ u.checkout }}</div>
+                                    {% if u.conferred %}
+                                        <span class="badge bg-green-lt">{{ __('Conferido, liberado para devolução', 'checklistitens') }}</span>
+                                    {% else %}
+                                        <span class="badge bg-orange-lt">{{ __('Sem conferência do gestor', 'checklistitens') }}</span>
+                                    {% endif %}
+                                </div>
+                                <a href="{{ u.record_url }}" class="ci-small" title="{{ __('Registro do equipamento', 'checklistitens') }}"><i class="ti ti-list-details"></i></a>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endfor %}
+
+            <div class="card mb-3">
+                <div class="card-body">
+                    <label class="form-label" for="ci-note">{{ __('Observação (opcional, vale para todos os marcados)', 'checklistitens') }}</label>
+                    <textarea id="ci-note" name="note" class="form-control mb-3" rows="2" maxlength="{{ max_note }}"></textarea>
+                    <label class="form-check mb-3">
+                        <input type="checkbox" class="form-check-input" name="confirm" value="1" required>
+                        <span class="form-check-label">{{ __('Conferi que os equipamentos marcados estão de volta.', 'checklistitens') }}</span>
+                    </label>
+                    <button type="submit" name="close" value="1" class="btn btn-warning">
+                        <i class="ti ti-lock-open"></i> {{ __('Encerrar sem devolução', 'checklistitens') }}
+                    </button>
+                </div>
+            </div>
+        </form>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header">
+            <h3 class="card-title">{{ __('Encerrados sem devolução', 'checklistitens') }} <span class="text-muted ci-small">({{ __('últimos %d dias', 'checklistitens')|format(recent_days) }})</span></h3>
+        </div>
+        <div class="list-group list-group-flush">
+            {% for u in recent %}
+                <div class="list-group-item">
+                    <div><i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted ci-small">{{ u.detail }} · {{ u.sector }}</span></div>
+                    <div class="ci-small">{{ u.user }} · {{ __('Retirado em', 'checklistitens') }} {{ u.checkout }}</div>
+                    <div class="ci-small text-muted">{{ __('Encerrado por %1$s em %2$s', 'checklistitens')|format(u.closed_by, u.closed_at) }} · <a href="{{ u.record_url }}">{{ __('Registro do equipamento', 'checklistitens') }}</a></div>
+
+                    <form method="post" action="{{ post_url }}" class="mt-2">
+                        <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">
+                        <label class="form-label ci-small mb-1" for="ci-note-{{ u.id }}">{{ __('Observação', 'checklistitens') }}</label>
+                        <div class="d-flex gap-2 align-items-start">
+                            <textarea id="ci-note-{{ u.id }}" name="note" class="form-control" rows="2" maxlength="{{ max_note }}">{{ u.note }}</textarea>
+                            <button type="submit" name="save_note" value="{{ u.id }}" class="btn btn-outline-primary">
+                                <i class="ti ti-device-floppy"></i> {{ __('Salvar', 'checklistitens') }}
+                            </button>
+                        </div>
+                    </form>
+
+                    {{ note.history(u.history) }}
+                </div>
+            {% else %}
+                <div class="list-group-item text-muted">{{ __('Nenhum encerramento ainda.', 'checklistitens') }}</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <a href="{{ home_url }}" class="btn btn-outline-secondary"><i class="ti ti-arrow-left"></i> {{ __('Voltar', 'checklistitens') }}</a>
+</div>

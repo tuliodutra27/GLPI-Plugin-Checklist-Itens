@@ -38,6 +38,10 @@ trabalho no aparelho quando a conexão falha.
 - Logoff automático por inatividade.
 - Na interface simplificada, o topo das telas mostra quem está conectado ("Não é você?") com um
   botão grande de Sair, para aparelhos compartilhados.
+- Devoluções pendentes: quem tem a permissão (perfis escolhidos na configuração; padrão
+  Super-Admin) encerra as retiradas de turnos já terminados que não foram devolvidas pelo sistema,
+  liberando os equipamentos. O histórico mostra "Devolução não registrada", com quem encerrou e uma
+  observação com histórico de alterações.
 - Perfis configurados abrem direto a tela do plugin logo depois do login.
 - Opcional: na interface simplificada, a página inicial do GLPI mostra atalhos para as funções do
   plugin, para os perfis escolhidos na configuração (desligado por padrão). Para o gestor, os

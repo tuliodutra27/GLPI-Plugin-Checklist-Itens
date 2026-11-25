@@ -352,6 +352,7 @@ class EquipmentRecord extends CommonGLPI
         }
         $confirmations = self::loadById(Confirmation::getTable(), array_filter($confirmation_ids));
         $view          = new UsageView($usages);
+        $notes         = UsageNote::getForUsages($ids);
 
         // Entregas para embarcação e recebimentos ligados aos usos (selfie e localização vêm deles)
         $deliveries = self::loadById(Delivery::getTable(), array_filter(array_column($usages, 'plugin_checklistitens_deliveries_id')));
@@ -447,6 +448,13 @@ class EquipmentRecord extends CommonGLPI
                     'location' => $checkin_location,
                 ] : null,
                 'checkin_confirmation' => self::confirmationInfo($confirmations[(int) $u['plugin_checklistitens_confirmations_id_checkin']] ?? null),
+                // Encerrado sem devolução (Devoluções pendentes), com a observação e o histórico dela
+                'not_returned' => $status === Usage::STATUS_NOT_RETURNED ? [
+                    'user'    => Ui::text(getUserName((int) $u['closed_users_id'])),
+                    'when'    => Ui::datetime($u['date_closed']),
+                    'note'    => $notes[$id][0]['text'] ?? '',
+                    'history' => $notes[$id] ?? [],
+                ] : null,
                 'block'        => $block,
                 'duration'     => $duration,
             ];
@@ -515,6 +523,8 @@ class EquipmentRecord extends CommonGLPI
             __('Problema conhecido na retirada', 'checklistitens'), __('Problema conhecido na devolução', 'checklistitens'),
             __('Laudos em aberto', 'checklistitens'), __('Fotos do defeito', 'checklistitens'),
             __('Embarcação', 'checklistitens'),
+            __('Encerrado sem devolução por', 'checklistitens'), __('Encerrado sem devolução em', 'checklistitens'),
+            __('Observação', 'checklistitens'),
         ];
 
         $rows  = [];
@@ -549,6 +559,9 @@ class EquipmentRecord extends CommonGLPI
                 ))),
                 count($entry['checkout']['photos']) + count($entry['checkin']['photos'] ?? []),
                 $entry['delivery']['vessel'] ?? '',
+                $entry['not_returned']['user'] ?? '',
+                $entry['not_returned']['when'] ?? '',
+                $entry['not_returned']['note'] ?? '',
             ];
         }
 

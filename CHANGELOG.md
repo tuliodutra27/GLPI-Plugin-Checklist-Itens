@@ -6,6 +6,19 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+Requer Atualizar em Configurar > Plugins.
+
+### Adicionado
+- Tela "Devoluções pendentes": lista as retiradas de turnos já terminados que o colaborador não
+  devolveu pelo sistema (conferidas ou não pelo gestor) e permite encerrá-las, uma a uma ou em
+  lote, depois de confirmar que os equipamentos estão de volta. O uso fica como "Devolução não
+  registrada", com quem encerrou e quando; o equipamento volta a ficar disponível e o colaborador
+  sai do limite por pessoa. A observação do encerramento pode ser alterada, e cada alteração fica no
+  histórico.
+- Opção "Perfis que podem encerrar uso sem devolução" na configuração (padrão: Super-Admin).
+- O registro do equipamento mostra o encerramento sem devolução na linha do tempo e no CSV; o
+  Histórico geral pode filtrar pela situação nova.
+
 ## [1.0.0] - 2026-11-25
 
 Requer Atualizar em Configurar > Plugins.

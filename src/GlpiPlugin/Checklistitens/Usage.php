@@ -26,6 +26,10 @@ class Usage extends CommonDBTM
     public const STATUS_ON_VESSEL          = 6; // entrega concluída: rádio com a embarcação
     public const STATUS_DELIVERY_CANCELLED = 7; // separação cancelada ou expirada: não prende o item
 
+    // Uso de turno encerrado que o colaborador não devolveu pelo sistema, encerrado por quem tem
+    // a permissão (PendingReturn): libera o equipamento sem inventar uma devolução
+    public const STATUS_NOT_RETURNED = 8;
+
     public const PHASE_CHECKOUT = 1;
     public const PHASE_CHECKIN  = 2;
 
@@ -179,6 +183,25 @@ class Usage extends CommonDBTM
                 'datatype'      => 'datetime',
                 'massiveaction' => false,
             ],
+            // Com opção de busca, o histórico do GLPI também registra a mudança desses campos
+            [
+                'id'            => '12',
+                'table'         => 'glpi_users',
+                'field'         => 'name',
+                'linkfield'     => 'closed_users_id',
+                'name'          => __('Encerrado sem devolução por', 'checklistitens'),
+                'datatype'      => 'dropdown',
+                'right'         => 'all',
+                'massiveaction' => false,
+            ],
+            [
+                'id'            => '13',
+                'table'         => $table,
+                'field'         => 'date_closed',
+                'name'          => __('Encerrado sem devolução em', 'checklistitens'),
+                'datatype'      => 'datetime',
+                'massiveaction' => false,
+            ],
         ];
     }
 
@@ -250,6 +273,7 @@ class Usage extends CommonDBTM
             self::STATUS_DELIVERY_DRAFT     => __('Em separação para embarcação', 'checklistitens'),
             self::STATUS_ON_VESSEL          => __('Com a embarcação', 'checklistitens'),
             self::STATUS_DELIVERY_CANCELLED => __('Separação cancelada', 'checklistitens'),
+            self::STATUS_NOT_RETURNED       => __('Devolução não registrada', 'checklistitens'),
         ];
     }
 
@@ -266,6 +290,8 @@ class Usage extends CommonDBTM
                 return 'yellow';
             case self::STATUS_ON_VESSEL:
                 return 'azure';
+            case self::STATUS_NOT_RETURNED:
+                return 'red';
         }
 
         return 'secondary';
@@ -304,6 +330,37 @@ class Usage extends CommonDBTM
     public static function commonUse(): array
     {
         return ['plugin_checklistitens_deliveries_id' => 0];
+    }
+
+    /**
+     * Uso que ficou sem devolução: aberto, comum (não é de entrega para embarcação) e retirado num
+     * turno que já terminou. Aguardando conferência ou já liberado, tanto faz: prende o item igual.
+     */
+    public static function notReturnedCriteria(): array
+    {
+        return ['lock_open' => 1, 'checkout_shift_start' => ['<', Shift::startFor()]] + self::commonUse();
+    }
+
+    /**
+     * Encerra um uso sem devolução (situação "Devolução não registrada"): o equipamento volta a
+     * ficar disponível e o colaborador sai do limite por pessoa. A retirada não muda, e os campos
+     * da devolução ficam vazios, porque a devolução de verdade não aconteceu.
+     *
+     * @return bool false se o uso não está (mais) nessa situação, ex.: devolvido nesse meio-tempo
+     */
+    public static function closeNotReturned(int $usages_id): bool
+    {
+        if (countElementsInTable(self::getTable(), ['id' => $usages_id] + self::notReturnedCriteria()) === 0) {
+            return false;
+        }
+
+        return (new self())->update([
+            'id'              => $usages_id,
+            'status'          => self::STATUS_NOT_RETURNED,
+            'lock_open'       => 'NULL',
+            'closed_users_id' => (int) Session::getLoginUserID(),
+            'date_closed'     => Shift::now(),
+        ]);
     }
 
     /**
