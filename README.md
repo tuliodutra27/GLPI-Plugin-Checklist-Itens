@@ -38,6 +38,10 @@ trabalho no aparelho quando a conexão falha.
 - Logoff automático por inatividade.
 - Na interface simplificada, o topo das telas mostra quem está conectado ("Não é você?") com um
   botão grande de Sair, para aparelhos compartilhados.
+- Devoluções pendentes: quem tem a permissão (perfis escolhidos na configuração; padrão
+  Super-Admin) encerra as retiradas de turnos já terminados que não foram devolvidas pelo sistema,
+  liberando os equipamentos. O histórico mostra "Devolução não registrada", com quem encerrou e uma
+  observação com histórico de alterações.
 - Perfis configurados abrem direto a tela do plugin logo depois do login.
 - Opcional: na interface simplificada, a página inicial do GLPI mostra atalhos para as funções do
   plugin, para os perfis escolhidos na configuração (desligado por padrão). Para o gestor, os
@@ -69,6 +73,9 @@ trabalho no aparelho quando a conexão falha.
     fotos do defeito, problema conhecido, laudos exibidos, bloqueios e chamados.
 
   Nos celulares e tablets, o registro também aparece numa aba do formulário do Telefone no GLPI.
+- **Histórico geral** de todos os usos (busca do GLPI), com filtros rápidos, colunas de quem
+  conferiu, do chamado e da embarcação, e a **página de cada uso**, que também abre pelo chamado do
+  bloqueio.
 - **Alerta de equipamento não devolvido** no fim do turno, para os gestores do setor e o TI.
 - **Selfies e localizações** guardadas fora da pasta pública. As selfies ficam pelo menos 90
   dias e as localizações pelo prazo configurado. Depois disso, os administradores podem limpar.

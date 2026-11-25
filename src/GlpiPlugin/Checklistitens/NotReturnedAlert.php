@@ -35,15 +35,9 @@ class NotReturnedAlert extends CommonGLPI
     {
         global $DB;
 
-        $current_shift = Shift::startFor();
-
         $iterator = $DB->request([
             'FROM'  => Usage::getTable(),
-            'WHERE' => [
-                'lock_open'               => 1,
-                'date_alert_not_returned' => null,
-                'checkout_shift_start'    => ['<', $current_shift],
-            ] + Usage::commonUse(),
+            'WHERE' => ['date_alert_not_returned' => null] + Usage::notReturnedCriteria(),
             'ORDER' => ['groups_id', 'checkout_shift_start', 'date_checkout'],
         ]);
 

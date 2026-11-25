@@ -73,6 +73,8 @@ class Config extends CommonGLPI
             // Atalhos do plugin na página inicial do GLPI (interface simplificada)
             'home_shortcuts'          => '0',
             'home_shortcuts_profiles' => '',
+            // Perfis que encerram uso sem devolução (tela Devoluções pendentes)
+            'notreturned_profiles'    => '',
             'laudo_enabled'         => '1',
             'laudo_done_statuses'   => '',
             'laudo_initial_status'  => '0',
@@ -109,6 +111,9 @@ class Config extends CommonGLPI
         }
         if (!isset($current['home_shortcuts_profiles'])) {
             $defaults['home_shortcuts_profiles'] = implode(',', self::findIdsByName(\Profile::getTable(), 'name', [Profile::MANAGER_PROFILE_NAME]));
+        }
+        if (!isset($current['notreturned_profiles'])) {
+            $defaults['notreturned_profiles'] = implode(',', self::findIdsByName(\Profile::getTable(), 'name', [Profile::SUPER_ADMIN_PROFILE_NAME]));
         }
         if (!isset($current['laudo_done_statuses'])) {
             $defaults['laudo_done_statuses'] = implode(',', LaudoProvider::findDefaultDoneStatuses());
@@ -333,6 +338,22 @@ class Config extends CommonGLPI
         return array_values(array_filter(array_map('intval', explode(',', (string) $stored['home_shortcuts_profiles']))));
     }
 
+    /**
+     * Perfis que podem encerrar uso sem devolução (tela Devoluções pendentes). Enquanto a opção
+     * nunca foi gravada, vale o perfil de nome "super-admin".
+     *
+     * @return int[]
+     */
+    public static function getNotReturnedProfiles(): array
+    {
+        $stored = GlpiConfig::getConfigurationValues(self::CONTEXT, ['notreturned_profiles']);
+        if (!array_key_exists('notreturned_profiles', $stored)) {
+            return self::findIdsByName(\Profile::getTable(), 'name', [Profile::SUPER_ADMIN_PROFILE_NAME]);
+        }
+
+        return array_values(array_filter(array_map('intval', explode(',', (string) $stored['notreturned_profiles']))));
+    }
+
     /** Integração com o plugin Laudo ligada na configuração (padrão: ligada). */
     public static function isLaudoEnabled(): bool
     {
@@ -400,6 +421,7 @@ class Config extends CommonGLPI
             'landing_profiles'      => implode(',', array_filter(array_map('intval', (array) ($input['landing_profiles'] ?? [])))),
             'home_shortcuts'          => !empty($input['home_shortcuts']) ? '1' : '0',
             'home_shortcuts_profiles' => implode(',', array_filter(array_map('intval', (array) ($input['home_shortcuts_profiles'] ?? [])))),
+            'notreturned_profiles'    => implode(',', array_filter(array_map('intval', (array) ($input['notreturned_profiles'] ?? [])))),
             'laudo_enabled'         => !empty($input['laudo_enabled']) ? '1' : '0',
             'laudo_done_statuses'   => implode(',', array_filter(array_map('intval', (array) ($input['laudo_done_statuses'] ?? [])))),
         ] + array_map(
@@ -492,6 +514,15 @@ class Config extends CommonGLPI
             'multiple' => true,
         ]);
         echo "<div class='text-muted'>" . __('Só esses perfis veem o bloco, e só com os atalhos ligados.', 'checklistitens') . "</div>";
+        echo "</td></tr>";
+
+        echo "<tr class='tab_bg_1'><td>" . __('Perfis que podem encerrar uso sem devolução', 'checklistitens') . "</td><td>";
+        \Profile::dropdown([
+            'name'     => 'notreturned_profiles',
+            'value'    => self::getNotReturnedProfiles(),
+            'multiple' => true,
+        ]);
+        echo "<div class='text-muted'>" . __('Tela "Devoluções pendentes": encerram os usos de turnos já terminados que o colaborador não devolveu pelo sistema, liberando os equipamentos. Quem vê todos os setores vê tudo; os outros perfis, só o próprio setor.', 'checklistitens') . "</div>";
         echo "</td></tr>";
 
         echo "<tr class='tab_bg_1'><td>" . __('Logoff por inatividade nas telas do colaborador (segundos, 0 = desligado)', 'checklistitens') . "</td><td>";

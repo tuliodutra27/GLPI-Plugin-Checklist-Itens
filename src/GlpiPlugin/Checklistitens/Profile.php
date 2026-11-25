@@ -41,6 +41,9 @@ class Profile extends GlpiProfile
     /** Nome do perfil que recebe o direito de gestor na instalação (comparação sem maiúsculas). */
     public const MANAGER_PROFILE_NAME = 'gestor operacional';
 
+    /** Perfil de administrador do GLPI (comparação sem maiúsculas). */
+    public const SUPER_ADMIN_PROFILE_NAME = 'super-admin';
+
     /** Campos do Self-Service copiados para o Gestor Operacional (além de interface e direitos). */
     private const SELF_SERVICE_FIELDS = [
         'helpdesk_hardware',
@@ -298,7 +301,16 @@ class Profile extends GlpiProfile
     {
         $first_install = countElementsInTable(ProfileRight::getTable(), ['name' => self::RIGHT_USAGE]) === 0;
 
-        ProfileRight::addProfileRights(self::getRightNames());
+        // addProfileRights insere a linha em todos os perfis sem conferir se ela existe (cada
+        // repetição vira um erro "Duplicate entry" no sql-errors.log): só os direitos novos. Perfil
+        // criado depois recebe as linhas dos direitos existentes pelo próprio GLPI (fillProfileRights).
+        $missing = array_values(array_filter(
+            self::getRightNames(),
+            static fn (string $name): bool => countElementsInTable(ProfileRight::getTable(), ['name' => $name]) === 0
+        ));
+        if (count($missing)) {
+            ProfileRight::addProfileRights($missing);
+        }
 
         if ($first_install) {
             foreach ((new GlpiProfile())->find() as $data) {
@@ -308,7 +320,7 @@ class Profile extends GlpiProfile
                 if ($name === self::MANAGER_PROFILE_NAME) {
                     $rights[self::RIGHT_MANAGER] = READ | UPDATE;
                 }
-                if ($name === 'super-admin') {
+                if ($name === self::SUPER_ADMIN_PROFILE_NAME) {
                     $rights[self::RIGHT_MANAGER] = READ | UPDATE;
                     $rights[self::RIGHT_CONFIG]  = READ | UPDATE;
                 }

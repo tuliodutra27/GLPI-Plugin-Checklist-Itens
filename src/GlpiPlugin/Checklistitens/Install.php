@@ -28,9 +28,18 @@ class Install
      * ativa, observação e última atualização (o nome já é a primeira coluna).
      */
     private const DISPLAY_PREFERENCES = [
-        Usage::class       => [2, 3, 4, 5, 6, 7, 9],
+        Usage::class       => [2, 3, 4, 5, 6, 7, 9, 12, 13],
         ProblemType::class => [101, 102, 103, 104, 105],
         Vessel::class      => [101, 16, 19],
+    ];
+
+    /**
+     * Colunas que entraram no padrão depois da primeira versão (1.1.0: encerrado sem devolução
+     * por/em). A atualização acrescenta ao padrão geral as que ele ainda não tem; por isso, quem
+     * tirar uma delas do padrão geral a vê voltar no próximo Atualizar. As visões pessoais não mudam.
+     */
+    private const DISPLAY_PREFERENCES_ADDED = [
+        Usage::class => [12, 13],
     ];
 
     public static function install(Migration $migration): void
@@ -57,22 +66,26 @@ class Install
         self::installNotifications();
     }
 
-    /** Colunas padrão das listas, só para o tipo que ainda não tem nenhuma. */
+    /**
+     * Colunas padrão das listas: todas para o tipo que ainda não tem padrão geral; no que já tem,
+     * só as que entraram depois e ainda faltam, no fim.
+     */
     private static function installDisplayPreferences(): void
     {
         global $DB;
 
         foreach (self::DISPLAY_PREFERENCES as $itemtype => $nums) {
-            if (countElementsInTable('glpi_displaypreferences', ['itemtype' => $itemtype, 'users_id' => 0]) > 0) {
-                continue;
-            }
-            foreach ($nums as $rank => $num) {
-                $DB->insert('glpi_displaypreferences', [
-                    'itemtype' => $itemtype,
-                    'num'      => $num,
-                    'rank'     => $rank + 1,
-                    'users_id' => 0,
-                ]);
+            $where   = ['itemtype' => $itemtype, 'users_id' => 0];
+            $current = array_map('intval', array_column(iterator_to_array($DB->request([
+                'SELECT' => ['num', 'rank'],
+                'FROM'   => 'glpi_displaypreferences',
+                'WHERE'  => $where,
+            ]), false), 'rank', 'num'));
+
+            $missing = count($current) ? array_diff(self::DISPLAY_PREFERENCES_ADDED[$itemtype] ?? [], array_keys($current)) : $nums;
+            $rank    = count($current) ? max($current) : 0;
+            foreach ($missing as $num) {
+                $DB->insert('glpi_displaypreferences', $where + ['num' => $num, 'rank' => ++$rank]);
             }
         }
     }
@@ -103,6 +116,9 @@ class Install
                 // em que o rádio voltou (0 = ainda não voltou)
                 'plugin_checklistitens_deliveries_id'       => ['int unsigned NOT NULL DEFAULT 0', 'plugin_checklistitens_confirmations_id_checkin'],
                 'plugin_checklistitens_deliveryreceipts_id' => ['int unsigned NOT NULL DEFAULT 0', 'plugin_checklistitens_deliveries_id'],
+                // 1.1.0: uso encerrado sem devolução (quem encerrou e quando)
+                'closed_users_id' => ['int unsigned NOT NULL DEFAULT 0', 'date_alert_not_returned'],
+                'date_closed'     => ['timestamp NULL DEFAULT NULL', 'closed_users_id'],
             ],
             // 0.11.0: capas entregues e devolvidas, estado das capas e baterias que voltaram com defeito
             Delivery::getTable() => [
@@ -149,7 +165,7 @@ class Install
 
         // Índices das colunas novas (addKey não repete um índice que já existe)
         $keys = [
-            Usage::getTable()       => ['plugin_checklistitens_deliveries_id', 'plugin_checklistitens_deliveryreceipts_id'],
+            Usage::getTable()       => ['plugin_checklistitens_deliveries_id', 'plugin_checklistitens_deliveryreceipts_id', 'date_closed'],
             DefectPhoto::getTable() => ['client_uuid'],
             DeliveryPhoto::getTable() => ['defect_ref'],
         ];
@@ -342,6 +358,7 @@ class Install
             DeliveryReceipt::getTable(),
             DeliveryPhoto::getTable(),
             AccessoryDefect::getTable(),
+            UsageNote::getTable(),
         ];
     }
 
@@ -375,6 +392,8 @@ class Install
                 `plugin_checklistitens_deliveries_id` int unsigned NOT NULL DEFAULT 0,
                 `plugin_checklistitens_deliveryreceipts_id` int unsigned NOT NULL DEFAULT 0,
                 `date_alert_not_returned` timestamp NULL DEFAULT NULL,
+                `closed_users_id` int unsigned NOT NULL DEFAULT 0,
+                `date_closed` timestamp NULL DEFAULT NULL,
                 `checkout_latitude` decimal(10,7) NULL DEFAULT NULL,
                 `checkout_longitude` decimal(10,7) NULL DEFAULT NULL,
                 `checkout_accuracy` int unsigned NULL DEFAULT NULL,
@@ -395,7 +414,8 @@ class Install
                 KEY `plugin_checklistitens_confirmations_id` (`plugin_checklistitens_confirmations_id`),
                 KEY `plugin_checklistitens_confirmations_id_checkin` (`plugin_checklistitens_confirmations_id_checkin`),
                 KEY `plugin_checklistitens_deliveries_id` (`plugin_checklistitens_deliveries_id`),
-                KEY `plugin_checklistitens_deliveryreceipts_id` (`plugin_checklistitens_deliveryreceipts_id`)
+                KEY `plugin_checklistitens_deliveryreceipts_id` (`plugin_checklistitens_deliveryreceipts_id`),
+                KEY `date_closed` (`date_closed`)
             ",
 
             // Conferência do gestor (selfie do gestor + o que foi conferido aponta para cá).
@@ -516,6 +536,19 @@ class Install
                 PRIMARY KEY (`id`),
                 UNIQUE KEY `usage_laudo_phase` (`plugin_checklistitens_usages_id`, `plugin_laudo_laudos_id`, `phase`),
                 KEY `plugin_laudo_laudos_id` (`plugin_laudo_laudos_id`)
+            ",
+
+            // Observação do uso encerrado sem devolução: cada alteração é uma linha nova (histórico
+            // completo); a atual é a mais recente
+            UsageNote::getTable() => "
+                `id` int unsigned NOT NULL AUTO_INCREMENT,
+                `plugin_checklistitens_usages_id` int unsigned NOT NULL DEFAULT 0,
+                `users_id` int unsigned NOT NULL DEFAULT 0,
+                `content` text,
+                `date_creation` timestamp NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `plugin_checklistitens_usages_id` (`plugin_checklistitens_usages_id`),
+                KEY `users_id` (`users_id`)
             ",
 
             // Fotos do equipamento com defeito (de 1 a 5 por problema marcado). Nunca são apagadas

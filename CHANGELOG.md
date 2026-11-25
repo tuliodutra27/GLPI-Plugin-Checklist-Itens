@@ -6,6 +6,53 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [1.1.0-rc.3] - 2026-11-25
+
+Requer Atualizar em Configurar > Plugins. A estrutura do banco não muda: a atualização só
+acrescenta as duas colunas ao padrão geral do Histórico geral.
+
+### Adicionado
+- Página de um uso: o número do uso no Histórico geral (e nos itens do chamado aberto pelo
+  bloqueio) abre só aquele uso, com o equipamento no topo, a retirada, a conferência do gestor, a
+  devolução, a conferência da devolução, o encerramento sem devolução e o bloqueio com o chamado.
+  Botões para o registro completo do equipamento e de volta à lista. Antes, o link abria o registro
+  inteiro do equipamento.
+- Cada cartão do registro do equipamento tem o número do uso, que abre essa página. O nome do rádio
+  no detalhe da entrega e o link de cada uso em Devoluções pendentes também abrem a página do uso.
+- Histórico geral: filtros rápidos (Todos, Em aberto, Turnos anteriores sem devolução, Com
+  problema, Devolução não registrada, Recusas) e as colunas "Conferido por", "Devolução conferida
+  por" (só para ver e exportar), "Chamado" e "Embarcação", para escolher na chave inglesa.
+
+### Alterado
+- Histórico geral: abre do uso mais recente para o mais antigo; o equipamento abre o registro de
+  uso dele; a situação aparece com a cor do registro. "Encerrado sem devolução por" e "Encerrado
+  sem devolução em" entram nas colunas padrão; na atualização, são acrescentadas ao padrão geral
+  que ainda não as tem (as visões pessoais não mudam).
+
+## [1.1.0-rc.2] - 2026-11-25
+
+Requer Atualizar em Configurar > Plugins.
+
+### Corrigido
+- O Atualizar em Configurar > Plugins gravava dezenas de erros "Duplicate entry" no log do banco do
+  GLPI (`sql-errors.log`), um por perfil e direito do plugin que já existia. Os direitos estavam
+  certos; agora só os direitos novos são criados e o log fica limpo.
+
+## [1.1.0-rc.1] - 2026-11-25
+
+Requer Atualizar em Configurar > Plugins.
+
+### Adicionado
+- Tela "Devoluções pendentes": lista as retiradas de turnos já terminados que o colaborador não
+  devolveu pelo sistema (conferidas ou não pelo gestor) e permite encerrá-las, uma a uma ou em
+  lote, depois de confirmar que os equipamentos estão de volta. O uso fica como "Devolução não
+  registrada", com quem encerrou e quando; o equipamento volta a ficar disponível e o colaborador
+  sai do limite por pessoa. A observação do encerramento pode ser alterada, e cada alteração fica no
+  histórico.
+- Opção "Perfis que podem encerrar uso sem devolução" na configuração (padrão: Super-Admin).
+- O registro do equipamento mostra o encerramento sem devolução na linha do tempo e no CSV; o
+  Histórico geral pode filtrar pela situação nova.
+
 ## [1.0.0] - 2026-11-25
 
 Requer Atualizar em Configurar > Plugins.

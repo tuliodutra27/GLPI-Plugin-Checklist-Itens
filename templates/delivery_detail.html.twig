@@ -83,7 +83,7 @@
                 <div class="list-group-item">
                     <div class="d-flex justify-content-between align-items-start gap-2">
                         <div>
-                            <a href="{{ i.record_url }}"><strong>{{ i.label }}</strong></a>
+                            <a href="{{ i.usage_url }}"><strong>{{ i.label }}</strong></a>
                             <span class="text-muted ci-small">{{ i.detail }}</span>
                             {{ ci.problems(i.checkout) }}
                             {% if i.checkin %}

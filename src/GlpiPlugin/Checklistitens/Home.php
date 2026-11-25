@@ -13,7 +13,7 @@ class Home
 {
     public static function canSee(): bool
     {
-        return Profile::canUse() || Profile::canViewRecords();
+        return Profile::canUse() || Profile::canViewRecords() || PendingReturn::canUse();
     }
 
     /**
@@ -114,6 +114,19 @@ class Home
                 'menu'        => true,
                 'shortcut'    => false,
                 'search'      => true,
+            ];
+        }
+
+        // Permissão própria: perfis escolhidos na configuração
+        if (PendingReturn::canUse()) {
+            $pages['pendingreturn'] = [
+                'title'       => PendingReturn::getTypeName(),
+                'description' => __('Usos de turnos encerrados que não foram devolvidos pelo sistema: encerrar e liberar os equipamentos que já voltaram.', 'checklistitens'),
+                'file'        => 'front/pendingreturn.php',
+                'icon'        => PendingReturn::getIcon(),
+                'color'       => 'orange',
+                'menu'        => true,
+                'shortcut'    => false,
             ];
         }
 
@@ -272,6 +285,14 @@ class Home
                 return [
                     'badge'       => $on_vessel ? sprintf(_n('%d entrega aberta', '%d entregas abertas', $on_vessel, 'checklistitens'), $on_vessel) : '',
                     'badge_color' => 'azure',
+                ];
+
+            case 'pendingreturn':
+                $pending = PendingReturn::count();
+
+                return [
+                    'badge'       => $pending ? sprintf(_n('%d pendente', '%d pendentes', $pending, 'checklistitens'), $pending) : '',
+                    'badge_color' => 'orange',
                 ];
 
             case 'itemblock':

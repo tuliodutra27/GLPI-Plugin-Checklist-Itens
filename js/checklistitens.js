@@ -1097,6 +1097,27 @@
         }, 1000);
     }
 
+    /**
+     * "Selecionar todos": a caixa com data-ci-check-all="grupo" marca ou desmarca as caixas com
+     * data-ci-check-group="grupo" (vazio = todas do formulário).
+     */
+    function setupCheckAll(box) {
+        var group = box.getAttribute('data-ci-check-all');
+        var scope = box.form || document;
+        var selector = group ? '[data-ci-check-group="' + group + '"]' : '[data-ci-check-group]';
+
+        box.addEventListener('change', function () {
+            qsa(selector, scope).forEach(function (el) {
+                el.checked = box.checked;
+            });
+            qsa('[data-ci-check-all]', scope).forEach(function (other) {
+                if (other !== box && (!group || other.getAttribute('data-ci-check-all') === group)) {
+                    other.checked = box.checked;
+                }
+            });
+        });
+    }
+
     function init() {
         qsa('[data-ci-selfie-box]').forEach(setupSelfie);
         qsa('[data-ci-defect-photos]').forEach(window.ChecklistDefectPhotos.setup);
@@ -1104,6 +1125,7 @@
         qsa('[data-ci-filter]').forEach(setupFilter);
         qsa('[data-ci-idle]').forEach(setupIdle);
         qsa('[data-ci-redirect]').forEach(setupRedirect);
+        qsa('[data-ci-check-all]').forEach(setupCheckAll);
     }
 
     if (document.readyState === 'loading') {

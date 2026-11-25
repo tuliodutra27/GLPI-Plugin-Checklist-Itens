@@ -49,6 +49,32 @@ class ItemBlock extends CommonDBTM
         return Profile::canViewRecords();
     }
 
+    /**
+     * Coluna "Chamado" do Histórico geral (opção 16 de Usage): o GLPI usa a classe da tabela da
+     * coluna para mostrar o valor.
+     */
+    public static function getSpecificValueToDisplay($field, $values, array $options = [])
+    {
+        if (!is_array($values)) {
+            $values = [$field => $values];
+        }
+        if ($field === 'tickets_id') {
+            // Uso sem bloqueio: a ligação não achou linha e o valor vem vazio (0 = bloqueio sem chamado)
+            if ((string) ($values['tickets_id'] ?? '') === '') {
+                return '';
+            }
+            $ticket = (int) $values['tickets_id'];
+            if ($ticket <= 0) {
+                return __('Sem chamado ainda', 'checklistitens');
+            }
+            return !empty($options['html'])
+                ? sprintf('<a href="%s">#%d</a>', htmlspecialchars(Ticket::getFormURLWithID($ticket)), $ticket)
+                : '#' . $ticket;
+        }
+
+        return parent::getSpecificValueToDisplay($field, $values, $options);
+    }
+
     /** @return array<int, string> */
     public static function getStatusLabels(): array
     {
