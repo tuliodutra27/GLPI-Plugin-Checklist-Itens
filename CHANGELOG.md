@@ -6,12 +6,23 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
-## [1.1.0-rc.3] - 2026-11-25
+## [1.1.0] - 2026-11-25
 
-Requer Atualizar em Configurar > Plugins. A estrutura do banco não muda: a atualização só
-acrescenta as duas colunas ao padrão geral do Histórico geral.
+Requer Atualizar em Configurar > Plugins. A atualização cria a tabela das observações dos usos
+encerrados sem devolução, acrescenta duas colunas aos usos (quem encerrou e quando) e põe essas
+duas colunas no padrão do Histórico geral.
+
+Testada no GLPI de teste como `1.1.0-rc.1` a `1.1.0-rc.3`, que não foram publicadas como release.
 
 ### Adicionado
+- Tela "Devoluções pendentes": lista as retiradas de turnos já terminados que o colaborador não
+  devolveu pelo sistema (conferidas ou não pelo gestor) e permite encerrá-las, uma a uma ou em
+  lote, depois de confirmar que os equipamentos estão de volta. O uso fica como "Devolução não
+  registrada", com quem encerrou e quando; o equipamento volta a ficar disponível e o colaborador
+  sai do limite por pessoa. A observação do encerramento pode ser alterada, e cada alteração fica no
+  histórico.
+- Opção "Perfis que podem encerrar uso sem devolução" na configuração (padrão: Super-Admin).
+- O registro do equipamento mostra o encerramento sem devolução na linha do tempo e no CSV.
 - Página de um uso: o número do uso no Histórico geral (e nos itens do chamado aberto pelo
   bloqueio) abre só aquele uso, com o equipamento no topo, a retirada, a conferência do gestor, a
   devolução, a conferência da devolução, o encerramento sem devolução e o bloqueio com o chamado.
@@ -29,29 +40,10 @@ acrescenta as duas colunas ao padrão geral do Histórico geral.
   sem devolução em" entram nas colunas padrão; na atualização, são acrescentadas ao padrão geral
   que ainda não as tem (as visões pessoais não mudam).
 
-## [1.1.0-rc.2] - 2026-11-25
-
-Requer Atualizar em Configurar > Plugins.
-
 ### Corrigido
 - O Atualizar em Configurar > Plugins gravava dezenas de erros "Duplicate entry" no log do banco do
   GLPI (`sql-errors.log`), um por perfil e direito do plugin que já existia. Os direitos estavam
   certos; agora só os direitos novos são criados e o log fica limpo.
-
-## [1.1.0-rc.1] - 2026-11-25
-
-Requer Atualizar em Configurar > Plugins.
-
-### Adicionado
-- Tela "Devoluções pendentes": lista as retiradas de turnos já terminados que o colaborador não
-  devolveu pelo sistema (conferidas ou não pelo gestor) e permite encerrá-las, uma a uma ou em
-  lote, depois de confirmar que os equipamentos estão de volta. O uso fica como "Devolução não
-  registrada", com quem encerrou e quando; o equipamento volta a ficar disponível e o colaborador
-  sai do limite por pessoa. A observação do encerramento pode ser alterada, e cada alteração fica no
-  histórico.
-- Opção "Perfis que podem encerrar uso sem devolução" na configuração (padrão: Super-Admin).
-- O registro do equipamento mostra o encerramento sem devolução na linha do tempo e no CSV; o
-  Histórico geral pode filtrar pela situação nova.
 
 ## [1.0.0] - 2026-11-25
 
@@ -174,7 +166,8 @@ As versões até a 0.9.0 (retirada e devolução com checklist, selfie com local
 gestor por turno, bloqueio do item com problema e registro de uso) não foram publicadas como
 release.
 
-[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v1.0.0...HEAD
+[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.13.0...v1.0.0
 [0.13.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0...v0.12.0
