@@ -75,11 +75,57 @@ class Usage extends CommonDBTM
     }
 
     /**
-     * Link do registro (busca e itens do chamado): abre o registro de uso do equipamento.
+     * Página de um uso (busca, itens do chamado, registro do equipamento, entrega, devoluções
+     * pendentes).
      */
     public static function getFormURLWithID($id = 0, $full = true)
     {
         return Ui::url('front/usage.form.php?id=' . (int) $id);
+    }
+
+    /** Histórico geral: os usos mais recentes primeiro (opção 7, retirada). */
+    public static function getDefaultSearchRequest(): array
+    {
+        return ['sort' => 7, 'order' => 'DESC'];
+    }
+
+    /**
+     * Filtros prontos acima do Histórico geral: links com a busca já montada (números das opções
+     * de rawSearchOptions).
+     *
+     * @return array<int, array{label: string, icon: string, url: string}>
+     */
+    public static function getQuickFilters(): array
+    {
+        $status = static fn (int $value, string $link = 'AND'): array => ['link' => $link, 'field' => 6, 'searchtype' => 'equals', 'value' => $value];
+        $open   = ['link' => 'AND', 'criteria' => [$status(self::STATUS_IN_USE), $status(self::STATUS_RELEASED, 'OR')]];
+
+        $filters = [
+            [__('Todos', 'checklistitens'), 'ti ti-list', null],
+            [__('Em aberto', 'checklistitens'), 'ti ti-clock', [$open]],
+            [__('Turnos anteriores sem devolução', 'checklistitens'), 'ti ti-alert-triangle', [
+                $open,
+                ['link' => 'AND', 'field' => 11, 'searchtype' => 'lessthan', 'value' => Shift::startFor()],
+            ]],
+            [__('Com problema', 'checklistitens'), 'ti ti-tool', [
+                ['link' => 'AND', 'field' => 8, 'searchtype' => 'equals', 'value' => 0],
+                ['link' => 'OR', 'field' => 10, 'searchtype' => 'equals', 'value' => 0],
+            ]],
+            [__('Devolução não registrada', 'checklistitens'), 'ti ti-clipboard-x', [$status(self::STATUS_NOT_RETURNED)]],
+            [__('Recusas', 'checklistitens'), 'ti ti-lock', [$status(self::STATUS_REFUSED)]],
+        ];
+
+        $list = [];
+        foreach ($filters as [$label, $icon, $criteria]) {
+            $params = $criteria === null ? ['reset' => 'reset'] : ['criteria' => $criteria, 'start' => 0];
+            $list[] = [
+                'label' => $label,
+                'icon'  => $icon,
+                'url'   => Ui::url('front/usage.php?' . http_build_query($params)),
+            ];
+        }
+
+        return $list;
     }
 
     public function rawSearchOptions()
@@ -202,24 +248,83 @@ class Usage extends CommonDBTM
                 'datatype'      => 'datetime',
                 'massiveaction' => false,
             ],
+            // Gestor da conferência da retirada (usuário da conferência)
+            [
+                'id'            => '14',
+                'table'         => 'glpi_users',
+                'field'         => 'name',
+                'linkfield'     => 'users_id',
+                'name'          => __('Conferido por', 'checklistitens'),
+                'datatype'      => 'dropdown',
+                'right'         => 'all',
+                'massiveaction' => false,
+                'joinparams'    => ['beforejoin' => ['table' => Confirmation::getTable()]],
+            ],
+            // Gestor da conferência da devolução: só para ver e exportar. A busca do GLPI não liga a
+            // mesma tabela duas vezes por colunas diferentes aqui: o apelido da segunda ligação
+            // (tabela + nome da coluna) passa dos 64 caracteres que o MySQL aceita.
+            [
+                'id'            => '15',
+                'table'         => $table,
+                'field'         => 'plugin_checklistitens_confirmations_id_checkin',
+                'name'          => __('Devolução conferida por', 'checklistitens'),
+                'datatype'      => 'specific',
+                'nosearch'      => true,
+                'nosort'        => true,
+                'massiveaction' => false,
+            ],
+            // Chamado do bloqueio criado pelo uso (o texto vem de ItemBlock::getSpecificValueToDisplay)
+            [
+                'id'            => '16',
+                'table'         => ItemBlock::getTable(),
+                'field'         => 'tickets_id',
+                'name'          => __('Chamado', 'checklistitens'),
+                'datatype'      => 'specific',
+                'searchtype'    => ['contains'],
+                'forcegroupby'  => true,
+                'massiveaction' => false,
+                'joinparams'    => ['jointype' => 'child'],
+            ],
+            [
+                'id'            => '17',
+                'table'         => Delivery::getTable(),
+                'field'         => 'vessel_name',
+                'name'          => __('Embarcação', 'checklistitens'),
+                'datatype'      => 'itemlink',
+                'massiveaction' => false,
+            ],
         ];
     }
 
+    /**
+     * Valores da busca. Com $options['html'] (a lista do GLPI), o equipamento leva ao registro e a
+     * situação vem com a cor; a exportação tira o HTML.
+     */
     public static function getSpecificValueToDisplay($field, $values, array $options = [])
     {
         if (!is_array($values)) {
             $values = [$field => $values];
         }
+        $html = !empty($options['html']);
         switch ($field) {
             case 'itemtype':
                 return htmlspecialchars(ItemProvider::getTypeLabel((string) $values['itemtype']));
             case 'items_id':
-                if (!empty($values['itemtype'])) {
-                    return htmlspecialchars(ItemProvider::describe((string) $values['itemtype'], (int) $values['items_id']));
+                $items_id = (int) $values['items_id'];
+                if (empty($values['itemtype'])) {
+                    return (string) $items_id;
                 }
-                return (string) (int) $values['items_id'];
+                $itemtype = (string) $values['itemtype'];
+                $label    = htmlspecialchars(ItemProvider::describe($itemtype, $items_id));
+                return $html ? sprintf('<a href="%s">%s</a>', htmlspecialchars(EquipmentRecord::getUrl($itemtype, $items_id)), $label) : $label;
             case 'status':
-                return htmlspecialchars(self::getStatusLabels()[(int) $values['status']] ?? '');
+                $status = (int) $values['status'];
+                $label  = htmlspecialchars(self::getStatusLabels()[$status] ?? '');
+                return $html ? sprintf('<span class="badge bg-%s">%s</span>', self::getStatusColor($status), $label) : $label;
+            case 'plugin_checklistitens_confirmations_id_checkin':
+                // Vazio faria a busca mostrar o número da conferência (0)
+                $confirmation = Db::row(Confirmation::getTable(), (int) $values[$field]);
+                return $confirmation !== null ? htmlspecialchars(Ui::text(getUserName((int) $confirmation['users_id']))) : '—';
         }
 
         return parent::getSpecificValueToDisplay($field, $values, $options);

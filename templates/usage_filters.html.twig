@@ -1,0 +1,6 @@
+{# Histórico geral: filtros prontos acima da busca do GLPI #}
+<div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="{{ __('Filtros rápidos', 'checklistitens') }}">
+    {% for f in filters %}
+        <a href="{{ f.url }}" class="btn btn-sm btn-outline-secondary"><i class="{{ f.icon }}"></i> {{ f.label }}</a>
+    {% endfor %}
+</div>

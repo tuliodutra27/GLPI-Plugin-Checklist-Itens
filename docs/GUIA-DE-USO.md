@@ -758,7 +758,8 @@ Toque numa entrega para abrir o **detalhe**:
   reserva, capas e a resposta de "Rádios ok?";
 - as **observações**;
 - os **rádios**, cada um com a situação, os problemas, as fotos do defeito, a data em que foi
-  recebido, o bloqueio e o chamado, se houver. O nome do rádio abre o registro de uso dele;
+  recebido, o bloqueio e o chamado, se houver. O nome do rádio abre a página desse uso
+  ([seção 8.2](#82-histórico-geral)), com o link para o registro completo do rádio;
 - as **fotos da entrega**. Toque numa foto para abrir no tamanho original;
 - um quadro para cada **recebimento**: quem recebeu, as baterias e as capas devolvidas, as baterias
   com defeito e o estado das capas (em destaque quando há problema), "Rádios ok?", o mapa,
@@ -850,6 +851,8 @@ Clique num equipamento para abrir o **Registro de uso**:
   - Rádio que foi para uma embarcação mostra a entrega, com o nome da embarcação e o link **Ver a
     entrega**, e a volta como "Recebimento da embarcação". A selfie e o mapa são os do gestor que
     entregou e do gestor que recebeu.
+  - O número do uso (ex.: **#58**), no topo de cada cartão, abre a página só daquele uso
+    ([seção 8.2](#82-histórico-geral)).
 - **Filtros:** período e colaborador. O botão **CSV** exporta tudo, inclusive as localizações e as
   colunas "Problema conhecido na retirada", "Problema conhecido na devolução", "Laudos em aberto",
   "Fotos do defeito" (quantidade) e "Embarcação".
@@ -858,8 +861,34 @@ Nos **celulares e tablets**, o mesmo registro aparece na aba **Registro de uso**
 
 ### 8.2 Histórico geral
 
-**Usos de equipamentos** é a busca nativa do GLPI sobre todos os usos: tipo, equipamento,
-colaborador, setor, situação e datas, com exportação. O gestor vê só o seu setor.
+**Usos de equipamentos** é a busca nativa do GLPI sobre todos os usos, do mais recente para o mais
+antigo, com exportação. O gestor vê só o seu setor.
+
+- **Colunas padrão:** tipo, equipamento, colaborador, setor, situação (com a cor), retirada,
+  devolução e, para os usos encerrados em Devoluções pendentes, "Encerrado sem devolução por" e
+  "Encerrado sem devolução em". O equipamento abre o registro de uso dele.
+- **Outras colunas** (pela chave inglesa da lista): "Conferido por" (gestor que conferiu a
+  retirada), "Devolução conferida por", "Chamado" (do bloqueio, com link), "Embarcação" (com link
+  para a entrega), turno da retirada e as respostas "ok?". "Devolução conferida por" aparece na
+  lista e na exportação, mas não serve de filtro.
+- **Filtros rápidos**, acima da busca:
+  - **Todos:** volta à busca padrão.
+  - **Em aberto:** em uso e liberados para devolução.
+  - **Turnos anteriores sem devolução:** os mesmos de Devoluções pendentes
+    ([seção 8.7](#87-devoluções-pendentes)).
+  - **Com problema:** "Não" na retirada ou na devolução, inclusive problema já conhecido e recusas.
+  - **Devolução não registrada** e **Recusas.**
+
+**Página de um uso:** o número do uso (coluna ID) abre a página **Uso #N**, só com aquele uso:
+- no topo, o equipamento, a situação, o colaborador, o setor, a retirada e a duração;
+- o uso do começo ao fim, como no registro do equipamento: retirada (ou entrega para embarcação),
+  conferência do gestor, devolução (ou recebimento), conferência da devolução, devolução não
+  registrada e bloqueio com o chamado;
+- os botões **Registro completo do equipamento** e **Usos de equipamentos** (volta à lista).
+
+O mesmo link aparece nos itens do chamado aberto pelo bloqueio, no número de cada cartão do
+registro do equipamento, no detalhe da entrega e em Devoluções pendentes. Quem pode abrir: o gestor
+do setor do equipamento e o TI.
 
 ### 8.3 Itens bloqueados
 
@@ -960,7 +989,7 @@ todos; os outros perfis da lista, só os do próprio setor.
    devolução") ou não ("Sem conferência do gestor"). Retiradas do turno atual e rádios com
    embarcação não aparecem.
 2. Confira na sala quais equipamentos já voltaram e marque só esses. Há "Selecionar todos" geral
-   e por turno.
+   e por turno. O ícone ao lado de cada uso abre a página dele (**Ver o uso**).
 3. Se quiser, escreva uma **observação** (vale para todos os marcados).
 4. Marque **"Conferi que os equipamentos marcados estão de volta"** e toque em **Encerrar sem
    devolução**.

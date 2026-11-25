@@ -381,7 +381,7 @@ class DeliveryReport
                 'status'       => $ustatus,
                 'status_label' => $labels[$ustatus] ?? '',
                 'status_color' => Usage::getStatusColor($ustatus),
-                'record_url'   => EquipmentRecord::getUrl($itemtype, (int) $u['items_id']) . '#usage-' . $uid,
+                'usage_url'    => Usage::getFormURLWithID($uid),
                 'receipt_id'   => (int) $u['plugin_checklistitens_deliveryreceipts_id'],
                 'checkout'     => $view->result($u, Usage::PHASE_CHECKOUT),
                 'checkin'      => $u['date_checkin']

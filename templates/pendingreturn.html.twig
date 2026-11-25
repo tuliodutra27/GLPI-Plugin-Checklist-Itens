@@ -45,7 +45,7 @@
                                         <span class="badge bg-orange-lt">{{ __('Sem conferência do gestor', 'checklistitens') }}</span>
                                     {% endif %}
                                 </div>
-                                <a href="{{ u.record_url }}" class="ci-small" title="{{ __('Registro do equipamento', 'checklistitens') }}"><i class="ti ti-list-details"></i></a>
+                                <a href="{{ u.usage_url }}" class="ci-small" title="{{ __('Ver o uso', 'checklistitens') }}"><i class="ti ti-list-details"></i></a>
                             </label>
                         {% endfor %}
                     </div>
@@ -77,7 +77,7 @@
                 <div class="list-group-item">
                     <div><i class="{{ u.icon }}"></i> <strong>{{ u.label }}</strong> <span class="text-muted ci-small">{{ u.detail }} · {{ u.sector }}</span></div>
                     <div class="ci-small">{{ u.user }} · {{ __('Retirado em', 'checklistitens') }} {{ u.checkout }}</div>
-                    <div class="ci-small text-muted">{{ __('Encerrado por %1$s em %2$s', 'checklistitens')|format(u.closed_by, u.closed_at) }} · <a href="{{ u.record_url }}">{{ __('Registro do equipamento', 'checklistitens') }}</a></div>
+                    <div class="ci-small text-muted">{{ __('Encerrado por %1$s em %2$s', 'checklistitens')|format(u.closed_by, u.closed_at) }} · <a href="{{ u.usage_url }}">{{ __('Ver o uso', 'checklistitens') }}</a></div>
 
                     <form method="post" action="{{ post_url }}" class="mt-2">
                         <input type="hidden" name="_glpi_csrf_token" value="{{ csrf_token() }}">

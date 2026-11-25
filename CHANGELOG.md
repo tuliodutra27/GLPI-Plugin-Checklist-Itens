@@ -6,6 +6,24 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- Página de um uso: o número do uso no Histórico geral (e nos itens do chamado aberto pelo
+  bloqueio) abre só aquele uso, com o equipamento no topo, a retirada, a conferência do gestor, a
+  devolução, a conferência da devolução, o encerramento sem devolução e o bloqueio com o chamado.
+  Botões para o registro completo do equipamento e de volta à lista. Antes, o link abria o registro
+  inteiro do equipamento.
+- Cada cartão do registro do equipamento tem o número do uso, que abre essa página. O nome do rádio
+  no detalhe da entrega e o link de cada uso em Devoluções pendentes também abrem a página do uso.
+- Histórico geral: filtros rápidos (Todos, Em aberto, Turnos anteriores sem devolução, Com
+  problema, Devolução não registrada, Recusas) e as colunas "Conferido por", "Devolução conferida
+  por" (só para ver e exportar), "Chamado" e "Embarcação", para escolher na chave inglesa.
+
+### Alterado
+- Histórico geral: abre do uso mais recente para o mais antigo; o equipamento abre o registro de
+  uso dele; a situação aparece com a cor do registro. "Encerrado sem devolução por" e "Encerrado
+  sem devolução em" entram nas colunas padrão; na atualização, são acrescentadas ao padrão geral
+  que ainda não as tem (as visões pessoais não mudam).
+
 ## [1.1.0-rc.2] - 2026-11-25
 
 Requer Atualizar em Configurar > Plugins.

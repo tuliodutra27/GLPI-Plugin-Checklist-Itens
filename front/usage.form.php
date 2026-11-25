@@ -7,13 +7,23 @@ use GlpiPlugin\Checklistitens\Usage;
 
 include('../../../inc/includes.php');
 
-// Link de um registro (busca, itens do chamado): abre o registro de uso do equipamento
+// Link de um uso (busca, itens do chamado, registro do equipamento): a página do uso
 if (isset($_GET['id']) && !isset($_POST['action'])) {
     $usage = new Usage();
-    if ($usage->getFromDB((int) $_GET['id']) && EquipmentRecord::canViewItem((string) $usage->fields['itemtype'], (int) $usage->fields['items_id'])) {
-        Html::redirect(EquipmentRecord::getUrl((string) $usage->fields['itemtype'], (int) $usage->fields['items_id']) . '#usage-' . (int) $usage->getID());
+    if (!$usage->getFromDB((int) $_GET['id'])
+        || !EquipmentRecord::canViewItem((string) $usage->fields['itemtype'], (int) $usage->fields['items_id'])) {
+        Html::displayRightError();
     }
-    Html::displayRightError();
+
+    $record = EquipmentRecord::getUsageRecord($usage->fields);
+
+    Ui::header(sprintf(__('Uso #%d', 'checklistitens'), $usage->getID()), 'usage');
+    Ui::render('usage_record.html.twig', $record + [
+        'usage_icon' => Usage::getIcon(),
+        'list_url'   => Ui::url('front/usage.php'),
+    ]);
+    Ui::footer();
+    exit;
 }
 
 Session::checkRight(Profile::RIGHT_USAGE, CREATE);

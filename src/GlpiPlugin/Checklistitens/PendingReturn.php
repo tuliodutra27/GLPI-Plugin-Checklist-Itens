@@ -122,7 +122,7 @@ class PendingReturn extends CommonGLPI
             'user'        => Ui::text(getUserName((int) $row['users_id'])),
             'sector'      => Sector::getName((int) $row['groups_id']),
             'conferred'   => (int) $row['status'] === Usage::STATUS_RELEASED,
-            'record_url'  => EquipmentRecord::getUrl((string) $row['itemtype'], (int) $row['items_id']) . '#usage-' . (int) $row['id'],
+            'usage_url'   => Usage::getFormURLWithID((int) $row['id']),
         ];
     }
 

@@ -29,6 +29,29 @@ class Db
     }
 
     /**
+     * Linhas da tabela pelos ids, numa consulta só; ids vazios ou 0 são ignorados.
+     *
+     * @param array<int|string> $ids
+     * @return array<int, array> id => linha
+     */
+    public static function rows(string $table, array $ids): array
+    {
+        global $DB;
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if (!count($ids)) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($DB->request(['FROM' => $table, 'WHERE' => ['id' => $ids]]) as $row) {
+            $map[(int) $row['id']] = $row;
+        }
+
+        return $map;
+    }
+
+    /**
      * add() que devolve 0 em vez de deixar o erro de banco chegar à tela.
      */
     public static function add(CommonDBTM $item, array $input): int

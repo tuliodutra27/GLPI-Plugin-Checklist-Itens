@@ -73,6 +73,9 @@ trabalho no aparelho quando a conexão falha.
     fotos do defeito, problema conhecido, laudos exibidos, bloqueios e chamados.
 
   Nos celulares e tablets, o registro também aparece numa aba do formulário do Telefone no GLPI.
+- **Histórico geral** de todos os usos (busca do GLPI), com filtros rápidos, colunas de quem
+  conferiu, do chamado e da embarcação, e a **página de cada uso**, que também abre pelo chamado do
+  bloqueio.
 - **Alerta de equipamento não devolvido** no fim do turno, para os gestores do setor e o TI.
 - **Selfies e localizações** guardadas fora da pasta pública. As selfies ficam pelo menos 90
   dias e as localizações pelo prazo configurado. Depois disso, os administradores podem limpar.
