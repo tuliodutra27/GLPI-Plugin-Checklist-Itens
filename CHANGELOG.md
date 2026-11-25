@@ -6,6 +6,14 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [1.0.0] - 2026-11-25
+
+Requer Atualizar em Configurar > Plugins.
+
+Primeira versão estável. A partir daqui a numeração segue as regras da 1.0.0 em diante
+(`docs/VERSIONAMENTO.md`, seção 2): mudança que quebra algo que já existe só em versão MAJOR. O
+GLPI pede o Atualizar a cada versão nova; a estrutura do banco não muda em relação à 0.13.0.
+
 ### Adicionado
 - Na interface simplificada, o topo de cada tela do plugin mostra quem está conectado ("Olá,
   bem-vindo(a), Ana. Não é Ana Lima?") e um botão grande de Sair, para quem pegar um aparelho
@@ -119,7 +127,8 @@ As versões até a 0.9.0 (retirada e devolução com checklist, selfie com local
 gestor por turno, bloqueio do item com problema e registro de uso) não foram publicadas como
 release.
 
-[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.13.0...HEAD
+[Não lançado]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.13.0...v1.0.0
 [0.13.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/tuliodutra27/GLPI-Plugin-Checklist-Itens/compare/v0.10.0...v0.11.0
