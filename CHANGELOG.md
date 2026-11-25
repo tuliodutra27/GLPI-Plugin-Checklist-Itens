@@ -6,6 +6,8 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [1.1.0-rc.1] - 2026-11-25
+
 Requer Atualizar em Configurar > Plugins.
 
 ### Adicionado
