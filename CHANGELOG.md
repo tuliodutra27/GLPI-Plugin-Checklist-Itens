@@ -6,6 +6,11 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+## [1.1.0-rc.3] - 2026-11-25
+
+Requer Atualizar em Configurar > Plugins. A estrutura do banco não muda: a atualização só
+acrescenta as duas colunas ao padrão geral do Histórico geral.
+
 ### Adicionado
 - Página de um uso: o número do uso no Histórico geral (e nos itens do chamado aberto pelo
   bloqueio) abre só aquele uso, com o equipamento no topo, a retirada, a conferência do gestor, a
