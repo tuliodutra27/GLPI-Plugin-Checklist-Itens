@@ -301,7 +301,16 @@ class Profile extends GlpiProfile
     {
         $first_install = countElementsInTable(ProfileRight::getTable(), ['name' => self::RIGHT_USAGE]) === 0;
 
-        ProfileRight::addProfileRights(self::getRightNames());
+        // addProfileRights insere a linha em todos os perfis sem conferir se ela existe (cada
+        // repetição vira um erro "Duplicate entry" no sql-errors.log): só os direitos novos. Perfil
+        // criado depois recebe as linhas dos direitos existentes pelo próprio GLPI (fillProfileRights).
+        $missing = array_values(array_filter(
+            self::getRightNames(),
+            static fn (string $name): bool => countElementsInTable(ProfileRight::getTable(), ['name' => $name]) === 0
+        ));
+        if (count($missing)) {
+            ProfileRight::addProfileRights($missing);
+        }
 
         if ($first_install) {
             foreach ((new GlpiProfile())->find() as $data) {

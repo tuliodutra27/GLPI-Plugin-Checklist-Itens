@@ -6,6 +6,11 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Corrigido
+- O Atualizar em Configurar > Plugins gravava dezenas de erros "Duplicate entry" no log do banco do
+  GLPI (`sql-errors.log`), um por perfil e direito do plugin que já existia. Os direitos estavam
+  certos; agora só os direitos novos são criados e o log fica limpo.
+
 ## [1.1.0-rc.1] - 2026-11-25
 
 Requer Atualizar em Configurar > Plugins.
