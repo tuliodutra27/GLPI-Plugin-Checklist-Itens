@@ -6,6 +6,13 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Corrigido
+- Quem abria uma tela do plugin sem estar conectado (depois de sair, com a sessão expirada ou pelo
+  link do e-mail de equipamento não devolvido) via "sem permissão". Agora vai para o login do GLPI
+  e, depois de entrar, volta para a tela que tentou abrir. Valia para a tela inicial do plugin,
+  Equipamentos, registro do equipamento, Histórico geral, página de um uso, Conferência do setor e
+  as telas das entregas para embarcação.
+
 ## [1.1.0] - 2026-11-25
 
 Requer Atualizar em Configurar > Plugins. A atualização cria a tabela das observações dos usos

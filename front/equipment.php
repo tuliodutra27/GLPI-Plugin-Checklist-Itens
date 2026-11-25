@@ -8,6 +8,8 @@ use GlpiPlugin\Checklistitens\Ui;
 
 include('../../../inc/includes.php');
 
+Session::checkLoginUser();
+
 if (!EquipmentRecord::canView()) {
     Html::displayRightError();
 }

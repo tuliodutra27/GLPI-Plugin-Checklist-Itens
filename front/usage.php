@@ -5,6 +5,8 @@ use GlpiPlugin\Checklistitens\Usage;
 
 include('../../../inc/includes.php');
 
+Session::checkLoginUser();
+
 if (!Usage::canView()) {
     Html::displayRightError();
 }

@@ -6,6 +6,8 @@ use GlpiPlugin\Checklistitens\Ui;
 
 include('../../../inc/includes.php');
 
+Session::checkLoginUser();
+
 $itemtype = (string) ($_GET['itemtype'] ?? '');
 $items_id = (int) ($_GET['items_id'] ?? 0);
 

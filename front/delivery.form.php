@@ -12,6 +12,8 @@ use GlpiPlugin\Checklistitens\Vessel;
 
 include('../../../inc/includes.php');
 
+Session::checkLoginUser();
+
 // Entrega de rádios para embarcação e recebimento de volta: só o gestor (ou o TI) que confere
 if (!Delivery::canDeliver()) {
     Html::displayRightError();

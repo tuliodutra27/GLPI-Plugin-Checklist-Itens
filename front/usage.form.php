@@ -7,6 +7,8 @@ use GlpiPlugin\Checklistitens\Usage;
 
 include('../../../inc/includes.php');
 
+Session::checkLoginUser();
+
 // Link de um uso (busca, itens do chamado, registro do equipamento): a página do uso
 if (isset($_GET['id']) && !isset($_POST['action'])) {
     $usage = new Usage();

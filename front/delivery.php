@@ -9,6 +9,8 @@ use GlpiPlugin\Checklistitens\Ui;
 
 include('../../../inc/includes.php');
 
+Session::checkLoginUser();
+
 // Entregas de rádios para embarcação: lista, detalhe, CSV e a tela final depois de concluir
 if (!DeliveryReport::canView()) {
     Html::displayRightError();

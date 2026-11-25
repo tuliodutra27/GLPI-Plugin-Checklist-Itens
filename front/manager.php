@@ -9,6 +9,8 @@ use GlpiPlugin\Checklistitens\Ui;
 
 include('../../../inc/includes.php');
 
+Session::checkLoginUser();
+
 if (!Profile::canViewRecords()) {
     Html::displayRightError();
 }
