@@ -6,6 +6,11 @@ seguem o [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não lançado]
 
+### Adicionado
+- Em Configurar > Plugins, o cartão do plugin mostra o ícone do menu (prancheta com ✓) em vez das
+  iniciais "CU". O GLPI só mostra logo de plugin do catálogo oficial; o plugin troca as iniciais
+  pelo ícone com um CSS próprio, carregado enquanto ele está ativo.
+
 ### Corrigido
 - Quem abria uma tela do plugin sem estar conectado (depois de sair, com a sessão expirada ou pelo
   link do e-mail de equipamento não devolvido) via "sem permissão". Agora vai para o login do GLPI

@@ -61,6 +61,9 @@ function plugin_init_checklistitens()
 
     $PLUGIN_HOOKS['config_page']['checklistitens'] = 'front/config.form.php';
 
+    // Ícone do plugin em Configurar > Plugins, no lugar das iniciais
+    $PLUGIN_HOOKS['add_css']['checklistitens'] = 'css/plugin-logo.css';
+
     // Depois do login, perfis configurados (padrão: operador) abrem direto a tela do plugin
     $PLUGIN_HOOKS['post_init']['checklistitens'] = [Landing::class, 'redirectAfterLogin'];
 
